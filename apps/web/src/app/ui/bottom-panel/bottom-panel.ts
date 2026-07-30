@@ -190,6 +190,26 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output'];
       touch-action: none;
     }
 
+    .resize-handle::after {
+      position: absolute;
+      top: 3px;
+      right: 50%;
+      left: 50%;
+      height: 1px;
+      content: '';
+      background: var(--mat-sys-outline-variant);
+      opacity: 0;
+      transition: opacity 120ms ease;
+    }
+
+    .resize-handle:hover::after,
+    :host(.dragging) .resize-handle::after,
+    .resize-handle:focus-visible::after {
+      right: 12px;
+      left: 12px;
+      opacity: 1;
+    }
+
     .resize-handle:focus-visible {
       outline: 2px solid var(--mat-sys-primary);
       outline-offset: -2px;
@@ -202,8 +222,9 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output'];
       flex: 0 0 auto;
       gap: 4px;
       min-height: 34px;
-      padding: 2px 5px 2px 7px;
+      padding: 3px 5px 3px 7px;
       border-bottom: 1px solid var(--mat-sys-outline-variant);
+      background: color-mix(in srgb, var(--mat-sys-surface-container-low) 82%, transparent);
     }
 
     .tablist {
@@ -293,6 +314,7 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output'];
       position: relative;
       flex: 1;
       min-height: 0;
+      overflow: hidden;
     }
 
     /*

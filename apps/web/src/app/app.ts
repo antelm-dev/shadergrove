@@ -34,6 +34,7 @@ import {
 import { DesktopPlatform } from './desktop/desktop-platform';
 import { ShaderStore } from './workspace/shader-store';
 import { SurfaceLayoutService } from './surfaces/surface-layout';
+import { SurfaceRegistry } from './surfaces/surface-registry';
 import { EditorShell } from './ui/editor/editor-shell';
 import { BottomPanel } from './ui/bottom-panel/bottom-panel';
 import { AppTitlebar } from './ui/layout/app-titlebar';
@@ -85,6 +86,7 @@ export class App {
   protected readonly status = inject(DocumentStatus);
   protected readonly commands = inject(MenuCommands);
   protected readonly layout = inject(SurfaceLayoutService);
+  private readonly surfaces = inject(SurfaceRegistry);
   protected readonly i18n = inject(I18n);
   protected readonly outputMode = isOutputWindow();
 
@@ -167,6 +169,16 @@ export class App {
 
   protected readonly editorOpen = this.layout.editorOpen;
   protected readonly bottomPanelOpen = computed(() => this.preferences.value().bottomPanelOpen);
+
+  /**
+   * The preview lives beside the application shell, while the editor lives
+   * inside it. Give the shell its own root-level layer so an active editor can
+   * genuinely overtake a floating preview instead of being trapped below the
+   * preview's stacking context.
+   */
+  protected readonly shellZIndex = computed(() =>
+    this.surfaces.foreground() === this.layout.editorId ? 3 : 1,
+  );
 
   /**
    * Whether a quick action's target panel is currently open — `capture-image`

@@ -354,7 +354,7 @@ export class PreviewShell {
   );
 
   protected readonly windowZIndex = computed(() =>
-    this.projected().stacked ? this.layout.zIndex(this.previewId) : null,
+    this.projected().stacked ? (this.registry.foreground() === this.previewId ? 4 : 2) : null,
   );
 
   protected readonly colorSchemeOptions = COLOR_SCHEME_OPTIONS;

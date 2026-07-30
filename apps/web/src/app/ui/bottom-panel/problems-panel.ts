@@ -23,6 +23,9 @@ import { ShaderStore } from '../../workspace/shader-store';
 @Component({
   selector: 'app-problems-panel',
   imports: [MatIconModule, TranslatePipe],
+  host: {
+    '[class.empty-state]': 'diagnostics().length === 0',
+  },
   template: `
     @if (diagnostics().length === 0) {
       <p class="empty">{{ 'panel.noProblems' | translate }}</p>
@@ -60,7 +63,12 @@ import { ShaderStore } from '../../workspace/shader-store';
       overflow-y: auto;
     }
 
+    :host(.empty-state) {
+      overflow: hidden;
+    }
+
     .empty {
+      box-sizing: border-box;
       display: grid;
       place-items: center;
       height: 100%;

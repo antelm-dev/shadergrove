@@ -53,7 +53,11 @@ const AUTOSCROLL_THRESHOLD = 24;
   imports: [MatButtonModule, MatIconModule, MatTooltipModule, TranslatePipe],
   template: `
     <div class="toolbar">
-      <span class="count" aria-live="polite">{{ entries().length }}</span>
+      <div class="title">
+        <mat-icon aria-hidden="true">terminal</mat-icon>
+        <span>{{ 'panel.output' | translate }}</span>
+        <span class="count" aria-live="polite">{{ entries().length }}</span>
+      </div>
       <span class="spacer"></span>
       <button
         matIconButton
@@ -67,17 +71,28 @@ const AUTOSCROLL_THRESHOLD = 24;
       </button>
     </div>
 
-    <div class="log" #scrollHost (scroll)="onScroll()">
+    <div
+      class="log"
+      [class.empty-log]="entries().length === 0"
+      #scrollHost
+      role="log"
+      aria-live="polite"
+      aria-relevant="additions"
+      (scroll)="onScroll()"
+    >
       @if (entries().length === 0) {
-        <p class="empty">{{ 'panel.noOutput' | translate }}</p>
+        <div class="empty">
+          <mat-icon aria-hidden="true">terminal</mat-icon>
+          <p>{{ 'panel.noOutput' | translate }}</p>
+        </div>
       } @else {
         @for (entry of entries(); track entry.id) {
           <div class="entry" [class]="entry.level">
             <span class="time">{{ formatTime(entry.timestamp) }}</span>
-            <span class="source">{{ sourceLabel(entry.source) }}</span>
             <mat-icon class="level-icon" [attr.aria-label]="levelLabel(entry.level)">
               {{ levelIcon(entry.level) }}
             </mat-icon>
+            <span class="source">{{ sourceLabel(entry.source) }}</span>
             <span class="message">{{ entry.message }}</span>
           </div>
         }
@@ -97,12 +112,35 @@ const AUTOSCROLL_THRESHOLD = 24;
       align-items: center;
       flex: 0 0 auto;
       gap: 8px;
-      padding: 2px 6px;
+      min-height: 34px;
+      padding: 2px 6px 2px 10px;
       border-bottom: 1px solid var(--mat-sys-outline-variant);
+      background: color-mix(in srgb, var(--mat-sys-surface-container-low) 62%, transparent);
+    }
+
+    .title {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      color: var(--mat-sys-on-surface-variant);
+      font: var(--mat-sys-label-medium);
+    }
+
+    .title mat-icon {
+      width: 16px;
+      height: 16px;
+      font-size: 16px;
     }
 
     .count {
-      padding-inline: 6px;
+      display: inline-grid;
+      min-width: 18px;
+      height: 18px;
+      padding-inline: 5px;
+      place-items: center;
+      border-radius: 9px;
+      background: color-mix(in srgb, var(--mat-sys-on-surface) 10%, transparent);
       color: var(--mat-sys-on-surface-variant);
       font: var(--mat-sys-label-small);
     }
@@ -116,11 +154,19 @@ const AUTOSCROLL_THRESHOLD = 24;
       min-height: 0;
       overflow-y: auto;
       overflow-x: hidden;
+      overscroll-behavior: contain;
+    }
+
+    .log.empty-log {
+      overflow: hidden;
     }
 
     .empty {
+      box-sizing: border-box;
       display: grid;
       place-items: center;
+      align-content: center;
+      gap: 8px;
       height: 100%;
       margin: 0;
       padding: 16px;
@@ -128,16 +174,30 @@ const AUTOSCROLL_THRESHOLD = 24;
       text-align: center;
     }
 
+    .empty mat-icon {
+      width: 28px;
+      height: 28px;
+      font-size: 28px;
+      opacity: 0.65;
+    }
+
+    .empty p {
+      margin: 0;
+    }
+
     .entry {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-      padding: 3px 10px;
+      display: grid;
+      grid-template-columns: auto 16px minmax(70px, auto) minmax(0, 1fr);
+      align-items: start;
+      column-gap: 8px;
+      padding: 6px 12px;
       font: var(--mat-sys-body-small);
       font-family: 'JetBrains Mono', Consolas, monospace;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
       border-bottom: 1px solid color-mix(in srgb, var(--mat-sys-outline-variant) 40%, transparent);
+    }
+
+    .entry:hover {
+      background: color-mix(in srgb, var(--mat-sys-on-surface) 4%, transparent);
     }
 
     .time {
@@ -147,8 +207,15 @@ const AUTOSCROLL_THRESHOLD = 24;
 
     .source {
       flex: 0 0 auto;
+      max-width: 16ch;
+      padding: 1px 5px;
+      overflow: hidden;
+      border-radius: 3px;
+      background: color-mix(in srgb, var(--mat-sys-on-surface) 7%, transparent);
       color: var(--mat-sys-on-surface-variant);
+      text-overflow: ellipsis;
       text-transform: uppercase;
+      white-space: nowrap;
       font-size: 0.85em;
       letter-spacing: 0.04em;
     }
@@ -179,7 +246,26 @@ const AUTOSCROLL_THRESHOLD = 24;
     }
 
     .message {
+      min-width: 0;
       color: var(--mat-sys-on-surface);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 520px) {
+      .entry {
+        grid-template-columns: auto 16px minmax(0, 1fr);
+      }
+
+      .source {
+        grid-column: 3;
+        width: fit-content;
+      }
+
+      .message {
+        grid-column: 1 / -1;
+        padding-left: 24px;
+      }
     }
   `,
 })

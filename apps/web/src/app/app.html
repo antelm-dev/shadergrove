@@ -16,7 +16,7 @@
   (change)="onFilePicked($event)"
 />
 
-<div class="shell">
+<div class="shell" [style.z-index]="shellZIndex()">
   <!-- Fullscreen only takes away the window chrome: the OS frame is gone, so the
        title bar that stands in for it goes with it. The app's own surfaces stay. -->
   @if (desktop.available && !desktop.fullscreen()) {
