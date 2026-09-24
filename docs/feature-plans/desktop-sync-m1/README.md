@@ -181,3 +181,11 @@ review_contract:
     - "second account never receives the first account's shaders"
   deferred: [pull-account-shaders, deletion-unlink-or-everywhere, offline-delete-queue]
 ```
+
+## Wave 1 outcome — contract amendments (binding for Tasks 03 and 04)
+
+Wave 1 merged into `develop` at `d8d473c21504b0d92f77c3809f6309ee9699dc9b` (PRs #18 and #19). Where this section contradicts the contracts above, this section wins.
+
+- **C2 (amended):** `PUT /api/shaders/:id/bundle` replaces content, presets and textures only. It **ignores the bundle's thumbnail** and never touches the stored one. Thumbnails go through the existing `PUT /api/shaders/:id/thumbnail` (last writer wins). `setThumbnail` does **not** bump `revision`. A thumbnail-only change is visible through `summary.thumbnail.updatedAt`. Locally, `ShaderLibrary.replaceFromPayload(id, payload, expectedRevision)` behaves the same way.
+- **C3 (amended):** `POST /api/desktop/handoff` requires `{ codeChallenge, password }`. The `/desktop/connect` page asks the user to confirm their password on every desktop connection. The desktop must generate `state` as 16–128 characters of `[A-Za-z0-9_-]` and `code_challenge` as exactly 43 base64url characters (S256); any other value sends the page back to `/`. The token endpoint is limited to 10 requests a minute per IP. Bearer requests without a cookie pass Better Auth's origin check; sign-out with only the bearer token works.
+- **C5 (amended):** a link is `{ remoteId, remoteRevision, localRevision, localThumbnail: string | null }`, where `localThumbnail` is the local `thumbnail.updatedAt` at the last sync. A push sends the content with `PUT …/bundle`. Then, if the local `thumbnail.updatedAt` differs from `link.localThumbnail`, it sends the thumbnail with `PUT …/thumbnail`. A shader whose only change is its thumbnail is `pending` too. For "keep both" on a 409: replace the local content with `replaceFromPayload`, then write the account's thumbnail locally with `setThumbnail`, since the replace ignores thumbnails.
