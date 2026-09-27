@@ -37,8 +37,7 @@ cohesive and do not touch web or desktop source.
    reference publication.
 2. ASSET_STORAGE=database remains default. For minio, validate endpoint,
    bucket, access key, secret key, optional region/TLS settings at startup.
-   Never expose secrets in clients/logs/responses. Incomplete config or bucket
-   preparation fails startup.
+   Never expose secrets in clients/logs/responses. Incomplete config or bucket access fails startup. Production bucket provisioning is separate; runtime must not require bucket creation or policy administration. Support configurable endpoint, region and addressing style for the GCS gate.
 3. Use README immutable keys. Upload before DB commit; commit failure may leave
    recoverable orphan. Replace/clear/delete enqueues cleanup; bounded retries
    verify no live reference before delete. Successful API mutations do not wait
@@ -48,7 +47,8 @@ cohesive and do not touch web or desktop source.
 5. Add MinIO Compose service, persistent volume, health check, private
    bucket/bootstrap, and documented non-secret variables. Do not publish host
    port unless local administration deliberately requires it.
-6. Add test-double unit coverage and reproducible real-MinIO integration where
+6. Expose bounded cleanup independently of a server timer for a scheduled job. Claim work durably with leases, survive concurrent execution and prevent live-reference resurrection during deletion.
+7. Add test-double unit coverage and reproducible real-MinIO integration where
    conventions permit: restart read, replacement, deletion retry, config failure.
 
 ## Out of scope
@@ -58,8 +58,7 @@ global deduplication, export-format changes, unrelated deployment hardening.
 
 ## Contracts and verification
 
-Meet AC-02 through AC-05. Feature remains default-off and rollbackable via
-ASSET_STORAGE=database.
+Meet AC-02 through AC-05. Feature remains default-off. ASSET_STORAGE=database changes new writes only; retain external reads and cleanup credentials. Verify mixed-storage rollback.
 
     pnpm --filter @shader-studio/backend test
     pnpm typecheck

@@ -40,10 +40,10 @@ adaptation. Do not add MinIO wiring, Compose/client changes, or a backfill tool.
 2. Add new additive Postgres migration(s), never edit migration 1, for object
    metadata and retryable cleanup/outbox records. Preserve assets.data and dual
    reads.
-3. Model object key, byte size, SHA-256, type/extension, timestamps, and
+3. Model object key, byte size, SHA-256, type/extension, timestamps, stable storage location (provider/bucket), and
    deterministic cleanup identity/retry state. A cleanup path must establish no
    live reference remains before physical deletion.
-4. Preserve database default behavior and shared SQLite/Postgres conformance.
+4. Resolve external reads by recorded location regardless of current write mode; database writes must keep existing external reads working. Preserve database default behavior and shared SQLite/Postgres conformance.
    Existing databases must upgrade safely and idempotently.
 5. Add focused tests for migration, dual-read, reference replacement, and
    cleanup-queue behavior including failure-safe replacement at contract scope.

@@ -36,7 +36,7 @@ latest-default to an exact commit; never treat a moving branch name as a base.
    libs/backend/src/persistence/shader-repository.ts.
 2. Introduce a server-selectable blob-store abstraction for bytes. Postgres
    stores complete immutable asset references: object key, byte size, SHA-256,
-   type/extension, and timestamps. Legacy data fallback is required.
+   type/extension, timestamps and a stable storage location identifier (provider/bucket). Legacy data fallback is required. Reads resolve the recorded location independently of current write mode.
 3. New MinIO objects use immutable shader-scoped keys:
    private/shaders/<shader-id>/<asset-key>/<sha256>.<ext>. The bucket is private
    and API routes remain the sole browser-facing transfer boundary.
@@ -57,16 +57,31 @@ latest-default to an exact commit; never treat a moving branch name as a base.
 - **AC-04:** Replace/clear/delete records retryable cleanup without depending on delete success.
 - **AC-05:** Compose, configuration, and tests reproduce MinIO locally; secrets never reach clients.
 
+- **AC-06:** The exact production image passes real private-GCS asset round trips, restart/revision, rollback and scheduled cleanup checks.
+- **AC-07:** GCP configuration, IAM, migrations, recovery and release evidence are reproducible before public traffic.
+
 ## Work plan
 
 | Wave | Task | Dependency | Delivery | Launch base |
 |---|---|---|---|---|
 | 1 | [01 — Asset references and lifecycle contract](01-asset-reference-contract.md) | none | default-branch-pr | latest-default |
 | 2 | [02 — Opt-in MinIO server path](02-minio-server-path.md) | Task 01 PR merged into master | default-branch-pr | latest-default |
+| 3 | [03 — GCP readiness](03-gcp-first-deployment.md) | Task 02 PR merged into master | default-branch-pr | latest-default |
 
 Task 01 is deployable alone: it keeps database bytes active and has additive
-schema/contract changes. Task 02 is default-off and rollback is configuration
-only: ASSET_STORAGE=database.
+schema/contract changes. Task 02 is default-off. ASSET_STORAGE=database changes new writes only; existing external references require their adapter, bucket and credentials. Code rollback must retain dual-read support.
+
+## First GCP deployment prerequisite
+
+Proposed target: Cloud Run for SSR/API, Cloud SQL PostgreSQL for metadata and
+legacy blobs, and private Cloud Storage through its S3-interoperable XML API.
+MinIO remains the local integration target. Actual GCS compatibility must be
+verified; this plan is not a completed implementation or deployment.
+
+Task 03 is mandatory before the first GCP deployment with external assets.
+See [GCP readiness and deployment gate](03-gcp-first-deployment.md).
+A database-only cloud smoke does not satisfy the hybrid storage milestone.
+Do not run persistent PostgreSQL or MinIO inside Cloud Run.
 
 ## Verification and integration gate
 
@@ -100,13 +115,14 @@ targeted checks, reviews their full diff, and returns commit IDs and risks.
 
 - codex/minio-hybrid-storage-01-asset-contract
 - codex/minio-hybrid-storage-02-server-path
+- codex/minio-hybrid-storage-03-gcp-readiness
 
 ## Deferred backlog
 
 - Idempotent production backfill from assets.data and later blob-column removal.
 - Presigned browser transfers, MinIO CORS, and CDN delivery.
 - Cross-shader content-addressed deduplication/reference counting.
-- Replication, KMS, backup/restore drills, and retention automation.
+- Multi-region replication, customer-managed KMS and retention automation. Basic backup/restore validation is required by task 03.
 
     review_contract:
       milestone: minio-hybrid-storage-phase-1
@@ -128,6 +144,14 @@ targeted checks, reviews their full diff, and returns commit IDs and risks.
           depends_on: ["01 merged into master"]
           acceptance: [AC-02, AC-03, AC-04, AC-05]
           checks: ["pnpm --filter @shader-studio/backend test", "pnpm typecheck", "pnpm format:check"]
+          delivery: default-branch-pr
+          base_policy: latest-default
+          feature_flag: ASSET_STORAGE=minio
+        - id: "03"
+          branch: codex/minio-hybrid-storage-03-gcp-readiness
+          depends_on: ["02 merged into master"]
+          acceptance: [AC-06, AC-07]
+          checks: ["pnpm run ci", "production image smoke", "real GCS deployment gate"]
           delivery: default-branch-pr
           base_policy: latest-default
           feature_flag: ASSET_STORAGE=minio
