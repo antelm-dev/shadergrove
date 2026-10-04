@@ -29,9 +29,11 @@ address with `docker ps` followed by `nsenter -t $(docker inspect -f '{{.State.P
 ## Deployments
 
 Dokploy's **Shadergrove / staging / Shadergrove web staging** application builds
-the repository's Dockerfile from the `develop` branch. Auto deploy on push is
-off. After the `check`, `smoke`, `e2e`, and `docker` GitHub Actions jobs pass on a
-push to `develop`, `deploy-staging` connects over SSH and queues a Dokploy
+the repository's Dockerfile from the `develop` branch. Dokploy's Autodeploy
+switch is on so its private webhook accepts the CI request; this generic Git
+source has no provider push webhook configured. After the `check`, `smoke`,
+`e2e`, and `docker` GitHub Actions jobs pass on a push to `develop`,
+`deploy-staging` connects over SSH and queues a Dokploy
 deployment. The `staging` GitHub environment allows deployments only from
 `develop` and holds the CI private key in its `STAGING_DEPLOY_SSH_KEY` secret.
 Its public key in `/root/.ssh/authorized_keys` has a

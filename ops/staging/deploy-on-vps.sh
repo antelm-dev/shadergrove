@@ -23,12 +23,24 @@ grep -Eq '^[A-Za-z0-9_-]+$' "$token_file" || {
   exit 1
 }
 
-docker exec -i "$container" node -e '
+docker exec -e DEPLOY_SHA="$sha" -i "$container" node -e '
   const token = require("node:fs").readFileSync(0, "utf8").trim();
+  const sha = process.env.DEPLOY_SHA;
   fetch("http://127.0.0.1:3000/api/deploy/" + token, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-github-event": "push" },
+    body: JSON.stringify({
+      ref: "refs/heads/develop",
+      after: sha,
+      head_commit: { id: sha, message: "CI checks passed" },
+      commits: [{ id: sha, added: [], modified: [], removed: [] }],
+    }),
     signal: AbortSignal.timeout(30000),
-  }).then((response) => {
-    if (!response.ok) throw new Error("Dokploy returned HTTP " + response.status);
+  }).then(async (response) => {
+    if (!response.ok) {
+      const detail = (await response.text()).trim().slice(0, 300).replaceAll(token, "[redacted]");
+      throw new Error("Dokploy returned HTTP " + response.status + ": " + detail);
+    }
   }).catch((error) => {
     console.error(error.message);
     process.exitCode = 1;
