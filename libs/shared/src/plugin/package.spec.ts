@@ -67,7 +67,9 @@ describe('validatePluginPackage', () => {
     expect(errors(pkg({}, { contributions: [{ ...effect, kind: 'analyzer' }] }))[0]).toMatch(
       /kind "analyzer"/,
     );
-    expect(errors(pkg({}, { protocolVersion: 3 }))[0]).toMatch(/protocolVersion 3/);
+    expect(errors(pkg({}, { protocolVersion: 4 }))[0]).toMatch(
+      /protocolVersion 4 is not supported/,
+    );
     expect(errors(pkg({}, { scripts: { postinstall: 'x' } }))[0]).toMatch(/scripts/);
     expect(errors(pkg({ assets: [] }))[0]).toMatch(/assets/);
     expect(errors(pkg({}, { contributions: [{ ...importer, url: 'https://x' }] }))[0]).toMatch(

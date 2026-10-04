@@ -1,4 +1,8 @@
-{
+// Generated from i18n/en.json by tools/workspace/src/generate/official-plugins.ts — do not edit.
+import type { TranslationKey } from './keys';
+
+/** The bundled English: what a key reads when no language pack translates it. */
+export const ENGLISH_MESSAGES: Readonly<Record<TranslationKey, string>> = {
   "language.english": "English",
   "language.french": "French",
   "menu.file": "File",
@@ -732,4 +736,4 @@
   "plugins.runCancelled": "Cancelled. Nothing was imported or written.",
   "plugins.staleResult": "The account, the open shader or the plugin changed while it ran. Nothing was imported or written.",
   "plugins.contentRights": "Imported content keeps its author’s rights and licence; the plugin’s licence covers only the plugin."
-}
+};

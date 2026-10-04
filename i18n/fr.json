@@ -673,6 +673,8 @@
   "plugins.kindImporter": "Importateur",
   "plugins.kindExporter": "Exportateur",
   "plugins.kindTheme": "Thème",
+  "plugins.kindLanguage": "Langue",
+  "plugins.languageDetail": "{name} ({locale})",
   "plugins.useTheme": "Utiliser comme thème de l’app",
   "plugins.themeInUse": "Thème actuel de l’app",
   "plugins.limits": "Limites : fichiers jusqu’à {input} octets, résultats jusqu’à {output} octets, {seconds} s par appel.",

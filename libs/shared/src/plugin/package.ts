@@ -17,8 +17,9 @@
  * independent: a package can be valid yet incompatible with this app.
  *
  * Validation happens before anything is activated. An `effect` is declarative
- * (GLSL plus controls the host turns into a pass), and so is a `theme` (colour
- * roles the host maps onto its own tokens — see `themes`); `importer`/`exporter`
+ * (GLSL plus controls the host turns into a pass), and so are a `theme` (colour
+ * roles the host maps onto its own tokens — see `themes`) and a `language`
+ * (messages for the app's own keys — see `languages`); `importer`/`exporter`
  * are JS run in the plugin Worker. Only the host picks files, builds forms,
  * saves and mutates the project — see `ImporterInput` / `ExporterResult` for the
  * calls.
@@ -34,21 +35,29 @@ import {
   type ProjectExporterContribution,
   type ProjectImporterContribution,
 } from './project';
-import { validateThemeFields, type ThemeContribution } from './themes';
+import { validateLanguageFields, type LanguageContribution } from './languages';
+import { validateThemeFields, validateThemeGroups, type ThemeContribution } from './themes';
+import { utf8Bytes } from './utf8';
 
+export * from './refs';
 export * from './themes';
+export * from './languages';
+export * from './defaults';
+export { utf8Bytes } from './utf8';
 export * from './project';
 export * from './texture-requests';
 export * from './wallpaper-web';
 export * from './catalogue';
 
 /** The newest protocol this host speaks. */
-export const PLUGIN_PROTOCOL_VERSION = 2;
+export const PLUGIN_PROTOCOL_VERSION = 3;
 /**
  * Every protocol this host accepts. Protocol 1 packages keep working
- * unchanged; protocol 2 adds `projectImporter`/`projectExporter` (see `project`).
+ * unchanged; protocol 2 adds `projectImporter`/`projectExporter` (see `project`);
+ * protocol 3 adds `language` and paired themes (theme schema 2). A host that
+ * predates a protocol refuses its packages rather than half-reading them.
  */
-export const SUPPORTED_PLUGIN_PROTOCOLS: readonly number[] = [1, 2];
+export const SUPPORTED_PLUGIN_PROTOCOLS: readonly number[] = [1, 2, 3];
 
 const KiB = 1024;
 const MiB = 1024 * KiB;
@@ -77,10 +86,19 @@ export type PluginContributionKind =
   | 'exporter'
   | 'theme'
   | 'projectImporter'
-  | 'projectExporter';
+  | 'projectExporter'
+  | 'language';
 
-/** Kinds that exist only from protocol 2 on. */
-const PROTOCOL_2_KINDS: readonly PluginContributionKind[] = ['projectImporter', 'projectExporter'];
+/** The protocol each kind first exists in. */
+const KIND_PROTOCOL: Readonly<Record<PluginContributionKind, number>> = {
+  effect: 1,
+  importer: 1,
+  exporter: 1,
+  theme: 1,
+  projectImporter: 2,
+  projectExporter: 2,
+  language: 3,
+};
 
 interface ContributionBase {
   id: string;
@@ -121,7 +139,8 @@ export type PluginContribution =
   | ExporterContribution
   | ThemeContribution
   | ProjectImporterContribution
-  | ProjectExporterContribution;
+  | ProjectExporterContribution
+  | LanguageContribution;
 
 /** The kinds whose work runs as JS in the plugin Worker, and so need `code`. */
 export const isCodeContribution = (contribution: PluginContribution): boolean =>
@@ -237,14 +256,10 @@ export const importerMethod = (id: string): string => `importer:${id}`;
 export const exporterMethod = (id: string): string => `exporter:${id}`;
 
 // This library compiles without DOM or Node types; every runtime that loads it has both.
-declare const TextEncoder: new () => { encode(text: string): Uint8Array };
 declare const TextDecoder: new (
   label: string,
   options: { fatal: boolean },
 ) => { decode(bytes: Uint8Array): string };
-
-const encoder = new TextEncoder();
-export const utf8Bytes = (text: string): number => encoder.encode(text).length;
 
 const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$/;
 const MIME_PATTERN = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/;
@@ -355,7 +370,9 @@ function validateManifest(input: unknown): Result<PluginManifest> {
   if (!isRecord(input)) return fail('manifest must be an object');
   const unknownKey = firstUnknownKey(input, MANIFEST_KEYS);
   if (unknownKey) return fail(`manifest.${unknownKey} is not a known field`);
-  if (utf8Bytes(JSON.stringify(input)) > PLUGIN_LIMITS.manifestBytes) {
+  // A language's messages have their own limit (`LANGUAGE_LIMITS`), checked with
+  // the rest of it; the manifest limit is for everything else.
+  if (utf8Bytes(JSON.stringify(input, withoutMessages)) > PLUGIN_LIMITS.manifestBytes) {
     return fail(`manifest must be at most ${PLUGIN_LIMITS.manifestBytes} bytes`);
   }
 
@@ -397,10 +414,14 @@ function validateManifest(input: unknown): Result<PluginManifest> {
   for (const [index, entry] of contributions.entries()) {
     const result = validateContribution(entry, `manifest.contributions[${index}]`);
     if (!result.ok) return result;
-    if (protocolVersion < 2 && PROTOCOL_2_KINDS.includes(result.value.kind)) {
-      return fail(
-        `manifest.contributions[${index}].kind "${result.value.kind}" needs protocolVersion 2`,
-      );
+    const needs = Math.max(
+      KIND_PROTOCOL[result.value.kind],
+      result.value.kind === 'theme' && result.value.schemaVersion === 2 ? 3 : 1,
+    );
+    if (protocolVersion < needs) {
+      const what =
+        result.value.kind === 'theme' ? 'theme schemaVersion 2' : `kind "${result.value.kind}"`;
+      return fail(`manifest.contributions[${index}]: ${what} needs protocolVersion ${needs}`);
     }
     if (seen.has(result.value.id)) {
       return fail(`manifest.contributions[${index}].id "${result.value.id}" is duplicated`);
@@ -408,6 +429,8 @@ function validateManifest(input: unknown): Result<PluginManifest> {
     seen.add(result.value.id);
     parsed.push(result.value);
   }
+  const groups = validateThemeGroups(parsed);
+  if (!groups.ok) return fail(...groups.errors.map((error) => `manifest.contributions: ${error}`));
 
   return ok({
     id,
@@ -430,10 +453,11 @@ function validateContribution(input: unknown, at: string): Result<PluginContribu
     kind !== 'exporter' &&
     kind !== 'theme' &&
     kind !== 'projectImporter' &&
-    kind !== 'projectExporter'
+    kind !== 'projectExporter' &&
+    kind !== 'language'
   ) {
     return fail(
-      `${at}.kind "${String(kind)}" is not supported (effect, importer, exporter, theme, projectImporter or projectExporter)`,
+      `${at}.kind "${String(kind)}" is not supported (effect, importer, exporter, theme, projectImporter, projectExporter or language)`,
     );
   }
   if (kind === 'effect' || kind === 'importer' || kind === 'exporter') {
@@ -450,6 +474,7 @@ function validateContribution(input: unknown, at: string): Result<PluginContribu
   const base = { id, name: name.value };
 
   if (kind === 'theme') return validateThemeFields(input, at, base);
+  if (kind === 'language') return validateLanguageFields(input, at, base);
   if (kind === 'projectImporter' || kind === 'projectExporter') {
     return validateProjectContributionFields(input, at, base);
   }
@@ -493,6 +518,11 @@ function validateContribution(input: unknown, at: string): Result<PluginContribu
     ...limits,
     params: params.value,
   });
+}
+
+/** A `JSON.stringify` replacer that leaves a language's messages out of the manifest's size. */
+function withoutMessages(this: unknown, key: string, value: unknown): unknown {
+  return key === 'messages' && isRecord(this) && this['kind'] === 'language' ? {} : value;
 }
 
 function controlList(input: unknown, at: string, max: number): Result<ShaderControl[]> {

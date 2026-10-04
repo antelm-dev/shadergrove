@@ -1159,6 +1159,8 @@ export class PluginsPage {
         return this.i18n.t('plugins.kindProjectImporter');
       case 'projectExporter':
         return this.i18n.t('plugins.kindProjectExporter');
+      case 'language':
+        return this.i18n.t('plugins.kindLanguage');
       default:
         return this.i18n.t('plugins.kindTheme');
     }
@@ -1183,6 +1185,11 @@ export class PluginsPage {
         return this.i18n.t('plugins.importsNew');
       case 'projectExporter':
         return this.i18n.t('plugins.exportsProject', { runtime: contribution.runtime });
+      case 'language':
+        return this.i18n.t('plugins.languageDetail', {
+          name: contribution.nativeName,
+          locale: contribution.locale,
+        });
     }
   }
 

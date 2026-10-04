@@ -17,6 +17,8 @@
     "apps/studio/src/desktop/contracts/ipc-bridge.ts",
     "tools/workspace/fixtures/plugins/isf/isf.sgplugin.json",
     "apps/studio/src/plugins/*.sgplugin.json",
+    "apps/studio/src/default-theme.generated.scss",
+    "libs/shared/src/i18n/english.generated.ts",
     ".angular/**",
     "**/.next/**",
     "apps/website/out/**",

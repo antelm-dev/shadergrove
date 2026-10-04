@@ -1,21 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { TRANSLATION_KEYS, placeholderNames } from '@shadergrove/shared/i18n';
+
 import { createLogger } from '../lib/logger.js';
 import { root } from '../lib/paths.js';
 
 type Catalog = Record<string, string>;
 
 const log = createLogger('i18n');
-const keysSource = readFileSync(resolve(root, 'apps/studio/src/app/i18n/keys.ts'), 'utf8');
 const locales = ['en', 'fr'] as const;
-
-const keysMatch = keysSource.match(/export const TRANSLATION_KEYS = \[([\s\S]*?)\] as const/);
-if (!keysMatch) {
-  fail('Could not parse TRANSLATION_KEYS from apps/studio/src/app/i18n/keys.ts');
-}
-
-const keys = [...keysMatch[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+const keys: readonly string[] = TRANSLATION_KEYS;
 if (keys.length === 0) fail('TRANSLATION_KEYS is empty');
 
 const duplicates = keys.filter((key, index) => keys.indexOf(key) !== index);
@@ -52,9 +47,6 @@ for (const locale of locales) {
     }
   }
 }
-
-const placeholderNames = (value: string): string[] =>
-  [...value.matchAll(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g)].map((match) => match[1]).sort();
 
 for (const key of keys) {
   const expected = placeholderNames(catalogs.en[key] ?? '');
