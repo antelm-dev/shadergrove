@@ -4,16 +4,16 @@
 
 Make project importers usable directly from editor commands, and let visitors return from a public shader to their exact Explore browsing context. Two independent vertical slices, one execution wave. This is documentation only; no workers have been launched.
 
-The larger agreed order remains: importer dialog; Explore URL/cache restoration; broader search and sort-aware pagination; Plugins Browse/Installed tabs; persistent top-bar navigation. Only the first two are executable here. They deliver useful behavior without changing the application shell or public API.
+The larger agreed order remains: importer dialog; Explore URL/cache restoration; broader search and sort-aware pagination; Plugins Browse/Installed tabs; persistent top-bar navigation. Only the first two are executable in this phase. Later phases now have separate bounded plans linked from the [full roadmap](../explore-plugins/README.md); do not launch their prompts as part of this cycle.
 
 ## Repository evidence and planning provenance
 
 - Original checkout: `E:/Adel/Documents/Orgs/shader-studio`, branch `develop`.
 - Source HEAD: `bc9c705bf312359845c02ac0f81996ce00b69a93`.
-- Planning ref: `codex/plan-explore-plugins-phase1`; plan directory: `docs/feature-plans/explore-plugins-phase1/`.
+- Planning ref for the full roadmap: `codex/plan-explore-plugins`; plan directory: `docs/feature-plans/explore-plugins-phase1/`. The original Phase 1 planning branch remains retained at `aef78f4b77b693b2c1a198d9a5cde4cba9380314`.
 - Remote: `origin`, `https://github.com/antelm-dev/shadergrove.git`; remote default is `master`, verified on 2026-10-04. Its observed tip was `076b3dcb086da4200f3b261018c7c93dab4c67f5`. Relevant plugin/publication source and RoutingCoordinator have no diff against source HEAD. Refresh again at launch.
 - Original staged changes were `docs/future-plans.md`, `docs/plugin-adapters-plan.md`, `docs/shadertoy-wallpaper-plugins-sketch.md`, and `libs/desktop-api/src/ipc-bridge.ts`; `.bruno/collection.bru` was untracked. None is part of this plan or a worker base.
-- Temporary planning worktree: `E:/Adel/Documents/Orgs/shader-studio/tmp/explore-plugins-phase1-plan`. Remove only this worktree after verifying the docs-only commit; retain its branch.
+- The original Phase 1 temporary worktree at `E:/Adel/Documents/Orgs/shader-studio/tmp/explore-plugins-phase1-plan` was removed after its docs-only commit; its branch was retained. The full-roadmap planning worktree lifecycle is recorded in the overview.
 - No applicable `AGENTS.md` was found. Recheck applicable instructions at execution time.
 
 `PAGE_STYLES` fixes each page over the editor and makes the host its scroll container. Explore currently owns search in a component signal and uses `PublicationApi.list(search, cursor)`. The server searches title and orders by `(updated_at, id)`. Plugins contains installation management and contribution forms; project importer commands currently navigate to `/plugins?use=<packageId>`. Active contribution menus and theme/effect commands already exist. `ProjectPluginActions` owns execution, cancellation, context invalidation and guarded adoption. Host adapters declare provider fields, including credentials; manifests declare importer modes.
@@ -67,11 +67,11 @@ Critical E2E scenarios:
 
 Manually verify the importer in a running desktop renderer and the built SSR application's initial q HTML/hydration. Browser mocks do not prove desktop adapter behavior or SSR. Explicitly report passed, failed, skipped and manual-unverified checks. Each worker produces 1–3 logical commits, a complete diff review and an evidence report with exact SHAs, launch base, acceptance IDs, commands/exit results and residual risks. Stop when the acceptance and aggregate gates pass; do not expand into new features.
 
-## Deferred backlog, not executable assignments
+## Later milestones, not assignments for this phase
 
-1. Description/author search and Recently published/Recently updated sorting. Version and bind public pagination cursors to the selected sort; preserve moderator/admin cursor semantics. Review indexes, matching semantics and actual query costs. No volume/performance claim is established here.
-2. Plugins Browse/Installed tabs after importer extraction. Keep `/plugins?use=` behavior; defer list-plus-detail until catalogue size justifies it.
-3. Persistent Editor/Explore/Plugins top-bar navigation; desktop shows Editor/Plugins. Preserve mounted editor state and standalone routing; validate small screens, focus, mobile and lazy-load races before changing shell placement.
+1. [Phase 2](../explore-plugins-phase2/README.md): description/author search and Recently published/Recently updated sorting, compatible sort-aware cursors and index migration.
+2. [Phase 3](../explore-plugins-phase3/README.md): Plugins Browse/Installed tabs after importer extraction, preserving `/plugins?use=` behavior.
+3. [Phase 4](../explore-plugins-phase4/README.md): persistent Editor/Explore/Plugins top-bar navigation; desktop shows Editor/Plugins, with mounted-state and routing validation.
 4. Metadata/tag/capability filters, ranking/social metrics, live feed previews, desktop Explore, registry changes, theme/effect redesign and unrelated cleanup.
 
 ## Machine-readable review handoff
@@ -79,7 +79,7 @@ Manually verify the importer in a running desktop renderer and the built SSR app
 ```yaml
 review_contract:
   milestone: explore-plugins-phase1
-  planning_ref: codex/plan-explore-plugins-phase1
+  planning_ref: codex/plan-explore-plugins
   source_base: bc9c705bf312359845c02ac0f81996ce00b69a93
   remote: origin
   default_branch: master
