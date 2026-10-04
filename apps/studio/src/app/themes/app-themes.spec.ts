@@ -67,6 +67,11 @@ class MemoryStores {
         records.set(record.id, record);
         return true;
       },
+      replace: async (record) => {
+        if (!records.has(record.id)) return false;
+        records.set(record.id, record);
+        return true;
+      },
       remove: async (id) => void records.delete(id),
       readBootstrap: async () => null,
       writeBootstrap: async () => undefined,

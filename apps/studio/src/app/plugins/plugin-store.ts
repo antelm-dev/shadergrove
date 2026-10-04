@@ -17,6 +17,13 @@ export interface PluginStore {
    * install made meanwhile — in this window or another.
    */
   add(record: StoredPlugin): Promise<boolean>;
+  /**
+   * Writes `record` only over a record of its id, in one step where the store
+   * allows it; whether it wrote. A change to an installed package — switching
+   * it — so a window still showing a package another one removed cannot
+   * bring it back.
+   */
+  replace(record: StoredPlugin): Promise<boolean>;
   remove(id: string): Promise<void>;
   /**
    * What this profile remembers of the default packages, kept apart from the
@@ -109,6 +116,24 @@ export class IndexedDbPluginStore implements PluginStore {
     });
   }
 
+  async replace(record: StoredPlugin): Promise<boolean> {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      // Read and written in one transaction: no delete can land between the two.
+      const transaction = db.transaction('plugins', 'readwrite');
+      const store = transaction.objectStore('plugins');
+      let replaced = false;
+      const existing = store.getKey(record.id);
+      existing.onsuccess = () => {
+        if (existing.result === undefined) return;
+        replaced = true;
+        store.put(record, record.id);
+      };
+      transaction.oncomplete = () => resolve(replaced);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  }
+
   async remove(id: string): Promise<void> {
     await this.request('readwrite', (store) => store.delete(id));
   }
@@ -161,6 +186,12 @@ export class DesktopPluginStore implements PluginStore {
     return true;
   }
 
+  async replace(record: StoredPlugin): Promise<boolean> {
+    if (!(await this.list()).some((stored) => stored.id === record.id)) return false;
+    await this.put(record);
+    return true;
+  }
+
   async remove(id: string): Promise<void> {
     await window.electron.bridge.plugins.remove(id);
   }
@@ -184,6 +215,9 @@ export class NoPluginStore implements PluginStore {
     throw new Error('Plugins cannot be installed here');
   }
   async add(): Promise<boolean> {
+    throw new Error('Plugins cannot be installed here');
+  }
+  async replace(): Promise<boolean> {
     throw new Error('Plugins cannot be installed here');
   }
   async remove(): Promise<void> {}

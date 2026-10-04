@@ -109,6 +109,8 @@ describe('PluginCommands', () => {
               list: async () => [...records.values()],
               put: async (stored: StoredPlugin) => void records.set(stored.id, stored),
               remove: async (id: string) => void records.delete(id),
+              replace: async (record: StoredPlugin) =>
+                records.has(record.id) ? (records.set(record.id, record), true) : false,
               readBootstrap: async () => null,
               writeBootstrap: async () => undefined,
             };

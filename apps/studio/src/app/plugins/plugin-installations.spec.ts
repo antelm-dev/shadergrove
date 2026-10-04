@@ -39,6 +39,11 @@ class MemoryStores {
         records.set(record.id, record);
         return true;
       },
+      replace: async (record) => {
+        if (!records.has(record.id)) return false;
+        records.set(record.id, record);
+        return true;
+      },
       remove: async (id) => void records.delete(id),
       readBootstrap: async () => null,
       writeBootstrap: async () => undefined,
@@ -416,6 +421,12 @@ class SeedingStores {
         await after?.(profile, record);
         return true;
       },
+      replace: async (record) => {
+        if (!records.has(record.id)) return false;
+        this.writes.push(`${profile}:put:${record.id}`);
+        records.set(record.id, record);
+        return true;
+      },
       remove: async (id) => {
         this.writes.push(`${profile}:remove:${id}`);
         records.delete(id);
@@ -680,6 +691,21 @@ describe('PluginInstallations — default packages', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('does not bring back a package another window removed when a stale list switches it', async () => {
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    const first = setup();
+    await settled(first);
+    const second = TestBed.runInInjectionContext(() => new PluginInstallations());
+    await settled(second);
+    expect(second.find(themes)).toBeDefined();
+
+    await first.remove(themes);
+    // Before the second window has heard of it, it still lists the pack and switches it.
+    await second.setEnabled(themes, false);
+    expect(stores.records.get('anonymous')!.has(themes)).toBe(false);
+    await vi.waitFor(() => expect(second.find(themes)).toBeUndefined());
   });
 
   it("shows another window's changes at once, the output window's included", async () => {
