@@ -31,6 +31,11 @@ and Swagger dependencies installed in the final studio image. Docker uses
 registry integrity hashes. The root dependency versions must stay aligned;
 `check-runtime-deps.mjs` rejects drift. Renovate groups updates across manifests.
 
+A scoped npm override patches Swagger's pinned `js-yaml@5.2.1` to `5.2.2` for
+[GHSA-pm4m-ph32-ghv5](https://github.com/advisories/GHSA-pm4m-ph32-ghv5).
+Remove the override when Swagger depends on a patched version upstream; it does
+not suppress findings or alter the workspace dependency graph.
+
 To update this inventory manually, update the root and runtime manifests, then:
 
 ```sh
