@@ -1,8 +1,11 @@
+import { isPlatformBrowser } from '@angular/common';
 import {
+  DestroyRef,
   Injectable,
   InjectionToken,
   computed,
   effect,
+  PLATFORM_ID,
   inject,
   signal,
   untracked,
@@ -143,7 +146,9 @@ export class PluginInstallations {
    * changed, so the one still showing it reloads — the output window included.
    */
   private readonly channel =
-    typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('shadergrove-plugins');
+    isPlatformBrowser(inject(PLATFORM_ID)) && typeof BroadcastChannel !== 'undefined'
+      ? new BroadcastChannel('shadergrove-plugins')
+      : null;
   /** Work under way per package; aborted when the package is switched off, replaced or removed. */
   private readonly pending = new Map<string, Set<AbortController>>();
 
@@ -152,6 +157,7 @@ export class PluginInstallations {
       const profile = this.profile();
       untracked(() => void this.switchTo(profile));
     });
+    inject(DestroyRef).onDestroy(() => this.channel?.close());
     this.channel?.addEventListener('message', (event: MessageEvent<{ profile?: unknown }>) => {
       if (event.data?.profile !== this.profile()) return;
       this.reload().catch((error: unknown) => console.warn('Plugins could not be reloaded', error));

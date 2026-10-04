@@ -1,6 +1,6 @@
 import { DOCUMENT, PLATFORM_ID } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_FILE_EXPLORER_OPEN,
@@ -244,6 +244,20 @@ describe('Preferences theme fields', () => {
     expect(prefs.value()).toMatchObject(appearance);
     expect(prefs.value().browserWidth).toBe(300);
     expect(browserWidth).toBe(420);
+  });
+
+  it("does not answer another window's save that changes nothing it shares", () => {
+    makePreferences(JSON.stringify({ browserWidth: 300, language: 'fr' }));
+    TestBed.tick();
+    const storage = TestBed.inject(DOCUMENT).defaultView!.localStorage;
+    const written = vi.spyOn(storage, 'setItem');
+    // The other window's own layout, with the same appearance as this one.
+    const theirs = JSON.stringify({ browserWidth: 420, language: 'fr' });
+    storage.setItem(STORAGE_KEY, theirs);
+    written.mockClear();
+    for (const listener of storageListeners) listener({ key: STORAGE_KEY, newValue: theirs });
+    TestBed.tick();
+    expect(written).not.toHaveBeenCalled();
   });
 
   it('leaves the root colour scheme to the theme service', () => {

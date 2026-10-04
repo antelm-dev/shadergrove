@@ -262,6 +262,10 @@ export class Preferences {
       this.document.defaultView?.addEventListener?.('storage', (event) => {
         if (event.key !== STORAGE_KEY || event.newValue === null) return;
         const saved = this.load();
+        // Only a real difference is taken: patching anyway would save this window's state,
+        // which the other window would read back — and the two would answer each other forever.
+        const current = this.state();
+        if (SHARED_KEYS.every((key) => saved[key] === current[key])) return;
         this.patch(Object.fromEntries(SHARED_KEYS.map((key) => [key, saved[key]])));
       });
     }

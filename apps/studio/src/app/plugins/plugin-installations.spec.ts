@@ -1,4 +1,4 @@
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { PLATFORM_ID, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -650,6 +650,36 @@ describe('PluginInstallations — default packages', () => {
     // The window that found them seeded by the other one loads them too.
     expect(ids(second)).toEqual(ids(first));
     expect(ids(second)).toEqual(DEFAULT_PACKAGE_IDS.map((id) => [id, true]).sort());
+  });
+
+  it('opens its channel in the browser only, and closes it with the app', async () => {
+    const channels: { close: ReturnType<typeof vi.fn> }[] = [];
+    vi.stubGlobal(
+      'BroadcastChannel',
+      class {
+        readonly close = vi.fn();
+        constructor() {
+          channels.push(this);
+        }
+        addEventListener(): void {}
+        postMessage(): void {}
+      },
+    );
+    try {
+      TestBed.configureTestingModule({
+        providers: [...providers(), { provide: PLATFORM_ID, useValue: 'server' }],
+      });
+      TestBed.inject(PluginInstallations);
+      expect(channels).toHaveLength(0);
+
+      TestBed.resetTestingModule();
+      setup();
+      expect(channels).toHaveLength(1);
+      TestBed.resetTestingModule();
+      expect(channels[0]!.close).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("shows another window's changes at once, the output window's included", async () => {
