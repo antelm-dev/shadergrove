@@ -13,8 +13,20 @@ internal port 80. There is no published host port for the website container.
 The Dockerfile installs only the website and brand workspace dependencies,
 generates `apps/website/out`, and serves it with Nginx. Its configuration is
 [`ops/website/nginx.conf`](../ops/website/nginx.conf). `/_next/static/` assets
-have immutable caching; pages use normal revalidation. The website's current
-calls to action point to the GitHub repository.
+have immutable caching; pages use normal revalidation.
+
+The hero's **Start creating** link uses `NEXT_PUBLIC_STUDIO_URL`. In Dokploy,
+set this public variable in the website application's **Build Arguments**
+so Docker receives it when compiling the static site:
+
+```dotenv
+NEXT_PUBLIC_STUDIO_URL=https://staging.45-155-170-120.sslip.io/
+```
+
+The URL is baked into the static export: redeploy the website after changing it.
+Without a value, the button falls back to the repository's quick-start section.
+For local development, copy `apps/website/.env.example` to
+`apps/website/.env.local`. The header's GitHub link remains the source-code link.
 
 On a push to `develop`, GitHub Actions runs the existing checks and builds
 both the studio and website images. Once they pass, the restricted SSH deploy

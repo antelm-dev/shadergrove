@@ -25,6 +25,13 @@
   "nx": {
     "targets": {
       "build": {
+        "inputs": [
+          "production",
+          "^production",
+          {
+            "env": "NEXT_PUBLIC_STUDIO_URL"
+          }
+        ],
         "outputs": [
           "{projectRoot}/out"
         ]

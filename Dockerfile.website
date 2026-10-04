@@ -17,6 +17,9 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
 COPY apps/website ./apps/website
 COPY libs/brand ./libs/brand
 
+ARG NEXT_PUBLIC_STUDIO_URL
+ENV NEXT_PUBLIC_STUDIO_URL=${NEXT_PUBLIC_STUDIO_URL}
+
 RUN pnpm --filter @shadergrove/website build
 
 FROM nginx:stable-alpine AS runtime
