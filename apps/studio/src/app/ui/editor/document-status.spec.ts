@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompileDiagnostic } from '@shadergrove/shared/diagnostic';
 import { Preferences, type WorkspacePreferences } from '../../prefs/preferences';
 import { ShaderStore } from '../../workspace/shader-store';
-import { I18nCatalog, type I18nCatalogMap } from '../../i18n/catalog';
 import { I18n } from '../../i18n/i18n';
+import { provideTestLanguages, speaking } from '../../i18n/testing/languages';
 import { DocumentStatus } from './document-status';
 
 class FakeStore implements Partial<ShaderStore> {
@@ -18,16 +15,6 @@ class FakeStore implements Partial<ShaderStore> {
   readonly saving = signal(false) as unknown as ShaderStore['saving'];
   readonly configValid = signal(true) as unknown as ShaderStore['configValid'];
   readonly diagnostics = signal<readonly CompileDiagnostic[]>([]);
-}
-
-class FileCatalog extends I18nCatalog {
-  override load(locale: 'en' | 'fr'): Promise<I18nCatalogMap> {
-    const raw = readFileSync(
-      resolve(import.meta.dirname, `../../../../../../i18n/${locale}.json`),
-      'utf8',
-    );
-    return Promise.resolve(JSON.parse(raw) as I18nCatalogMap);
-  }
 }
 
 const error = (source: CompileDiagnostic['source']): CompileDiagnostic =>
@@ -39,30 +26,29 @@ const warning = (): CompileDiagnostic =>
 describe('DocumentStatus', () => {
   let store: FakeStore;
   let status: DocumentStatus;
-  const language = signal({ language: 'en' as 'en' | 'fr' });
+  const language = signal(speaking('en'));
 
   beforeEach(async () => {
     vi.useFakeTimers();
     store = new FakeStore();
-    language.set({ language: 'en' });
+    language.set(speaking('en'));
     TestBed.configureTestingModule({
       providers: [
         DocumentStatus,
         I18n,
-        { provide: I18nCatalog, useClass: FileCatalog },
+        provideTestLanguages(),
         { provide: ShaderStore, useValue: store },
         {
           provide: Preferences,
           useValue: {
             value: language.asReadonly(),
             patch: (patch: Partial<WorkspacePreferences>) => {
-              if (patch.language) language.set({ language: patch.language });
+              language.update((value) => ({ ...value, ...patch }));
             },
           },
         },
       ],
     });
-    await TestBed.inject(I18n).ensureLoaded('en');
     status = TestBed.inject(DocumentStatus);
     TestBed.tick();
   });

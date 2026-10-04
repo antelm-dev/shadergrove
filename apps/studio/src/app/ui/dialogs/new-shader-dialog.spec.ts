@@ -1,26 +1,13 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatDialogRef } from '@angular/material/dialog';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { I18nCatalog, type I18nCatalogMap } from '../../i18n/catalog';
 import { I18n } from '../../i18n/i18n';
+import { provideTestLanguages } from '../../i18n/testing/languages';
 import { PluginCommands, type PluginCommand } from '../../plugins/plugin-commands';
 import { Preferences } from '../../prefs/preferences';
 import { NewShaderDialog } from './new-shader-dialog';
-
-class FileCatalog extends I18nCatalog {
-  override load(locale: 'en' | 'fr'): Promise<I18nCatalogMap> {
-    const raw = readFileSync(
-      resolve(import.meta.dirname, `../../../../../../i18n/${locale}.json`),
-      'utf8',
-    );
-    return Promise.resolve(JSON.parse(raw) as I18nCatalogMap);
-  }
-}
 
 describe('NewShaderDialog', () => {
   const imports = signal<PluginCommand[]>([]);
@@ -34,13 +21,12 @@ describe('NewShaderDialog', () => {
       providers: [
         provideZonelessChangeDetection(),
         I18n,
-        { provide: I18nCatalog, useClass: FileCatalog },
+        provideTestLanguages(),
         { provide: Preferences, useValue: { value: signal({ language: 'en' }).asReadonly() } },
         { provide: MatDialogRef, useValue: { close } },
         { provide: PluginCommands, useValue: { imports } },
       ],
     });
-    await TestBed.inject(I18n).ensureLoaded('en');
   });
 
   afterEach(() => TestBed.resetTestingModule());

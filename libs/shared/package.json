@@ -117,6 +117,10 @@
       "types": "./src/plugin/package.ts",
       "default": "./src/plugin/package.ts"
     },
+    "./i18n": {
+      "types": "./src/i18n/index.ts",
+      "default": "./src/i18n/index.ts"
+    },
     "./version": {
       "types": "./src/version.ts",
       "default": "./src/version.ts"

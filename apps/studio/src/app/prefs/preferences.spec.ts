@@ -1,6 +1,6 @@
 import { DOCUMENT, PLATFORM_ID } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_FILE_EXPLORER_OPEN,
@@ -12,8 +12,12 @@ import { Preferences } from './preferences';
 
 const STORAGE_KEY = 'shader-studio.preferences';
 
+/** What another window's save looks like to this one. */
+let storageListeners: ((event: { key: string | null; newValue: string | null }) => void)[] = [];
+
 function makePreferences(storageData?: string): Preferences {
   const storage = new Map<string, string>();
+  storageListeners = [];
   if (storageData !== undefined) storage.set(STORAGE_KEY, storageData);
 
   const mockStorage = {
@@ -30,6 +34,9 @@ function makePreferences(storageData?: string): Preferences {
           defaultView: {
             localStorage: mockStorage,
             matchMedia: () => null,
+            addEventListener: (type: string, listener: (typeof storageListeners)[number]) => {
+              if (type === 'storage') storageListeners.push(listener);
+            },
           },
           documentElement: { style: {} },
         },
@@ -175,6 +182,82 @@ describe('Preferences theme fields', () => {
     expect(prefs.value().colorScheme).toBe('light');
     expect(prefs.value().editorAppearance).toMatchObject({ theme: 'auto', fontSize: 15 });
     expect(prefs.value().fileExplorerWidth).toBe(300);
+  });
+
+  it('reads a legacy store as unmigrated: builtin theme in fixed mode, no language pack yet', () => {
+    const prefs = makePreferences(JSON.stringify({ language: 'fr', colorScheme: 'system' }));
+    expect(prefs.value()).toMatchObject({
+      language: 'fr',
+      languagePackId: null,
+      appThemeId: 'builtin',
+      appThemeMode: 'fixed',
+      colorScheme: 'system',
+    });
+  });
+
+  it('keeps theme modes, language references and any canonical locale; nothing malformed', () => {
+    const kept = makePreferences(
+      JSON.stringify({
+        language: 'pt-BR',
+        languagePackId: 'plugin:dev.example.portuguese/portuguese',
+        appThemeMode: 'system',
+      }),
+    );
+    expect(kept.value()).toMatchObject({
+      language: 'pt-BR',
+      languagePackId: 'plugin:dev.example.portuguese/portuguese',
+      appThemeMode: 'system',
+    });
+    TestBed.resetTestingModule();
+    const recovered = makePreferences(
+      JSON.stringify({ language: 'pt_br', languagePackId: 'fallback-en' }),
+    );
+    expect(recovered.value()).toMatchObject({ language: 'en', languagePackId: 'fallback-en' });
+    TestBed.resetTestingModule();
+    const malformed = makePreferences(
+      JSON.stringify({ language: '../x', languagePackId: 'fr', appThemeMode: 'auto' }),
+    );
+    expect(malformed.value()).toMatchObject({
+      language: 'en',
+      languagePackId: null,
+      appThemeMode: 'fixed',
+    });
+  });
+
+  it("wears another window's theme and language, keeping its own layout", () => {
+    const prefs = makePreferences(JSON.stringify({ browserWidth: 300 }));
+    const saved = {
+      appThemeId: 'plugin:dev.shadergrove.default-themes/light',
+      appThemeMode: 'system',
+      colorScheme: 'system',
+      language: 'fr',
+      languagePackId: 'plugin:dev.shadergrove.language-fr/french',
+      browserWidth: 420,
+    };
+    const storage = TestBed.inject(DOCUMENT).defaultView!.localStorage;
+    storage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    for (const listener of storageListeners) {
+      listener({ key: 'something-else', newValue: '{}' });
+      listener({ key: STORAGE_KEY, newValue: JSON.stringify(saved) });
+    }
+    const { browserWidth, ...appearance } = saved;
+    expect(prefs.value()).toMatchObject(appearance);
+    expect(prefs.value().browserWidth).toBe(300);
+    expect(browserWidth).toBe(420);
+  });
+
+  it("does not answer another window's save that changes nothing it shares", () => {
+    makePreferences(JSON.stringify({ browserWidth: 300, language: 'fr' }));
+    TestBed.tick();
+    const storage = TestBed.inject(DOCUMENT).defaultView!.localStorage;
+    const written = vi.spyOn(storage, 'setItem');
+    // The other window's own layout, with the same appearance as this one.
+    const theirs = JSON.stringify({ browserWidth: 420, language: 'fr' });
+    storage.setItem(STORAGE_KEY, theirs);
+    written.mockClear();
+    for (const listener of storageListeners) listener({ key: STORAGE_KEY, newValue: theirs });
+    TestBed.tick();
+    expect(written).not.toHaveBeenCalled();
   });
 
   it('leaves the root colour scheme to the theme service', () => {

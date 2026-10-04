@@ -212,11 +212,10 @@ export class WorkspaceActions {
   }
 
   async duplicateShader(id: string, currentName: string): Promise<void> {
-    const suffix = this.i18n.locale() === 'fr' ? 'copie' : 'copy';
     const name = await this.prompt({
       title: this.i18n.t('dialog.duplicateShader'),
       label: this.i18n.t('dialog.duplicateName'),
-      value: `${currentName} ${suffix}`,
+      value: `${currentName} ${this.i18n.t('dialog.copySuffix')}`,
       confirmText: this.i18n.t('dialog.duplicateConfirm'),
     });
     if (name) await this.guardedTransition(() => this.store.duplicate(id, name));
@@ -340,7 +339,6 @@ export class WorkspaceActions {
       )
       .map((pass) => pass.name);
 
-    const join = this.i18n.locale() === 'fr' ? ' et ' : ' and ';
     const confirmed = await this.confirm({
       title: this.i18n.t('dialog.deleteBuffer'),
       message:
@@ -350,7 +348,7 @@ export class WorkspaceActions {
           : consumers.length === 1
             ? this.i18n.t('dialog.deleteBufferConsumersOne', { name: consumers[0] })
             : this.i18n.t('dialog.deleteBufferConsumersMany', {
-                names: consumers.join(join),
+                names: this.i18n.formatList(consumers),
               })),
       confirmText: this.i18n.t('action.delete'),
       destructive: true,

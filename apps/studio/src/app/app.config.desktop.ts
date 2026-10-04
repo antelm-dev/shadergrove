@@ -11,7 +11,6 @@ import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
 import { DesktopShaderApi } from './desktop/desktop-shader-api';
 import { ShaderApi } from './api/shader-api';
-import { DesktopI18nCatalog } from './i18n/catalog';
 import { provideI18n } from './i18n/provide-i18n';
 import { provideHostAdapters } from './plugins/host-adapters';
 import { ShadertoyApiProvider } from './plugins/providers/shadertoy-provider';
@@ -25,7 +24,7 @@ export const desktopConfig: ApplicationConfig = {
     provideRouter(routes),
     DesktopShaderApi,
     { provide: ShaderApi, useExisting: DesktopShaderApi },
-    provideI18n(DesktopI18nCatalog),
+    provideI18n(),
     // The host halves of the official plugins: what their manifests may name, nothing more.
     provideHostAdapters({
       sourceProviders: [ShadertoyApiProvider],

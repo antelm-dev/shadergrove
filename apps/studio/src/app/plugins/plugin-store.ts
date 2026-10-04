@@ -1,3 +1,4 @@
+import { sanitizeBootstrapState, type PluginBootstrapState } from '@shadergrove/shared/plugin';
 import type { StoredPlugin } from '../../desktop/contracts/contracts';
 
 export type { StoredPlugin };
@@ -10,7 +11,33 @@ export interface PluginStore {
   list(): Promise<StoredPlugin[]>;
   /** Keyed by `record.id`, the id from the package's own manifest. */
   put(record: StoredPlugin): Promise<void>;
+  /**
+   * Writes `record` only if no record has its id, in one step where the store
+   * allows it; whether it wrote. What seeding uses, so it never replaces an
+   * install made meanwhile — in this window or another.
+   */
+  add(record: StoredPlugin): Promise<boolean>;
+  /**
+   * Writes `record` only over the same install — a record of its id and
+   * `installedAt` — in one step where the store allows it; whether it wrote.
+   * A change to an installed package, switching it: a window still showing a
+   * package another one removed, or replaced with another version, can
+   * neither bring it back nor write the old version over the new.
+   */
+  replace(record: StoredPlugin): Promise<boolean>;
   remove(id: string): Promise<void>;
+  /**
+   * Deletes the record of `expected.id` only if it is still exactly `expected`
+   * (text, switch, install time), in one step; whether it did. How seeding
+   * undoes its own write without ever deleting an install made after it.
+   */
+  removeIf(expected: StoredPlugin): Promise<boolean>;
+  /**
+   * What this profile remembers of the default packages, kept apart from the
+   * packages themselves; `null` where defaults are never seeded.
+   */
+  readBootstrap(): Promise<PluginBootstrapState | null>;
+  writeBootstrap(state: PluginBootstrapState): Promise<void>;
 }
 
 /**
@@ -20,8 +47,33 @@ export interface PluginStore {
  */
 export class IndexedDbPluginStore implements PluginStore {
   private db: Promise<IDBDatabase> | null = null;
+  private bootstrapDb: Promise<IDBDatabase> | null = null;
 
+  /**
+   * The bootstrap state lives in a companion database (`<name>:bootstrap`): the
+   * packages' own database keeps its schema and version, so an older release
+   * still opens it after a downgrade.
+   */
   constructor(private readonly name: string) {}
+
+  async readBootstrap(): Promise<PluginBootstrapState> {
+    const db = await (this.bootstrapDb ??= openDatabase(`${this.name}:bootstrap`, 'state'));
+    return new Promise((resolve, reject) => {
+      const request = db.transaction('state', 'readonly').objectStore('state').get('bootstrap');
+      request.onsuccess = () => resolve(sanitizeBootstrapState(request.result));
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async writeBootstrap(state: PluginBootstrapState): Promise<void> {
+    const db = await (this.bootstrapDb ??= openDatabase(`${this.name}:bootstrap`, 'state'));
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction('state', 'readwrite');
+      transaction.objectStore('state').put(sanitizeBootstrapState(state), 'bootstrap');
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error);
+    });
+  }
 
   /**
    * Each record under its own string key, whatever it holds: a value damaged outside
@@ -54,18 +106,66 @@ export class IndexedDbPluginStore implements PluginStore {
     await this.request('readwrite', (store) => store.put(record, record.id));
   }
 
+  async add(record: StoredPlugin): Promise<boolean> {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction('plugins', 'readwrite');
+      const request = transaction.objectStore('plugins').add(record, record.id);
+      let added = true;
+      request.onerror = (event) => {
+        // The id is taken: not a failure, and not one that may abort the transaction.
+        if (request.error?.name !== 'ConstraintError') return;
+        added = false;
+        event.preventDefault();
+      };
+      transaction.oncomplete = () => resolve(added);
+      transaction.onabort = () => reject(transaction.error ?? request.error);
+    });
+  }
+
+  async replace(record: StoredPlugin): Promise<boolean> {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      // Read and written in one transaction: no delete can land between the two.
+      const transaction = db.transaction('plugins', 'readwrite');
+      const store = transaction.objectStore('plugins');
+      let replaced = false;
+      const existing = store.get(record.id);
+      existing.onsuccess = () => {
+        const value = existing.result as Partial<StoredPlugin> | undefined;
+        if (value?.installedAt !== record.installedAt) return;
+        replaced = true;
+        store.put(record, record.id);
+      };
+      transaction.oncomplete = () => resolve(replaced);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  }
+
   async remove(id: string): Promise<void> {
     await this.request('readwrite', (store) => store.delete(id));
   }
 
-  private open(): Promise<IDBDatabase> {
-    this.db ??= new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.name, 1);
-      request.onupgradeneeded = () => request.result.createObjectStore('plugins');
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
+  async removeIf(expected: StoredPlugin): Promise<boolean> {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      // Read, compared and deleted in one transaction: no write can land in between.
+      const transaction = db.transaction('plugins', 'readwrite');
+      const store = transaction.objectStore('plugins');
+      let removed = false;
+      const existing = store.get(expected.id);
+      existing.onsuccess = () => {
+        if (!sameRecord(existing.result as Partial<StoredPlugin> | undefined, expected)) return;
+        removed = true;
+        store.delete(expected.id);
+      };
+      transaction.oncomplete = () => resolve(removed);
+      transaction.onabort = () => reject(transaction.error);
     });
-    return this.db;
+  }
+
+  private open(): Promise<IDBDatabase> {
+    return (this.db ??= openDatabase(this.name, 'plugins'));
   }
 
   private async request(
@@ -84,6 +184,26 @@ export class IndexedDbPluginStore implements PluginStore {
   }
 }
 
+/** The same install, unchanged: id, text, switch and install time. */
+function sameRecord(stored: Partial<StoredPlugin> | undefined, expected: StoredPlugin): boolean {
+  return (
+    stored?.id === expected.id &&
+    stored.text === expected.text &&
+    stored.enabled === expected.enabled &&
+    stored.installedAt === expected.installedAt
+  );
+}
+
+/** One object store, version 1. */
+function openDatabase(name: string, store: string): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(store);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 /** The desktop app's: files under `<userData>/plugins`, written by the main process. */
 export class DesktopPluginStore implements PluginStore {
   list(): Promise<StoredPlugin[]> {
@@ -95,8 +215,37 @@ export class DesktopPluginStore implements PluginStore {
     await window.electron.bridge.plugins.put(record);
   }
 
+  /** Checked, then written: only the main window writes here, one operation at a time. */
+  async add(record: StoredPlugin): Promise<boolean> {
+    if ((await this.list()).some((stored) => stored.id === record.id)) return false;
+    await this.put(record);
+    return true;
+  }
+
+  async replace(record: StoredPlugin): Promise<boolean> {
+    const same = (stored: StoredPlugin) =>
+      stored.id === record.id && stored.installedAt === record.installedAt;
+    if (!(await this.list()).some(same)) return false;
+    await this.put(record);
+    return true;
+  }
+
   async remove(id: string): Promise<void> {
     await window.electron.bridge.plugins.remove(id);
+  }
+
+  removeIf(expected: StoredPlugin): Promise<boolean> {
+    // The main process reads, compares and deletes as one serialized write.
+    return window.electron.bridge.plugins.removeIf(expected);
+  }
+
+  async readBootstrap(): Promise<PluginBootstrapState | null> {
+    const state = await window.electron.bridge.plugins.bootstrap();
+    return state === null ? null : sanitizeBootstrapState(state);
+  }
+
+  async writeBootstrap(state: PluginBootstrapState): Promise<void> {
+    await window.electron.bridge.plugins.saveBootstrap(state);
   }
 }
 
@@ -108,5 +257,18 @@ export class NoPluginStore implements PluginStore {
   async put(): Promise<void> {
     throw new Error('Plugins cannot be installed here');
   }
+  async add(): Promise<boolean> {
+    throw new Error('Plugins cannot be installed here');
+  }
+  async replace(): Promise<boolean> {
+    throw new Error('Plugins cannot be installed here');
+  }
   async remove(): Promise<void> {}
+  async removeIf(): Promise<boolean> {
+    return false;
+  }
+  async readBootstrap(): Promise<null> {
+    return null;
+  }
+  async writeBootstrap(): Promise<void> {}
 }

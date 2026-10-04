@@ -1,15 +1,23 @@
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  DEFAULT_THEMES_PACKAGE_ID,
+  DEFAULT_THEME_REFS,
+  parsePluginPackage,
+} from '@shadergrove/shared/plugin';
+
 import { AuthService } from '../auth/auth.service';
 import { DesktopPlatform } from '../desktop/desktop-platform';
-import { I18n } from '../i18n/i18n';
+import { I18n, languageEntries, type LanguageEntry } from '../i18n/i18n';
+import { installedPackage } from '../i18n/testing/languages';
 import { WallpaperWebRuntime } from '../rendering/wallpaper-runtime';
 import { AppThemes } from '../themes/app-themes';
+import { pluginThemeEntries, themePairs, type PluginThemeEntry } from '../themes/theme-catalog';
 import { WorkspaceActions } from '../ui/workspace-actions';
 import { ShaderStore } from '../workspace/shader-store';
 import { EffectAdoption } from './effect-adoption';
@@ -65,6 +73,12 @@ function effectPackage(): string {
   });
 }
 
+const themeEntries = signal<PluginThemeEntry[]>([]);
+const selectPlugin = vi.fn();
+const selectSystem = vi.fn();
+const languages = signal<LanguageEntry[]>([]);
+const selectLanguage = vi.fn();
+
 describe('PluginCommands', () => {
   const user = signal<{ id: string } | null>(null);
   const status = signal<'loading' | 'anonymous' | 'authenticated'>('anonymous');
@@ -95,6 +109,12 @@ describe('PluginCommands', () => {
               list: async () => [...records.values()],
               put: async (stored: StoredPlugin) => void records.set(stored.id, stored),
               remove: async (id: string) => void records.delete(id),
+              replace: async (record: StoredPlugin) =>
+                records.get(record.id)?.installedAt === record.installedAt
+                  ? (records.set(record.id, record), true)
+                  : false,
+              readBootstrap: async () => null,
+              writeBootstrap: async () => undefined,
             };
           },
         },
@@ -105,6 +125,9 @@ describe('PluginCommands', () => {
           useValue: {
             t: (key: string, params?: object) =>
               params ? `${key} ${JSON.stringify(params)}` : key,
+            languages,
+            label: (entry: LanguageEntry) => entry.language.nativeName,
+            select: selectLanguage,
           },
         },
         { provide: WorkspaceActions, useValue: {} },
@@ -112,7 +135,15 @@ describe('PluginCommands', () => {
           provide: ShaderStore,
           useValue: { selectedId: signal('waves'), record, notice },
         },
-        { provide: AppThemes, useValue: { entries: signal([]) } },
+        {
+          provide: AppThemes,
+          useValue: {
+            entries: themeEntries,
+            pairs: computed(() => themePairs(themeEntries())),
+            selectPlugin,
+            selectSystem,
+          },
+        },
         { provide: EffectAdoption, useValue: { adopt } },
         { provide: Router, useValue: { navigate } },
         { provide: SOURCE_PROVIDERS, useValue: provider, multi: true },
@@ -151,6 +182,63 @@ describe('PluginCommands', () => {
   });
 
   afterEach(() => TestBed.resetTestingModule());
+
+  it('offers every active theme and System for each pair, selecting through the theme service', async () => {
+    const parsed = parsePluginPackage(text(DEFAULT_THEMES_PACKAGE_ID));
+    if (!parsed.ok) throw new Error(parsed.errors.join());
+    const id = DEFAULT_THEMES_PACKAGE_ID;
+    themeEntries.set(
+      pluginThemeEntries([
+        {
+          id,
+          stored: { id, text: '', enabled: true, installedAt: '' },
+          plugin: parsed.value,
+          problem: null,
+          active: true,
+        },
+      ]),
+    );
+    const { commands } = setup();
+    await settle();
+    const themes = commands.themeCommands();
+    // The app's own themes read in the app's language.
+    expect(labels(themes)).toEqual([
+      'menu.theme: theme.light',
+      'menu.theme: theme.dark',
+      'menu.theme: theme.system',
+    ]);
+    expect(themes.map((command) => command.icon())).toEqual([
+      'light_mode',
+      'dark_mode',
+      'contrast',
+    ]);
+
+    themes[1]!.action();
+    themes[2]!.action();
+    expect(selectPlugin).toHaveBeenCalledWith(DEFAULT_THEME_REFS.dark);
+    expect(selectSystem).toHaveBeenCalledWith(`${id}/default`);
+
+    themeEntries.set([]);
+    expect(commands.themeCommands()).toEqual([]);
+  });
+
+  it('offers every active language, then the bundled English, choosing through I18n', async () => {
+    languages.set(languageEntries([installedPackage(text('dev.shadergrove.language-fr'))]));
+    const { commands } = setup();
+    await settle();
+    expect(labels(commands.languageCommands())).toEqual([
+      'menu.language: Français',
+      'menu.language: language.fallback',
+    ]);
+    commands.languageCommands()[0]!.action();
+    commands.languageCommands()[1]!.action();
+    expect(selectLanguage.mock.calls).toEqual([
+      ['plugin:dev.shadergrove.language-fr/french'],
+      ['fallback-en'],
+    ]);
+    languages.set([]);
+    expect(labels(commands.languageCommands())).toEqual(['menu.language: language.fallback']);
+  });
 
   it('offers nothing for a package that is missing, or installed but switched off', async () => {
     const { commands, installations } = setup();

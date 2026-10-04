@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { Component, input, output, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
@@ -15,21 +12,11 @@ import {
 import { LIMITS } from '@shadergrove/shared/validate';
 import { CodeEditor, type EditorDoc } from '../../editor/code-editor';
 import { EditorSettings } from '../../editor/editor-settings';
-import { I18nCatalog, type I18nCatalogMap } from '../../i18n/catalog';
 import { I18n } from '../../i18n/i18n';
+import { provideTestLanguages } from '../../i18n/testing/languages';
 import { Preferences, createDefaultWorkspacePreferences } from '../../prefs/preferences';
 import { ShaderStore } from '../../workspace/shader-store';
 import { CustomEffectEditor } from './custom-effect-editor';
-
-class FileCatalog extends I18nCatalog {
-  override load(locale: 'en' | 'fr'): Promise<I18nCatalogMap> {
-    const raw = readFileSync(
-      resolve(import.meta.dirname, `../../../../../../i18n/${locale}.json`),
-      'utf8',
-    );
-    return Promise.resolve(JSON.parse(raw) as I18nCatalogMap);
-  }
-}
 
 /** Monaco has no place in jsdom; the dialog only needs a document in and edits out. */
 @Component({ selector: 'app-code-editor', template: '' })
@@ -61,7 +48,7 @@ describe('CustomEffectEditor', () => {
       imports: [CustomEffectEditor],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: I18nCatalog, useClass: FileCatalog },
+        provideTestLanguages(),
         I18n,
         { provide: MAT_DIALOG_DATA, useValue: { instanceId: 'c' } },
         { provide: MatDialogRef, useValue: dialogRef },
@@ -89,7 +76,6 @@ describe('CustomEffectEditor', () => {
         add: { imports: [StubCodeEditor] },
       })
       .compileComponents();
-    await TestBed.inject(I18n).ensureLoaded('en');
   });
 
   afterEach(() => {

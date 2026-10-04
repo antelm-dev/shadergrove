@@ -1,0 +1,21 @@
+{
+  "id": "dev.shadergrove.language-fr",
+  "version": "1.0.0",
+  "protocolVersion": 3,
+  "appVersionRange": ">=1.5.0 <2.0.0",
+  "name": "French",
+  "publisher": "Shadergrove",
+  "license": "Apache-2.0",
+  "contributions": [
+    {
+      "kind": "language",
+      "id": "french",
+      "name": "French",
+      "schemaVersion": 1,
+      "locale": "fr",
+      "nativeName": "Français",
+      "direction": "ltr",
+      "messages": "i18n/fr.json"
+    }
+  ]
+}

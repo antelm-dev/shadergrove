@@ -8,10 +8,11 @@ import type { Locator, Page, TestInfo } from '@playwright/test';
 
 import { expect, test } from './fixtures';
 
-// Plugin themes end to end: a real `.sgplugin.json` picked in Plugins, switched
-// on, worn from the Theme menu and the editor settings, kept across a reload,
-// updated, and taken away again — asserting the colours the browser actually
-// computes for the chrome and for Monaco, not just a stored preference.
+// Plugin themes end to end: the official Light/Dark pack every profile starts
+// with, and a real `.sgplugin.json` picked in Plugins, switched on, worn from
+// the Theme menu and the editor settings, kept across a reload, updated, and
+// taken away again — asserting the colours the browser actually computes for
+// the chrome and for Monaco, not just a stored preference.
 
 // Each test is one long journey through Plugins, menus, dialogs and reloads.
 test.describe.configure({ timeout: 300_000 });
@@ -23,6 +24,10 @@ const ISF_TEXT = readFileSync(resolve(fixtures, 'isf/isf.sgplugin.json'), 'utf8'
 const AMBER = 'dev.shadergrove.grove-amber';
 const DARK = `plugin:${AMBER}/amber-dark`;
 const LIGHT = `plugin:${AMBER}/amber-light`;
+const DEFAULTS = 'dev.shadergrove.default-themes';
+const OFFICIAL_LIGHT = `plugin:${DEFAULTS}/light`;
+const OFFICIAL_DARK = `plugin:${DEFAULTS}/dark`;
+const SYSTEM = `${DEFAULTS}/default`;
 
 /** `#rrggbb` as `getComputedStyle` reports it. */
 function rgb(hex: string): string {
@@ -30,8 +35,10 @@ function rgb(hex: string): string {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-// The built-in dark theme's text and the two Grove Amber palettes.
+// The house Light/Dark (the official pack, and the fallback painted without it)
+// and the two Grove Amber palettes.
 const BUILTIN_DARK_TEXT = rgb('#e6e6e8');
+const BUILTIN_LIGHT_TEXT = rgb('#1b1b1d');
 const BUILTIN_PRIMARY = 'light-dark(#276c00, #71df3e)';
 const AMBER_DARK = { text: rgb('#ede4d8'), toolbar: rgb('#1c1813'), menu: rgb('#2b251e') };
 const AMBER_LIGHT = { text: rgb('#231b12'), toolbar: rgb('#f6efe5') };
@@ -40,6 +47,7 @@ const EDITOR = {
   amberLight: rgb('#fdf9f3'),
   midnight: rgb('#0b0a14'),
   studioDark: rgb('#10141c'),
+  studioLight: rgb('#fbfcfe'),
 };
 
 const style = (locator: Locator, property: string) =>
@@ -134,16 +142,19 @@ test('Grove Amber is installed, worn by the app and the editor, kept, and remove
   const darkItem = page.getByTestId(`theme-option-${DARK}`);
   await expect(darkItem).toHaveAttribute('aria-checked', 'true');
   await expect(darkItem).toHaveAttribute('role', 'menuitemradio');
-  await expect(page.getByTestId('theme-option-dark')).toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByTestId(`theme-option-${OFFICIAL_DARK}`)).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
   expect(await style(page.locator('.mat-mdc-menu-panel').last(), 'background-color')).toBe(
     AMBER_DARK.menu,
   );
   // From the keyboard alone: back out to the Theme row, into the submenu again,
-  // past the built-ins, onto the light variant.
+  // past the official Light, Dark and System, onto the light variant.
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menuitem', { name: /Theme$/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByTestId('theme-option-light')).toBeFocused();
+  await expect(page.getByTestId(`theme-option-${OFFICIAL_LIGHT}`)).toBeFocused();
   for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowDown');
   await expect(page.getByTestId(`theme-option-${LIGHT}`)).toBeFocused();
   await page.keyboard.press('Enter');
@@ -180,15 +191,21 @@ test('Grove Amber is installed, worn by the app and the editor, kept, and remove
   await expect.poll(() => editorBackground(page)).toBe(EDITOR.amberDark);
   expect(await toolbar(page)).toBe(AMBER_LIGHT.toolbar);
 
-  // Removed: the built-in comes back, with the scheme it had, in the app and the editor.
+  // Removed: the fallback is painted in the scheme last worn, in the app and the
+  // editor, and the choice is kept for if the package comes back.
   await openPlugins(page);
   await page.getByTestId(`plugin-remove-${AMBER}`).click();
   await expect(page.getByTestId(`plugin-${AMBER}`)).toHaveCount(0);
-  await expect.poll(() => textColour(page)).toBe(BUILTIN_DARK_TEXT);
+  await expect.poll(() => textColour(page)).toBe(BUILTIN_LIGHT_TEXT);
   await backToEditor(page);
-  await expect.poll(() => editorBackground(page)).toBe(EDITOR.studioDark);
+  await expect.poll(() => editorBackground(page)).toBe(EDITOR.studioLight);
   // The stylesheet's own pair again, not a value left inline.
   expect(await token(page, '--mat-sys-primary')).toBe(BUILTIN_PRIMARY);
+  await openThemeMenu(page);
+  await expect(page.getByTestId(`theme-option-${OFFICIAL_LIGHT}`)).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
 });
 
 test('an update, a partial palette, an older package and another profile', async ({ page }) => {
@@ -207,14 +224,15 @@ test('an update, a partial palette, an older package and another profile', async
   expect(await token(page, '--mat-sys-error')).toContain('light-dark(');
 
   // A new release under the same id: installing it switches it off, so the
-  // built-in is back; switched on again, its new colours are worn.
+  // fallback is back, light like the theme last worn; switched on again, its new
+  // colours are worn.
   const update = JSON.parse(AMBER_TEXT);
   update.manifest.version = '1.1.0';
   update.manifest.contributions[1].ui.primary = '#1d6b3a';
   update.manifest.contributions[1].ui['on-surface'] = '#14301f';
   await install(page, 'grove-amber-1.1.0.sgplugin.json', JSON.stringify(update), AMBER);
   await expect(page.getByText('1.1.0').first()).toBeVisible();
-  await expect.poll(() => textColour(page)).toBe(BUILTIN_DARK_TEXT);
+  await expect.poll(() => textColour(page)).toBe(BUILTIN_LIGHT_TEXT);
   await setEnabled(page, AMBER, true);
   await expect.poll(() => token(page, '--mat-sys-primary')).toBe('#1d6b3a');
   expect(await textColour(page)).toBe(rgb('#14301f'));
@@ -225,14 +243,104 @@ test('an update, a partial palette, an older package and another profile', async
   await expect(page.getByTestId('import-dev.shadergrove.isf/isf-import')).toBeEnabled();
   expect(await textColour(page)).toBe(rgb('#14301f'));
 
-  // Signed out, the anonymous profile has no such package: the built-in is
+  // Signed out, the anonymous profile has no such package: the fallback is
   // painted, and the choice is still there for when the account comes back.
   await page.context().clearCookies();
   await page.goto('/');
   await expect(page.locator('mat-toolbar.toolbar')).toBeVisible();
-  await expect.poll(() => textColour(page)).toBe(BUILTIN_DARK_TEXT);
+  await expect.poll(() => textColour(page)).toBe(BUILTIN_LIGHT_TEXT);
   const stored = await page.evaluate(
     () => JSON.parse(localStorage.getItem('shader-studio.preferences') ?? '{}').appThemeId,
   );
   expect(stored).toBe(LIGHT);
 });
+
+test('the official Light and Dark: a default pack, System mode, parity and removal', async ({
+  page,
+}, testInfo) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await openStudio(page);
+  const menuPanel = () => style(page.locator('.mat-mdc-menu-panel').last(), 'background-color');
+
+  // A fresh profile has it installed and switched on, beside the other defaults.
+  await openPlugins(page);
+  await expect(page.getByTestId(`plugin-enable-${DEFAULTS}`).getByRole('switch')).toBeChecked();
+  await backToEditor(page);
+
+  // The legacy built-in Dark became the official Dark: one row per theme, no duplicate.
+  await openThemeMenu(page);
+  await expect(page.getByTestId(`theme-option-${OFFICIAL_DARK}`)).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(page.getByTestId(`theme-option-${OFFICIAL_LIGHT}`)).toBeVisible();
+  await expect(page.getByTestId(`theme-system-${SYSTEM}`)).toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByTestId('theme-option-dark')).toHaveCount(0);
+  await expect(page.getByTestId('theme-option-light')).toHaveCount(0);
+  await expect(page.getByTestId('theme-option-system')).toHaveCount(0);
+  const worn = {
+    text: await textColour(page),
+    toolbar: await toolbar(page),
+    menu: await menuPanel(),
+  };
+  expect(worn.text).toBe(BUILTIN_DARK_TEXT);
+  await closeMenus(page);
+  await openEditor(page);
+  await expect.poll(() => editorBackground(page)).toBe(EDITOR.studioDark);
+  await screenshot(page, testInfo, 'official-dark');
+
+  // System follows the OS, in the chrome and in Monaco, both ways.
+  await openThemeMenu(page);
+  await page.getByTestId(`theme-system-${SYSTEM}`).click();
+  await closeMenus(page);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect.poll(() => textColour(page)).toBe(BUILTIN_LIGHT_TEXT);
+  expect(await style(page.locator('html'), 'color-scheme')).toBe('light');
+  await expect.poll(() => editorBackground(page)).toBe(EDITOR.studioLight);
+  await screenshot(page, testInfo, 'official-light-system');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect.poll(() => textColour(page)).toBe(BUILTIN_DARK_TEXT);
+  await expect.poll(() => editorBackground(page)).toBe(EDITOR.studioDark);
+  await page.reload();
+  await openThemeMenu(page);
+  await expect(page.getByTestId(`theme-system-${SYSTEM}`)).toHaveAttribute('aria-checked', 'true');
+  await closeMenus(page);
+
+  // Switched off, the fallback paints exactly what the pack did, and nothing stays inline.
+  await openPlugins(page);
+  await setEnabled(page, DEFAULTS, false);
+  await backToEditor(page);
+  expect(await token(page, '--mat-sys-primary')).toBe(BUILTIN_PRIMARY);
+  await openThemeMenu(page);
+  await expect(page.getByTestId('theme-none')).toBeVisible();
+  expect({
+    text: await textColour(page),
+    toolbar: await toolbar(page),
+    menu: await menuPanel(),
+  }).toEqual(worn);
+  await closeMenus(page);
+  await screenshot(page, testInfo, 'fallback-dark');
+
+  // Removed, it stays removed across a reload; reinstalling it is explicit, and leaves it off.
+  await openPlugins(page);
+  await page.getByTestId(`plugin-remove-${DEFAULTS}`).click();
+  await expect(page.getByTestId(`plugin-${DEFAULTS}`)).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId(`install-available-${DEFAULTS}`)).toBeVisible();
+  await expect(page.getByTestId(`plugin-${DEFAULTS}`)).toHaveCount(0);
+  await page.getByTestId(`install-available-${DEFAULTS}`).click();
+  await expect(page.getByTestId(`plugin-enable-${DEFAULTS}`).getByRole('switch')).not.toBeChecked();
+  await setEnabled(page, DEFAULTS, true);
+  // The choice was kept all along: System, now dark like the OS.
+  await expect.poll(() => token(page, '--mat-sys-surface')).toBe('#141416');
+});
+
+/** Closes every open menu, the Theme submenu and the menu it came from. */
+async function closeMenus(page: Page): Promise<void> {
+  const panels = page.locator('.mat-mdc-menu-panel');
+  // One Escape per menu level, each once the one above has closed.
+  await expect(async () => {
+    if ((await panels.count()) > 0) await page.keyboard.press('Escape');
+    await expect(panels).toHaveCount(0, { timeout: 500 });
+  }).toPass();
+}

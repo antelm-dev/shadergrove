@@ -46,10 +46,14 @@ import {
 } from '@shadergrove/shared/surfaces';
 import {
   DEFAULT_APP_THEME_ID,
+  canonicalLocale,
   sanitizeAppThemeId,
+  sanitizeAppThemeMode,
+  sanitizeLanguagePackId,
   type AppThemeId,
+  type AppThemeMode,
+  type LanguagePackId,
 } from '@shadergrove/shared/plugin';
-import type { AppLocale } from '../i18n/i18n';
 
 /**
  * UI state that should survive a reload: which shader was open, which panels
@@ -79,7 +83,18 @@ export function colorSchemeIcon(scheme: ColorScheme): string {
 }
 
 export interface WorkspacePreferences {
-  language: AppLocale;
+  /**
+   * The locale of the language last worn, as a canonical BCP 47 tag. What an
+   * older release of the app reads; `languagePackId` is what this one chooses by.
+   */
+  language: string;
+  /**
+   * The language chosen: a language contribution by reference, `fallback-en`,
+   * or `null` for a preference from before languages were packages, which is
+   * migrated once from `language`. Only a reference: whether that language is
+   * installed is the i18n service's question.
+   */
+  languagePackId: LanguagePackId;
   lastShaderId: string | null;
   /** Remembered so importing from Shadertoy doesn't ask for it every time. */
   shadertoyApiKey: string | null;
@@ -111,15 +126,19 @@ export interface WorkspacePreferences {
   paused: boolean;
   autoRipples: boolean;
   /**
-   * The built-in theme's scheme. Kept while a plugin theme is worn, which
-   * brings its own, so that switching back finds it as it was left.
+   * The fallback palette's scheme: what is painted while the chosen theme is
+   * not available (not loaded yet, switched off, removed). Kept in step with
+   * the theme worn, so the fallback looks like it.
    */
   colorScheme: ColorScheme;
   /**
-   * `builtin`, or a reference to a plugin theme. Only a reference: whether that
-   * theme is installed is the theme service's question, not this one's.
+   * A reference to a plugin theme, or `builtin` until a legacy preference is
+   * migrated. Only a reference: whether that theme is installed is the theme
+   * service's question, not this one's.
    */
   appThemeId: AppThemeId;
+  /** Wear `appThemeId` as is, or its pair's variant for the OS's light/dark setting. */
+  appThemeMode: AppThemeMode;
   /** How the editor is dressed: font, size, theme, and the rest. */
   editorAppearance: EditorAppearance;
   /** Where the editor sits: docked, floating, maximized or collapsed. */
@@ -138,6 +157,7 @@ export interface WorkspacePreferences {
 
 const DEFAULTS: WorkspacePreferences = {
   language: 'en',
+  languagePackId: null,
   lastShaderId: null,
   shadertoyApiKey: null,
   browserOpen: true,
@@ -158,6 +178,7 @@ const DEFAULTS: WorkspacePreferences = {
   autoRipples: false,
   colorScheme: 'dark',
   appThemeId: DEFAULT_APP_THEME_ID,
+  appThemeMode: 'fixed',
   editorAppearance: DEFAULT_EDITOR_APPEARANCE,
   editorWindow: DEFAULT_EDITOR_WINDOW,
   previewWindow: DEFAULT_PREVIEW_WINDOW,
@@ -181,12 +202,22 @@ function sanitizeColorScheme(value: unknown): ColorScheme {
     : DEFAULTS.colorScheme;
 }
 
+/** The appearance every window of the app shares: what it is painted with, and what it says. */
+const SHARED_KEYS = [
+  'appThemeId',
+  'appThemeMode',
+  'colorScheme',
+  'language',
+  'languagePackId',
+] as const satisfies readonly (keyof WorkspacePreferences)[];
+
 export function createDefaultWorkspacePreferences(): WorkspacePreferences {
   return { ...DEFAULTS };
 }
 
-function sanitizeLanguage(value: unknown): AppLocale {
-  return value === 'fr' ? 'fr' : 'en';
+/** Any canonical locale an older or newer release stored; anything else is English. */
+function sanitizeLanguage(value: unknown): string {
+  return canonicalLocale(value) ?? 'en';
 }
 
 @Injectable({ providedIn: 'root' })
@@ -199,15 +230,19 @@ export class Preferences {
 
   readonly value = this.state.asReadonly();
 
+  /** The OS's light/dark setting, whatever is chosen. */
+  readonly systemScheme = computed<ResolvedColorScheme>(() =>
+    this.systemDark() ? 'dark' : 'light',
+  );
+
   /**
-   * The light/dark scheme of the *built-in* theme: the OS's when the preference
-   * is `system`, otherwise the preference itself. A plugin theme brings its own
+   * The light/dark scheme of the fallback palette: the OS's when the preference
+   * is `system`, otherwise the preference itself. A theme brings its own
    * scheme — `AppThemes.scheme` is the one actually painted.
    */
   readonly resolved = computed<ResolvedColorScheme>(() => {
     const scheme = this.state().colorScheme;
-    if (scheme !== 'system') return scheme;
-    return this.systemDark() ? 'dark' : 'light';
+    return scheme === 'system' ? this.systemScheme() : scheme;
   });
 
   constructor() {
@@ -221,6 +256,18 @@ export class Preferences {
       }
 
       effect(() => this.persist(this.state()));
+
+      // Another window of the app saved its preferences: wear the same theme and speak the
+      // same language here. Layout and the rest stay this window's own.
+      this.document.defaultView?.addEventListener?.('storage', (event) => {
+        if (event.key !== STORAGE_KEY || event.newValue === null) return;
+        const saved = this.load();
+        // Only a real difference is taken: patching anyway would save this window's state,
+        // which the other window would read back — and the two would answer each other forever.
+        const current = this.state();
+        if (SHARED_KEYS.every((key) => saved[key] === current[key])) return;
+        this.patch(Object.fromEntries(SHARED_KEYS.map((key) => [key, saved[key]])));
+      });
     }
   }
 
@@ -301,6 +348,7 @@ export class Preferences {
 
       return {
         language: sanitizeLanguage(parsed.language),
+        languagePackId: sanitizeLanguagePackId(parsed.languagePackId),
         lastShaderId:
           typeof parsed.lastShaderId === 'string' ? parsed.lastShaderId : DEFAULTS.lastShaderId,
         shadertoyApiKey:
@@ -336,6 +384,7 @@ export class Preferences {
         autoRipples: parsed.autoRipples ?? DEFAULTS.autoRipples,
         colorScheme: sanitizeColorScheme(parsed.colorScheme),
         appThemeId: sanitizeAppThemeId(parsed.appThemeId),
+        appThemeMode: sanitizeAppThemeMode(parsed.appThemeMode),
         editorAppearance: sanitizeAppearance(parsed.editorAppearance),
         editorWindow,
         previewWindow,

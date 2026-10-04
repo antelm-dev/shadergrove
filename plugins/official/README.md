@@ -3,18 +3,46 @@
 Sources of the plugin packages that ship with each Shadergrove release and
 appear under **Plugins → Available**. They install and run like any other
 package: reviewed, installed switched off, enabled explicitly, and executed in
-the isolated plugin Worker. The app has no built-in fallback for what they do.
+the isolated plugin Worker. The app has no built-in fallback for what the
+Shadertoy and Wallpaper Engine packages do.
 
 | Folder              | Package id                         | Contributions                                          |
 | ------------------- | ---------------------------------- | ------------------------------------------------------ |
+| `default-themes/`   | `dev.shadergrove.default-themes`   | `theme` `light`, `dark` (pair `default`) — default     |
+| `language-en/`      | `dev.shadergrove.language-en`      | `language` `english` (`en`) — default                  |
+| `language-fr/`      | `dev.shadergrove.language-fr`      | `language` `french` (`fr`) — default                   |
 | `shadertoy/`        | `dev.shadergrove.shadertoy`        | `projectImporter` (paste, provider `shadertoy-api/v1`) |
 | `wallpaper-engine/` | `dev.shadergrove.wallpaper-engine` | `projectExporter` (runtime `wallpaper-web/v1`)         |
+
+## Default packages
+
+The three packages marked _default_ are data only — no code, GLSL or URL —
+and are the app's own list (`DEFAULT_PACKAGE_IDS` in
+`libs/shared/src/plugin/defaults.ts`); nothing in a package or the catalogue
+can make another package a default. Each profile gets them installed and
+**switched on once**, from this release's catalogue (size and hash checked),
+the first time it loads; from then on they are ordinary packages: switched
+off, removed or reinstalled by the user, and never installed again by the app
+(`PluginInstallations` keeps that record beside the packages). The app still
+renders without them: the stylesheet's fallback palette and the bundled
+English are generated from the same sources.
+
+- `default-themes/manifest.json` is the source of the house Light/Dark
+  palette. Its UI colours are also generated into
+  `apps/studio/src/default-theme.generated.scss`, the stylesheet's fallback;
+  its editor colours must match the built-in Studio Light/Dark editor themes
+  (`apps/studio/src/app/themes/default-themes.spec.ts`).
+- A language's source `messages` names a root dictionary (`"i18n/fr.json"`),
+  which the generator copies in. `i18n/en.json` is also generated into
+  `libs/shared/src/i18n/english.generated.ts`, the bundled English. An official
+  language must translate every key.
 
 ## Layout and build
 
 Each folder holds `manifest.json`, `listing.json` (catalogue-only text: the
-description) and `src/index.ts`, the Worker entry. `release.json` lists the
-folders this release's catalogue offers, in order.
+description) and, for a package with importers or exporters, `src/index.ts`,
+the Worker entry. `release.json` lists the folders this release's catalogue
+offers, in order.
 
 ```sh
 pnpm gen:plugins     # bundle every package and write the catalogue
@@ -31,7 +59,8 @@ catalogue entry pins its file's size and SHA-256; the app checks both, and the
 manifest's id, version, protocol and app range, before the usual review. The
 hash is an integrity check, not a publisher signature.
 
-A version is immutable: change the code, bump `manifest.version`. Installing a
+A version is immutable: change the code — or, for a language, its dictionary —
+and bump `manifest.version`. Installing a
 newer version from the catalogue is an explicit **Update** that leaves the
 package switched off until the user enables it again; if the update fails, the
 installed version stays.
@@ -41,7 +70,9 @@ installed version stays.
 `libs/shared/src/plugin/project.ts` is the source of truth; in short:
 
 - `manifest.protocolVersion: 2`. Protocol 1 packages (effects, file
-  importers/exporters, themes) are unchanged and still accepted.
+  importers/exporters, themes) are unchanged and still accepted. Protocol 3
+  adds `language` contributions (`libs/shared/src/plugin/languages.ts`) and
+  paired themes (theme schema 2, `variantGroup`).
 - **`projectImporter`** — `{ kind, id, name, modes: ("paste" | "provider")[],
 provider?: "shadertoy-api/v1", maxInputBytes, maxOutputBytes }` (limits up
   to 4 MiB). Method `projectImporter:<id>`, called with

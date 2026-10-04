@@ -28,7 +28,7 @@ import { map } from 'rxjs';
 
 import type { ImportMode } from '@shadergrove/shared/model';
 import { DEFAULT_PANEL_WIDTHS, PANEL_LIMITS } from '@shadergrove/shared/panel-prefs';
-import { COLOR_SCHEME_OPTIONS, Preferences } from './prefs/preferences';
+import { Preferences } from './prefs/preferences';
 import { AppThemes } from './themes/app-themes';
 import { ThemeMenu } from './themes/theme-menu';
 import { DesktopAccount } from './desktop/desktop-account';
@@ -55,7 +55,8 @@ import { TransportBar } from './ui/layout/transport-bar';
 import { StartupCoordinator } from './workspace/startup-coordinator';
 import { WorkspaceActions } from './ui/workspace-actions';
 import { PluginCommands } from './plugins/plugin-commands';
-import { I18n, LANGUAGE_OPTIONS, type AppLocale } from './i18n/i18n';
+import { FALLBACK_LANGUAGE_ID } from '@shadergrove/shared/plugin';
+import { I18n } from './i18n/i18n';
 import { TranslatePipe } from './i18n/translate.pipe';
 import { AuthService } from './auth/auth.service';
 import { AuthPrompt } from './auth/auth-prompt';
@@ -154,7 +155,7 @@ export class App {
     this.isHandset() ? this.handsetDrawerOpen() : this.preferences.value().browserOpen,
   );
 
-  protected readonly languageOptions = LANGUAGE_OPTIONS;
+  protected readonly fallbackLanguage = FALLBACK_LANGUAGE_ID;
 
   protected readonly inspectorOpen = computed(() => this.layout.inspectorOpen());
 
@@ -330,14 +331,6 @@ export class App {
 
   /** What the Settings section keeps behind submenus and dialogs, flattened for the palette. */
   private readonly settingsCommands: readonly MenuCommand[] = [
-    ...COLOR_SCHEME_OPTIONS.map(
-      (option): MenuCommand => ({
-        id: `theme-${option.value}`,
-        icon: () => option.icon,
-        label: () => `${this.i18n.t('menu.theme')}: ${this.i18n.t(`theme.${option.value}`)}`,
-        action: () => this.themes.selectBuiltin(option.value),
-      }),
-    ),
     {
       id: 'editor-appearance',
       icon: () => 'settings',
@@ -377,7 +370,11 @@ export class App {
         { label: this.i18n.t('menu.importExport'), commands: this.importExportCommands() },
         {
           label: this.i18n.t('menu.settings'),
-          commands: [...this.settingsCommands, ...this.pluginCommands.themeCommands()],
+          commands: [
+            ...this.pluginCommands.themeCommands(),
+            ...this.pluginCommands.languageCommands(),
+            ...this.settingsCommands,
+          ],
         },
       ],
     };
@@ -505,10 +502,6 @@ export class App {
   protected commitBrowserWidth(width: number): void {
     this.liveBrowserWidth.set(null);
     this.preferences.patch({ browserWidth: width });
-  }
-
-  protected setLanguage(language: AppLocale): void {
-    this.i18n.setLocale(language);
   }
 
   protected toggleBrowser(): void {

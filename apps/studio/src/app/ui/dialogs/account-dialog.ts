@@ -8,7 +8,6 @@
  */
 
 import { Component, inject, signal, type OnInit } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -29,7 +28,6 @@ import { WorkspaceActions } from '../workspace-actions';
 @Component({
   selector: 'app-account-dialog',
   imports: [
-    DatePipe,
     MatButtonModule,
     MatDialogModule,
     MatFormFieldModule,
@@ -99,8 +97,10 @@ import { WorkspaceActions } from '../workspace-actions';
               <div>
                 <p class="device">{{ session.userAgent || ('auth.unknownDevice' | translate) }}</p>
                 <p class="dates">
-                  {{ 'auth.sessionStarted' | translate }} {{ session.createdAt | date: 'medium' }} ·
-                  {{ 'auth.sessionExpires' | translate }} {{ session.expiresAt | date: 'medium' }}
+                  {{ 'auth.sessionStarted' | translate }}
+                  {{ i18n.formatDate(session.createdAt, sessionDate) }} ·
+                  {{ 'auth.sessionExpires' | translate }}
+                  {{ i18n.formatDate(session.expiresAt, sessionDate) }}
                 </p>
               </div>
             </li>
@@ -194,7 +194,11 @@ import { WorkspaceActions } from '../workspace-actions';
 export class AccountDialog implements OnInit {
   protected readonly auth = inject(AuthService);
   private readonly workspace = inject(WorkspaceActions);
-  private readonly i18n = inject(I18n);
+  protected readonly i18n = inject(I18n);
+  protected readonly sessionDate: Intl.DateTimeFormatOptions = {
+    dateStyle: 'medium',
+    timeStyle: 'medium',
+  };
   private readonly ref = inject(MatDialogRef<AccountDialog>);
 
   protected readonly sessions = signal<AuthSession[]>([]);

@@ -1,4 +1,3 @@
-import { DecimalPipe } from '@angular/common';
 import { Component, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -67,7 +66,6 @@ const EFFECT_LABEL_KEY: Record<PostProcessingEffectType, TranslationKey> = {
 @Component({
   selector: 'app-post-processing-panel',
   imports: [
-    DecimalPipe,
     FormsModule,
     MatButtonModule,
     MatIconModule,
@@ -234,7 +232,7 @@ const EFFECT_LABEL_KEY: Record<PostProcessingEffectType, TranslationKey> = {
                 <label class="field">
                   <span class="field-label">
                     {{ 'rack.strength' | translate }}
-                    <span class="value">{{ effect.settings.strength.toFixed(2) }}</span>
+                    <span class="value">{{ i18n.formatNumber(effect.settings.strength, twoDecimals) }}</span>
                   </span>
                   <mat-slider [min]="0" [max]="2" [step]="0.01">
                     <input
@@ -247,7 +245,7 @@ const EFFECT_LABEL_KEY: Record<PostProcessingEffectType, TranslationKey> = {
                 <label class="field">
                   <span class="field-label">
                     {{ 'rack.radius' | translate }}
-                    <span class="value">{{ effect.settings.radius.toFixed(2) }}</span>
+                    <span class="value">{{ i18n.formatNumber(effect.settings.radius, twoDecimals) }}</span>
                   </span>
                   <mat-slider [min]="0" [max]="1" [step]="0.01">
                     <input
@@ -260,7 +258,7 @@ const EFFECT_LABEL_KEY: Record<PostProcessingEffectType, TranslationKey> = {
                 <label class="field">
                   <span class="field-label">
                     {{ 'rack.threshold' | translate }}
-                    <span class="value">{{ effect.settings.threshold.toFixed(2) }}</span>
+                    <span class="value">{{ i18n.formatNumber(effect.settings.threshold, twoDecimals) }}</span>
                   </span>
                   <mat-slider [min]="0" [max]="1" [step]="0.01">
                     <input
@@ -277,7 +275,7 @@ const EFFECT_LABEL_KEY: Record<PostProcessingEffectType, TranslationKey> = {
                 <label class="field">
                   <span class="field-label">
                     {{ 'rack.intensity' | translate }}
-                    <span class="value">{{ effect.settings.intensity.toFixed(2) }}</span>
+                    <span class="value">{{ i18n.formatNumber(effect.settings.intensity, twoDecimals) }}</span>
                   </span>
                   <mat-slider [min]="0" [max]="1" [step]="0.01">
                     <input
@@ -290,7 +288,7 @@ const EFFECT_LABEL_KEY: Record<PostProcessingEffectType, TranslationKey> = {
                 <label class="field">
                   <span class="field-label">
                     {{ 'rack.softness' | translate }}
-                    <span class="value">{{ effect.settings.softness.toFixed(2) }}</span>
+                    <span class="value">{{ i18n.formatNumber(effect.settings.softness, twoDecimals) }}</span>
                   </span>
                   <mat-slider [min]="0" [max]="1" [step]="0.01">
                     <input
@@ -303,7 +301,7 @@ const EFFECT_LABEL_KEY: Record<PostProcessingEffectType, TranslationKey> = {
                 <label class="field">
                   <span class="field-label">
                     {{ 'rack.roundness' | translate }}
-                    <span class="value">{{ effect.settings.roundness.toFixed(2) }}</span>
+                    <span class="value">{{ i18n.formatNumber(effect.settings.roundness, twoDecimals) }}</span>
                   </span>
                   <mat-slider [min]="0" [max]="1" [step]="0.01">
                     <input
@@ -341,7 +339,7 @@ const EFFECT_LABEL_KEY: Record<PostProcessingEffectType, TranslationKey> = {
                       <label class="field">
                         <span class="field-label">
                           {{ control.label ?? control.key }}
-                          <span class="value">{{ +effect.values[control.key] | number: '1.0-2' }}</span>
+                          <span class="value">{{ i18n.formatNumber(+effect.values[control.key]) }}</span>
                         </span>
                         <mat-slider [min]="control.min" [max]="control.max" [step]="step(control)">
                           <input
@@ -535,7 +533,11 @@ const EFFECT_LABEL_KEY: Record<PostProcessingEffectType, TranslationKey> = {
 })
 export class PostProcessingPanel {
   protected readonly store = inject(ShaderStore);
-  private readonly i18n = inject(I18n);
+  protected readonly i18n = inject(I18n);
+  protected readonly twoDecimals: Intl.NumberFormatOptions = {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  };
   private readonly dialog = inject(MatDialog);
 
   protected readonly types = POST_PROCESSING_EFFECT_TYPES;

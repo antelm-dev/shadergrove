@@ -1,17 +1,18 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CatalogueEntry } from '@shadergrove/shared/plugin';
+import {
+  DEFAULT_LANGUAGE_REFS,
+  FRENCH_PACKAGE_ID,
+  type CatalogueEntry,
+} from '@shadergrove/shared/plugin';
 import { DesktopPlatform } from '../desktop/desktop-platform';
-import { I18nCatalog, type I18nCatalogMap } from '../i18n/catalog';
 import { I18n } from '../i18n/i18n';
-import { Preferences } from '../prefs/preferences';
+import { installedPackage, officialPackageText } from '../i18n/testing/languages';
+import { Preferences, type WorkspacePreferences } from '../prefs/preferences';
 import { AppThemes } from '../themes/app-themes';
 import { ShaderStore } from '../workspace/shader-store';
 import { EffectAdoption } from './effect-adoption';
@@ -19,16 +20,6 @@ import { PluginCatalogueService } from './plugin-catalogue';
 import { PluginInstallations } from './plugin-installations';
 import { PluginsPage } from './plugins-page';
 import { ProjectPluginActions } from './project-actions';
-
-class FileCatalog extends I18nCatalog {
-  override load(locale: 'en' | 'fr'): Promise<I18nCatalogMap> {
-    const raw = readFileSync(
-      resolve(import.meta.dirname, `../../../../../i18n/${locale}.json`),
-      'utf8',
-    );
-    return Promise.resolve(JSON.parse(raw) as I18nCatalogMap);
-  }
-}
 
 const entry = (id: string): CatalogueEntry => ({
   id,
@@ -68,12 +59,12 @@ describe('PluginsPage deep links', () => {
         provideZonelessChangeDetection(),
         provideRouter([{ path: 'plugins', component: PluginsPage }]),
         I18n,
-        { provide: I18nCatalog, useClass: FileCatalog },
         { provide: Preferences, useValue: { value: signal({ language: 'en' }).asReadonly() } },
         {
           provide: PluginInstallations,
           useValue: {
             loading: signal(false),
+            defaultsSettled: signal(false),
             plugins: signal([]),
             profile: signal('anonymous'),
             find: () => undefined,
@@ -96,7 +87,6 @@ describe('PluginsPage deep links', () => {
         { provide: DesktopPlatform, useValue: { available: false } },
       ],
     });
-    await TestBed.inject(I18n).ensureLoaded('en');
   });
 
   afterEach(() => {
@@ -136,5 +126,82 @@ describe('PluginsPage deep links', () => {
     await harness.navigateByUrl(`/plugins?use=${SECOND}`, PluginsPage);
     await settle(harness);
     expect(scrolled).toEqual([`available-${FIRST}`, `available-${SECOND}`, `available-${SECOND}`]);
+  });
+});
+
+/**
+ * A language pack in Plugins: its locale and native name, and a plain choice
+ * to speak it — no importer form, no Worker — that shows when it is in use.
+ */
+describe('PluginsPage language packs', () => {
+  const prefs = signal<Pick<WorkspacePreferences, 'language' | 'languagePackId'>>({
+    language: 'en',
+    languagePackId: null,
+  });
+  const french = installedPackage(officialPackageText(FRENCH_PACKAGE_ID));
+
+  beforeEach(() => {
+    prefs.set({ language: 'en', languagePackId: null });
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([{ path: 'plugins', component: PluginsPage }]),
+        I18n,
+        {
+          provide: Preferences,
+          useValue: {
+            value: prefs.asReadonly(),
+            patch: (patch: Partial<WorkspacePreferences>) =>
+              prefs.update((value) => ({ ...value, ...patch })),
+          },
+        },
+        {
+          provide: PluginInstallations,
+          useValue: {
+            loading: signal(false),
+            defaultsSettled: signal(false),
+            plugins: signal([french]),
+            profile: signal('anonymous'),
+            find: (id: string) => (id === french.id ? french : undefined),
+          },
+        },
+        {
+          provide: PluginCatalogueService,
+          useValue: {
+            state: signal({ status: 'ready', packages: [] }),
+            load: async () => undefined,
+          },
+        },
+        {
+          provide: ProjectPluginActions,
+          useValue: { running: signal(null), importers: signal([]), exporters: signal([]) },
+        },
+        { provide: AppThemes, useValue: { entries: signal([]) } },
+        { provide: EffectAdoption, useValue: {} },
+        { provide: ShaderStore, useValue: { draft: signal(null) } },
+        { provide: DesktopPlatform, useValue: { available: false } },
+      ],
+    });
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('shows the language, and speaks it when chosen there', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/plugins', PluginsPage);
+    harness.detectChanges();
+    const page = harness.routeNativeElement as HTMLElement;
+    const key = `${FRENCH_PACKAGE_ID}/french`;
+    expect(page.textContent).toContain('Language');
+    expect(page.textContent).toContain('Français (fr)');
+
+    const use = page.querySelector<HTMLButtonElement>(`[data-testid="use-language-${key}"]`);
+    expect(use?.textContent?.trim()).toBe('Use as app language');
+    use!.click();
+    harness.detectChanges();
+    expect(prefs()).toEqual({ language: 'fr', languagePackId: DEFAULT_LANGUAGE_REFS.fr });
+    expect(page.querySelector(`[data-testid="language-in-use-${key}"]`)?.textContent?.trim()).toBe(
+      'Langue actuelle de l’app',
+    );
   });
 });
