@@ -6,7 +6,7 @@ import {
   provideZonelessChangeDetection,
 } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
+import { provideClientHydration, withNoIncrementalHydration } from '@angular/platform-browser';
 import { MatIconRegistry } from '@angular/material/icon';
 import { provideRouter } from '@angular/router';
 
@@ -45,6 +45,9 @@ export const appConfig: ApplicationConfig = {
         'mat-ligature-font',
       );
     }),
-    provideClientHydration(withEventReplay()),
+    // Incremental hydration injects event-replay scripts into SSR HTML. The
+    // workspace has no deferred hydration blocks, so keep regular hydration
+    // without inline scripts that its script-src 'self' CSP would block.
+    provideClientHydration(withNoIncrementalHydration()),
   ],
 };

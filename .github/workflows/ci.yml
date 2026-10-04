@@ -127,6 +127,33 @@ jobs:
       - name: Build production image
         run: docker build --tag shadergrove:ci .
 
+  deploy-staging:
+    name: Deploy staging
+    needs: [check, smoke, e2e, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.45-155-170-120.sslip.io/
+    timeout-minutes: 5
+
+    steps:
+      - name: Queue deployment in Dokploy
+        env:
+          STAGING_DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
+        run: |
+          set -eu
+          test -n "$STAGING_DEPLOY_SSH_KEY"
+          key=$(mktemp)
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$STAGING_DEPLOY_SSH_KEY" > "$key"
+          chmod 600 "$key"
+          mkdir -p ~/.ssh
+          printf '%s\n' '45.155.170.120 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINlDcFcMXfjYBWoMisJPzl+Bg2AOUgx/yX2nQPA+YJal' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -i "$key" root@45.155.170.120 "$GITHUB_SHA"
+
   desktop:
     name: Windows desktop package
     runs-on: windows-latest
