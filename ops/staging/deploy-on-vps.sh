@@ -3,9 +3,18 @@
 # applications configured on this VPS.
 set -eu
 
-sha=${SSH_ORIGINAL_COMMAND:-}
-printf '%s\n' "$sha" | grep -Eq '^[0-9a-f]{40}$' || {
-  echo 'Expected a commit SHA' >&2
+command=${SSH_ORIGINAL_COMMAND:-}
+# Keep SHA-only requests working while the old workflow finishes in flight.
+case "$command" in
+  'studio '*) sha=${command#studio }; services=shadergrove-staging ;;
+  'website '*) sha=${command#website }; services=shadergrove-website ;;
+  *) sha=$command; services='shadergrove-staging shadergrove-website' ;;
+esac
+case "$sha" in
+  ''|*[!0-9a-f]*) echo 'Invalid commit SHA' >&2; exit 2 ;;
+esac
+[ "${#sha}" -eq 40 ] || {
+  echo 'Expected studio or website followed by a commit SHA' >&2
   exit 2
 }
 
@@ -18,7 +27,7 @@ fi
 
 container=$(docker ps -q --filter label=com.docker.swarm.service.name=dokploy | head -n 1)
 [ -n "$container" ] || { echo 'Dokploy is not running' >&2; exit 1; }
-for service in shadergrove-staging shadergrove-website; do
+for service in $services; do
   token_file="/root/.config/${service}-deploy-token"
   grep -Eq '^[A-Za-z0-9_-]+$' "$token_file" || {
     echo "Invalid Dokploy deploy token for $service" >&2
@@ -26,7 +35,7 @@ for service in shadergrove-staging shadergrove-website; do
   }
 done
 
-for service in shadergrove-staging shadergrove-website; do
+for service in $services; do
   token_file="/root/.config/${service}-deploy-token"
   docker exec -e DEPLOY_SHA="$sha" -i "$container" node -e '
   const token = require("node:fs").readFileSync(0, "utf8").trim();

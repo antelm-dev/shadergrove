@@ -28,14 +28,18 @@ Without a value, the button falls back to the repository's quick-start section.
 For local development, copy `apps/website/.env.example` to
 `apps/website/.env.local`. The header's GitHub link remains the source-code link.
 
-On a push to `develop`, GitHub Actions runs the existing checks and builds
-both the studio and website images. Once they pass, the restricted SSH deploy
-key invokes `/usr/local/sbin/deploy-shadergrove-staging`, which queues both
-Dokploy applications. The script is versioned at
+On a push to `develop`, GitHub Actions selects the affected applications.
+Website or brand changes run website typechecks, brand tests and the website
+image build; studio browser tests and Windows packaging are skipped. Shared
+workspace configuration changes validate both applications. See [CI routing](ci.md).
+Once the common lint/format checks and website checks pass, `deploy-website`
+uses the restricted SSH key to invoke `/usr/local/sbin/deploy-shadergrove-staging`
+with `website COMMIT_SHA`. It queues only the website, independently of studio
+validation and deployment. The script is versioned at
 [`ops/staging/deploy-on-vps.sh`](../ops/staging/deploy-on-vps.sh). Copy changes
 to the VPS path when updating it. Dokploy webhook tokens stay in separate
 root-owned files under `/root/.config/`, mode 600, and are not stored in GitHub.
-The CI job confirms that Dokploy accepted the requests; check each
+The CI job confirms that Dokploy accepted the request; check the website
 application's **Deployments** tab for the completed rollout.
 
 Check the public route with:
