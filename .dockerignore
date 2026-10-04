@@ -14,6 +14,9 @@ coverage
 __screenshots__
 .nx
 .tmp
+**/.next
+apps/website/out
+apps/website/design
 
 # User shaders created at runtime — the container seeds its own store from examples/.
 data

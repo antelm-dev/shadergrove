@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1
+
+FROM node:24-alpine AS build
+
+WORKDIR /app
+ENV CI=true
+
+RUN npm install --global pnpm@10.28.2
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+COPY apps/website/package.json ./apps/website/
+COPY libs/brand/package.json ./libs/brand/
+
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --filter @shadergrove/website... --frozen-lockfile
+
+COPY apps/website ./apps/website
+COPY libs/brand ./libs/brand
+
+RUN pnpm --filter @shadergrove/website build
+
+FROM nginx:stable-alpine AS runtime
+
+COPY ops/website/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/apps/website/out /usr/share/nginx/html
+
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1

@@ -1,5 +1,6 @@
 #!/bin/sh
-# Authorized-keys forced command: this key can trigger only the staging deploy.
+# Authorized-keys forced command: this key can trigger only the Shadergrove
+# applications configured on this VPS.
 set -eu
 
 sha=${SSH_ORIGINAL_COMMAND:-}
@@ -17,13 +18,17 @@ fi
 
 container=$(docker ps -q --filter label=com.docker.swarm.service.name=dokploy | head -n 1)
 [ -n "$container" ] || { echo 'Dokploy is not running' >&2; exit 1; }
-token_file=/root/.config/shadergrove-staging-deploy-token
-grep -Eq '^[A-Za-z0-9_-]+$' "$token_file" || {
-  echo 'Invalid Dokploy deploy token' >&2
-  exit 1
-}
+for service in shadergrove-staging shadergrove-website; do
+  token_file="/root/.config/${service}-deploy-token"
+  grep -Eq '^[A-Za-z0-9_-]+$' "$token_file" || {
+    echo "Invalid Dokploy deploy token for $service" >&2
+    exit 1
+  }
+done
 
-docker exec -e DEPLOY_SHA="$sha" -i "$container" node -e '
+for service in shadergrove-staging shadergrove-website; do
+  token_file="/root/.config/${service}-deploy-token"
+  docker exec -e DEPLOY_SHA="$sha" -i "$container" node -e '
   const token = require("node:fs").readFileSync(0, "utf8").trim();
   const sha = process.env.DEPLOY_SHA;
   fetch("http://127.0.0.1:3000/api/deploy/" + token, {
@@ -46,4 +51,5 @@ docker exec -e DEPLOY_SHA="$sha" -i "$container" node -e '
     process.exitCode = 1;
   });
 ' < "$token_file"
-echo 'Shadergrove staging deployment queued in Dokploy'
+  echo "$service deployment queued in Dokploy"
+done

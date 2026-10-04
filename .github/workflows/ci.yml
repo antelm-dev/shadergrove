@@ -118,7 +118,7 @@ jobs:
           retention-days: 14
 
   docker:
-    name: Docker image
+    name: Docker images
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -126,9 +126,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Build production image
         run: docker build --tag shadergrove:ci .
+      - name: Build website image
+        run: docker build --file Dockerfile.website --tag shadergrove-website:ci .
 
   deploy-staging:
-    name: Deploy staging
+    name: Deploy VPS applications
     needs: [check, smoke, e2e, docker]
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
@@ -138,7 +140,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Queue deployment in Dokploy
+      - name: Queue studio and website deployments in Dokploy
         env:
           STAGING_DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
         run: |
