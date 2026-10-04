@@ -25,7 +25,7 @@ class FileCatalog extends I18nCatalog {
 
 describe('DesktopVersionDialog', () => {
   const platform = { available: true };
-  const language = signal({ language: 'en' as 'en' | 'fr' });
+  const language = signal({ language: 'en' as string });
   const updateState = signal<UpdateState>({
     status: 'up-to-date',
     currentVersion: '1.2.3',

@@ -9,7 +9,6 @@ import {
   provideAppInitializer,
 } from '@angular/core';
 
-import { Preferences } from '../prefs/preferences';
 import { I18nCatalog } from './catalog';
 import { I18n } from './i18n';
 
@@ -21,7 +20,7 @@ export function provideI18n(catalog: Type<I18nCatalog>): EnvironmentProviders {
     { provide: I18nCatalog, useExisting: catalog },
     {
       provide: LOCALE_ID,
-      useFactory: () => inject(Preferences).value().language,
+      useFactory: () => inject(I18n).locale(),
     },
     provideAppInitializer(() => {
       const i18n = inject(I18n);

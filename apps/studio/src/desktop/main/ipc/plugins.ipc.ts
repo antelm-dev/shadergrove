@@ -4,7 +4,13 @@ import { join } from 'node:path';
 import type { WebContents } from 'electron';
 import { defineIpcModule, handle } from 'electron-ipc-module';
 
-import { PLUGIN_LIMITS, parsePluginPackage } from '@shadergrove/shared';
+import {
+  PLUGIN_BOOTSTRAP_MAX_BYTES,
+  PLUGIN_LIMITS,
+  parsePluginPackage,
+  sanitizeBootstrapState,
+  type PluginBootstrapState,
+} from '@shadergrove/shared';
 import type { StoredPlugin } from '../../contracts/contracts';
 
 /**
@@ -76,6 +82,43 @@ export function createPluginFiles(dir: string) {
   };
 }
 
+/**
+ * What the app remembers of the default packages (see `PluginBootstrapState`):
+ * one small JSON file beside — not inside — the plugins folder, so it is never
+ * mistaken for a package record. Read with a size bound and sanitized; written
+ * whole, through a temporary file renamed over it, so a crash leaves the old
+ * state or the new one, never half of either.
+ */
+export function createPluginBootstrapFile(path: string) {
+  return {
+    async read(): Promise<PluginBootstrapState> {
+      const text = await stat(path)
+        .then((info) =>
+          info.isFile() && info.size <= PLUGIN_BOOTSTRAP_MAX_BYTES ? readFile(path, 'utf8') : null,
+        )
+        .catch(() => null);
+      try {
+        return sanitizeBootstrapState(text === null ? null : JSON.parse(text));
+      } catch {
+        return sanitizeBootstrapState(null);
+      }
+    },
+
+    async write(state: PluginBootstrapState): Promise<void> {
+      const text = JSON.stringify(sanitizeBootstrapState(state));
+      if (text.length > PLUGIN_BOOTSTRAP_MAX_BYTES) throw new Error('Plugin state is too large');
+      const temp = `${path}.${randomBytes(6).toString('hex')}.tmp`;
+      try {
+        await writeFile(temp, text);
+        await rename(temp, path);
+      } catch (error) {
+        await rm(temp, { force: true }).catch(() => undefined);
+        throw error;
+      }
+    },
+  };
+}
+
 function isStoredPlugin(value: unknown): value is StoredPlugin {
   if (typeof value !== 'object' || value === null) return false;
   const { id, text, enabled, installedAt } = value as Record<string, unknown>;
@@ -95,8 +138,13 @@ function isStoredPlugin(value: unknown): value is StoredPlugin {
  * `isMainWindow` gates every call: output and satellite windows render
  * shaders, they do not get to install or remove code.
  */
-export function createPluginsIpc(dir: string, isMainWindow: (sender: WebContents) => boolean) {
+export function createPluginsIpc(
+  dir: string,
+  bootstrapPath: string,
+  isMainWindow: (sender: WebContents) => boolean,
+) {
   const files = createPluginFiles(dir);
+  const bootstrap = createPluginBootstrapFile(bootstrapPath);
   const guard = (sender: WebContents) => {
     if (!isMainWindow(sender)) throw new Error('Plugins are managed from the main window only');
   };
@@ -113,6 +161,14 @@ export function createPluginsIpc(dir: string, isMainWindow: (sender: WebContents
     remove: handle(async (event, id: string): Promise<void> => {
       guard(event.sender);
       await files.remove(id);
+    }),
+    bootstrap: handle(async (event): Promise<PluginBootstrapState> => {
+      guard(event.sender);
+      return bootstrap.read();
+    }),
+    saveBootstrap: handle(async (event, state: PluginBootstrapState): Promise<void> => {
+      guard(event.sender);
+      await bootstrap.write(state);
     }),
   });
 }

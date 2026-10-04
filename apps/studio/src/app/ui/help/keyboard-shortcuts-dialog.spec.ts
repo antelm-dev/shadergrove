@@ -22,7 +22,7 @@ class FileCatalog extends I18nCatalog {
 }
 
 describe('KeyboardShortcutsDialog', () => {
-  const language = signal({ language: 'en' as 'en' | 'fr' });
+  const language = signal({ language: 'en' as string });
 
   beforeEach(async () => {
     language.set({ language: 'en' });

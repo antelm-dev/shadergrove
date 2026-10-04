@@ -51,7 +51,7 @@ function stubCommand(id: string): MenuCommand {
 }
 
 describe('AppTitlebar Help and View menus', () => {
-  const language = signal({ language: 'en' as 'en' | 'fr' });
+  const language = signal({ language: 'en' as string });
   const pluginImports = signal<PluginCommand[]>([]);
   const pluginExports = signal<PluginCommand[]>([]);
   const openKeyboardShortcuts = vi.fn();
@@ -70,6 +70,7 @@ describe('AppTitlebar Help and View menus', () => {
 
     const prefs: WorkspacePreferences = {
       language: 'en',
+      languagePackId: null,
       lastShaderId: null,
       shadertoyApiKey: null,
       browserOpen: true,
@@ -90,6 +91,7 @@ describe('AppTitlebar Help and View menus', () => {
       autoRipples: false,
       colorScheme: 'dark',
       appThemeId: 'builtin',
+      appThemeMode: 'fixed',
       editorAppearance: DEFAULT_EDITOR_APPEARANCE,
       editorWindow: DEFAULT_EDITOR_WINDOW,
       previewWindow: DEFAULT_PREVIEW_WINDOW,

@@ -178,7 +178,7 @@ function dispatchDragEvent(
 }
 
 describe('ExplorerPanel', () => {
-  const language = signal({ language: 'en' as 'en' | 'fr' });
+  const language = signal({ language: 'en' as string });
   const tree = signal<ExplorerTree>(sampleTree());
   let resizeObserverCallback: ((entries: Array<{ contentRect: { width: number } }>) => void) | null;
 

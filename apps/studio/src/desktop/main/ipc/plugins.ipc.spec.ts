@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PLUGIN_LIMITS } from '@shadergrove/shared';
-import { createPluginFiles, createPluginsIpc } from './plugins.ipc';
+import { createPluginBootstrapFile, createPluginFiles, createPluginsIpc } from './plugins.ipc';
 
 // The real module registers on Electron's ipcMain; here a module is just its handlers.
 vi.mock('electron-ipc-module', () => ({
@@ -118,10 +118,16 @@ describe('the plugins IPC module', () => {
     const dir = await mkdtemp(join(tmpdir(), 'sg-plugins-ipc-'));
     const main = { id: 1 };
     const output = { id: 2 };
-    const handlers = createPluginsIpc(dir, (sender) => sender === (main as never)) as unknown as {
+    const handlers = createPluginsIpc(
+      dir,
+      join(dir, 'bootstrap.json'),
+      (sender) => sender === (main as never),
+    ) as unknown as {
       list: (event: { sender: unknown }) => Promise<unknown>;
       put: (event: { sender: unknown }, record: unknown) => Promise<unknown>;
       remove: (event: { sender: unknown }, id: string) => Promise<unknown>;
+      bootstrap: (event: { sender: unknown }) => Promise<unknown>;
+      saveBootstrap: (event: { sender: unknown }, state: unknown) => Promise<unknown>;
     };
     try {
       await expect(handlers.list({ sender: main })).resolves.toEqual([]);
@@ -132,9 +138,65 @@ describe('the plugins IPC module', () => {
       await expect(handlers.remove({ sender: output }, 'dev.example.tint')).rejects.toThrow(
         /main window/,
       );
+      await expect(handlers.bootstrap({ sender: output })).rejects.toThrow(/main window/);
+      await expect(
+        handlers.saveBootstrap({ sender: output }, { version: 1, packages: {} }),
+      ).rejects.toThrow(/main window/);
       expect(await readdir(dir)).toEqual([]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('the plugin bootstrap file', () => {
+  let dir: string;
+  let file: ReturnType<typeof createPluginBootstrapFile>;
+  const path = () => join(dir, 'plugin-bootstrap.json');
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'sg-plugin-bootstrap-'));
+    file = createPluginBootstrapFile(path());
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('reads as empty until written, then reads back what was written', async () => {
+    expect(await file.read()).toEqual({ version: 0, packages: {} });
+    const state = {
+      version: 1,
+      packages: {
+        'dev.shadergrove.default-themes': 'seeded',
+        'dev.shadergrove.language-fr': 'removed',
+      },
+    } as const;
+    await file.write(state);
+    expect(await file.read()).toEqual(state);
+    // Written whole through a renamed temporary file: nothing else is left behind.
+    expect(await readdir(dir)).toEqual(['plugin-bootstrap.json']);
+  });
+
+  it('keeps only well-formed entries for default packages, and survives a damaged file', async () => {
+    await writeFile(
+      path(),
+      JSON.stringify({
+        version: 1,
+        packages: {
+          'dev.shadergrove.language-en': 'seeded',
+          'dev.example.other': 'seeded',
+          'dev.shadergrove.language-fr': 'enabled',
+        },
+      }),
+    );
+    expect(await file.read()).toEqual({
+      version: 1,
+      packages: { 'dev.shadergrove.language-en': 'seeded' },
+    });
+    await writeFile(path(), '{ not json');
+    expect(await file.read()).toEqual({ version: 0, packages: {} });
+    await writeFile(path(), 'x'.repeat(64 * 1024));
+    expect(await file.read()).toEqual({ version: 0, packages: {} });
   });
 });

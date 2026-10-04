@@ -47,6 +47,8 @@ class MemoryStores {
       list: async () => [...records.values()],
       put: async (record) => void records.set(record.id, record),
       remove: async (id) => void records.delete(id),
+      readBootstrap: async () => null,
+      writeBootstrap: async () => undefined,
     };
   }
 

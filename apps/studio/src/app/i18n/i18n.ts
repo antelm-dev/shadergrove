@@ -25,7 +25,9 @@ export class I18n {
   private readonly catalogs = signal<Partial<Record<AppLocale, I18nCatalogMap>>>({});
   private readonly inflight = new Map<AppLocale, Promise<void>>();
 
-  readonly locale = computed(() => this.preferences.value().language);
+  readonly locale = computed<AppLocale>(() =>
+    this.preferences.value().language === 'fr' ? 'fr' : 'en',
+  );
 
   constructor() {
     effect(() => {

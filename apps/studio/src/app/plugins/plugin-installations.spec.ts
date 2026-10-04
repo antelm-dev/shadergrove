@@ -9,12 +9,20 @@ import {
   type EffectContribution,
   type RenderSettings,
 } from '@shadergrove/shared';
+import {
+  DEFAULT_PACKAGES_VERSION,
+  DEFAULT_PACKAGE_IDS,
+  emptyBootstrapState,
+  type CatalogueEntry,
+  type PluginBootstrapState,
+} from '@shadergrove/shared/plugin';
 import { AuthService } from '../auth/auth.service';
 import { RendererHandle } from '../rendering/renderer-handle';
 import { ShaderStore } from '../workspace/shader-store';
 import { EffectAdoption } from './effect-adoption';
+import { PluginCatalogueService } from './plugin-catalogue';
 import { PLUGIN_STORE, PluginInstallations, type PluginReview } from './plugin-installations';
-import type { PluginStore, StoredPlugin } from './plugin-store';
+import { NoPluginStore, type PluginStore, type StoredPlugin } from './plugin-store';
 
 /** One map per profile, standing in for one IndexedDB database each, and outliving the service. */
 class MemoryStores {
@@ -27,6 +35,8 @@ class MemoryStores {
       list: async () => [...records.values()],
       put: async (record) => void records.set(record.id, record),
       remove: async (id) => void records.delete(id),
+      readBootstrap: async () => null,
+      writeBootstrap: async () => undefined,
     };
   }
 }
@@ -338,5 +348,333 @@ describe('PluginInstallations', () => {
     };
     await expect(installations.installReviewedUpdate(failing)).rejects.toThrow(/disk full/);
     expect(installations.find('dev.example.tint')?.plugin?.manifest.version).toBe('1.0.0');
+  });
+});
+/** A default's package as the catalogue would hand it over: data only. */
+function defaultText(id: string, version = '1.0.0'): string {
+  return JSON.stringify({
+    manifest: {
+      id,
+      version,
+      protocolVersion: 3,
+      appVersionRange: '>=1.0.0',
+      name: id,
+      publisher: 'Shadergrove',
+      license: 'Apache-2.0',
+      contributions: [
+        {
+          kind: 'language',
+          id: 'words',
+          name: 'Words',
+          schemaVersion: 1,
+          locale: 'en',
+          nativeName: 'English',
+          direction: 'ltr',
+          messages: { 'menu.file': 'File' },
+        },
+      ],
+    },
+  });
+}
+
+/** Stores that also keep the bootstrap state, as the web's and the desktop's do. */
+class SeedingStores {
+  readonly records = new Map<string, Map<string, StoredPlugin>>();
+  readonly states = new Map<string, PluginBootstrapState>();
+  readonly writes: string[] = [];
+
+  for(profile: string): PluginStore {
+    const records = this.records.get(profile) ?? new Map<string, StoredPlugin>();
+    this.records.set(profile, records);
+    return {
+      list: async () => [...records.values()],
+      put: async (record) => {
+        this.writes.push(`${profile}:put:${record.id}`);
+        records.set(record.id, record);
+      },
+      remove: async (id) => {
+        this.writes.push(`${profile}:remove:${id}`);
+        records.delete(id);
+      },
+      readBootstrap: async () => structuredClone(this.states.get(profile) ?? emptyBootstrapState()),
+      writeBootstrap: async (state) => {
+        this.writes.push(`${profile}:bootstrap`);
+        this.states.set(profile, structuredClone(state));
+      },
+    };
+  }
+}
+
+class FakeCatalogue {
+  readonly fetched: string[] = [];
+  readonly failing = new Set<string>();
+  texts = new Map(DEFAULT_PACKAGE_IDS.map((id) => [id, defaultText(id)]));
+  /** Holds every fetch until opened. */
+  gate: Promise<void> = Promise.resolve();
+
+  async entry(id: string): Promise<CatalogueEntry | null> {
+    return this.texts.has(id) ? ({ id } as CatalogueEntry) : null;
+  }
+
+  async fetchPackage(entry: CatalogueEntry): Promise<Uint8Array> {
+    this.fetched.push(entry.id);
+    await this.gate;
+    if (this.failing.has(entry.id)) throw new Error('offline');
+    return bytes(this.texts.get(entry.id)!);
+  }
+}
+
+/** A one-at-a-time lock shared by every "tab" of a test, as `navigator.locks` is. */
+function installLocks(): () => void {
+  const queues = new Map<string, Promise<unknown>>();
+  const locks = {
+    request: (name: string, work: () => Promise<unknown>) => {
+      const run = (queues.get(name) ?? Promise.resolve()).then(work, work);
+      queues.set(
+        name,
+        run.catch(() => undefined),
+      );
+      return run;
+    },
+  };
+  const original = Object.getOwnPropertyDescriptor(navigator, 'locks');
+  Object.defineProperty(navigator, 'locks', { value: locks, configurable: true });
+  return () => {
+    if (original) Object.defineProperty(navigator, 'locks', original);
+    else delete (navigator as { locks?: unknown }).locks;
+  };
+}
+
+describe('PluginInstallations — default packages', () => {
+  let stores: SeedingStores;
+  let catalogue: FakeCatalogue;
+  let restoreLocks: () => void;
+  const user = signal<{ id: string } | null>(null);
+  const status = signal<'loading' | 'anonymous' | 'authenticated'>('anonymous');
+
+  function providers() {
+    return [
+      provideZonelessChangeDetection(),
+      { provide: PLUGIN_STORE, useValue: (profile: string) => stores.for(profile) },
+      { provide: AuthService, useValue: { user, status } },
+      { provide: PluginCatalogueService, useValue: catalogue },
+    ];
+  }
+
+  function setup(): PluginInstallations {
+    TestBed.configureTestingModule({ providers: providers() });
+    return TestBed.inject(PluginInstallations);
+  }
+
+  /** A fresh app session over the same stores. */
+  function restart(): PluginInstallations {
+    TestBed.resetTestingModule();
+    return setup();
+  }
+
+  async function settled(installations: PluginInstallations): Promise<void> {
+    TestBed.tick();
+    await vi.waitFor(() => {
+      if (!installations.defaultsSettled()) throw new Error('not settled');
+    });
+  }
+
+  const ids = (installations: PluginInstallations) =>
+    installations.plugins().map((installed) => [installed.id, installed.active]);
+
+  beforeEach(() => {
+    stores = new SeedingStores();
+    catalogue = new FakeCatalogue();
+    user.set(null);
+    status.set('anonymous');
+    restoreLocks = installLocks();
+  });
+
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    restoreLocks();
+  });
+
+  it('installs every default switched on, once, and leaves ordinary installs off', async () => {
+    let installations = setup();
+    await settled(installations);
+    expect(ids(installations)).toEqual(DEFAULT_PACKAGE_IDS.map((id) => [id, true]).sort());
+    expect(stores.states.get('anonymous')).toEqual({
+      version: DEFAULT_PACKAGES_VERSION,
+      packages: Object.fromEntries(DEFAULT_PACKAGE_IDS.map((id) => [id, 'seeded'])),
+    });
+
+    installations = restart();
+    await settled(installations);
+    expect(catalogue.fetched).toHaveLength(DEFAULT_PACKAGE_IDS.length);
+
+    const review = installations.review(bytes(packageText()));
+    if (!review.ok) throw new Error();
+    await installations.install(review);
+    expect(installations.find('dev.example.tint')?.active).toBe(false);
+  });
+
+  it('keeps a default switched off, and a removed one removed, across restarts and reinstalls', async () => {
+    const [themes, english] = DEFAULT_PACKAGE_IDS as [string, string];
+    let installations = setup();
+    await settled(installations);
+    await installations.setEnabled(themes, false);
+    await installations.remove(english);
+    // The removal is on record before the record is gone.
+    expect(stores.writes.slice(-2)).toEqual(['anonymous:bootstrap', `anonymous:remove:${english}`]);
+    expect(stores.states.get('anonymous')?.packages[english]).toBe('removed');
+
+    installations = restart();
+    await settled(installations);
+    expect(installations.find(themes)?.active).toBe(false);
+    expect(installations.find(english)).toBeUndefined();
+
+    // Reinstalling is the user's, explicitly, and follows the ordinary rule: off.
+    const review = installations.review(bytes(defaultText(english)));
+    if (!review.ok) throw new Error();
+    await installations.install(review);
+    installations = restart();
+    await settled(installations);
+    expect(installations.find(english)?.active).toBe(false);
+  });
+
+  it('never replaces a default the profile already has, whatever its version or switch', async () => {
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    const mine = {
+      id: themes,
+      text: defaultText(themes, '0.9.0'),
+      enabled: false,
+      installedAt: '2026-01-01T00:00:00.000Z',
+    };
+    await stores.for('anonymous').put(mine);
+    const installations = setup();
+    await settled(installations);
+    expect(installations.find(themes)?.stored).toEqual(mine);
+    expect(catalogue.fetched).not.toContain(themes);
+    expect(stores.states.get('anonymous')?.packages[themes]).toBe('seeded');
+  });
+
+  it('keeps what succeeded when one default fails, and tries only that one again', async () => {
+    const [, english, french] = DEFAULT_PACKAGE_IDS as [string, string, string];
+    catalogue.failing.add(french);
+    let installations = setup();
+    await settled(installations);
+    expect(installations.find(english)?.active).toBe(true);
+    expect(installations.find(french)).toBeUndefined();
+    expect(stores.states.get('anonymous')?.packages[french]).toBeUndefined();
+
+    catalogue.failing.clear();
+    catalogue.fetched.length = 0;
+    installations = restart();
+    await settled(installations);
+    expect(catalogue.fetched).toEqual([french]);
+    expect(installations.find(french)?.active).toBe(true);
+  });
+
+  it('records a default an interrupted seed already wrote, without fetching it again', async () => {
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    // Written, then the app stopped before recording it.
+    await stores.for('anonymous').put({
+      id: themes,
+      text: defaultText(themes),
+      enabled: true,
+      installedAt: '2026-01-01T00:00:00.000Z',
+    });
+    const installations = setup();
+    await settled(installations);
+    expect(catalogue.fetched).not.toContain(themes);
+    expect(stores.states.get('anonymous')?.packages[themes]).toBe('seeded');
+  });
+
+  it("stops seeding when the profile changes, and never writes one profile's defaults into another", async () => {
+    let open!: () => void;
+    catalogue.gate = new Promise((resolve) => (open = resolve));
+    const installations = setup();
+    TestBed.tick();
+    await vi.waitFor(() => expect(catalogue.fetched.length).toBeGreaterThan(0));
+
+    user.set({ id: 'alice' });
+    status.set('authenticated');
+    TestBed.tick();
+    open();
+    await settled(installations);
+
+    expect(stores.records.get('anonymous')?.size ?? 0).toBe(0);
+    expect(stores.states.get('anonymous')).toBeUndefined();
+    expect(ids(installations)).toEqual(DEFAULT_PACKAGE_IDS.map((id) => [id, true]).sort());
+    expect(stores.writes.every((write) => write.startsWith('alice:'))).toBe(true);
+  });
+
+  it('seeds once when two windows start together on the same profile', async () => {
+    const first = setup();
+    const second = TestBed.runInInjectionContext(() => new PluginInstallations());
+    await settled(first);
+    await settled(second);
+    expect(stores.writes.filter((write) => write.includes(':put:'))).toHaveLength(
+      DEFAULT_PACKAGE_IDS.length,
+    );
+  });
+
+  it('a removal during seeding waits for it, then stays removed', async () => {
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    await stores.for('anonymous').put({
+      id: themes,
+      text: defaultText(themes),
+      enabled: true,
+      installedAt: '2026-01-01T00:00:00.000Z',
+    });
+    let open!: () => void;
+    catalogue.gate = new Promise((resolve) => (open = resolve));
+    let installations = setup();
+    TestBed.tick();
+    await vi.waitFor(() => expect(installations.find(themes)).toBeDefined());
+    const removal = installations.remove(themes);
+    open();
+    await removal;
+    await settled(installations);
+    expect(installations.find(themes)).toBeUndefined();
+
+    installations = restart();
+    await settled(installations);
+    expect(installations.find(themes)).toBeUndefined();
+  });
+
+  it('installs nothing where defaults are not kept, and nothing but data', async () => {
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    catalogue.texts.set(themes, packageText({ id: themes }));
+    let installations = setup();
+    await settled(installations);
+    expect(installations.find(themes)).toBeUndefined();
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [...providers(), { provide: PLUGIN_STORE, useValue: () => new NoPluginStore() }],
+    });
+    catalogue.fetched.length = 0;
+    installations = TestBed.inject(PluginInstallations);
+    await settled(installations);
+    expect(catalogue.fetched).toEqual([]);
+    expect(installations.plugins()).toEqual([]);
+  });
+
+  it('settles with nothing loaded where the store cannot be read', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        ...providers(),
+        {
+          provide: PLUGIN_STORE,
+          useValue: () => ({
+            ...stores.for('anonymous'),
+            list: () => Promise.reject(new Error('Plugins are managed from the main window only')),
+          }),
+        },
+      ],
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const installations = TestBed.inject(PluginInstallations);
+    await settled(installations);
+    expect(installations.plugins()).toEqual([]);
+    expect(catalogue.fetched).toEqual([]);
+    warn.mockRestore();
   });
 });

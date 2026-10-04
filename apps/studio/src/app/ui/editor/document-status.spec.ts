@@ -39,7 +39,7 @@ const warning = (): CompileDiagnostic =>
 describe('DocumentStatus', () => {
   let store: FakeStore;
   let status: DocumentStatus;
-  const language = signal({ language: 'en' as 'en' | 'fr' });
+  const language = signal({ language: 'en' as string });
 
   beforeEach(async () => {
     vi.useFakeTimers();

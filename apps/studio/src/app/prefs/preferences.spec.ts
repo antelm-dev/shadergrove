@@ -177,6 +177,46 @@ describe('Preferences theme fields', () => {
     expect(prefs.value().fileExplorerWidth).toBe(300);
   });
 
+  it('reads a legacy store as unmigrated: builtin theme in fixed mode, no language pack yet', () => {
+    const prefs = makePreferences(JSON.stringify({ language: 'fr', colorScheme: 'system' }));
+    expect(prefs.value()).toMatchObject({
+      language: 'fr',
+      languagePackId: null,
+      appThemeId: 'builtin',
+      appThemeMode: 'fixed',
+      colorScheme: 'system',
+    });
+  });
+
+  it('keeps theme modes, language references and any canonical locale; nothing malformed', () => {
+    const kept = makePreferences(
+      JSON.stringify({
+        language: 'pt-BR',
+        languagePackId: 'plugin:dev.example.portuguese/portuguese',
+        appThemeMode: 'system',
+      }),
+    );
+    expect(kept.value()).toMatchObject({
+      language: 'pt-BR',
+      languagePackId: 'plugin:dev.example.portuguese/portuguese',
+      appThemeMode: 'system',
+    });
+    TestBed.resetTestingModule();
+    const recovered = makePreferences(
+      JSON.stringify({ language: 'pt_br', languagePackId: 'fallback-en' }),
+    );
+    expect(recovered.value()).toMatchObject({ language: 'en', languagePackId: 'fallback-en' });
+    TestBed.resetTestingModule();
+    const malformed = makePreferences(
+      JSON.stringify({ language: '../x', languagePackId: 'fr', appThemeMode: 'auto' }),
+    );
+    expect(malformed.value()).toMatchObject({
+      language: 'en',
+      languagePackId: null,
+      appThemeMode: 'fixed',
+    });
+  });
+
   it('leaves the root colour scheme to the theme service', () => {
     const prefs = makePreferences(JSON.stringify({ colorScheme: 'light' }));
     TestBed.tick();

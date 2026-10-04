@@ -9,6 +9,9 @@ import {
 } from '@angular/core';
 
 import {
+  DEFAULT_PACKAGES_VERSION,
+  DEFAULT_PACKAGE_IDS,
+  isDefaultPackageId,
   isPluginCompatible,
   parsePluginPackage,
   type PluginPackage,
@@ -16,6 +19,8 @@ import {
 import { APP_VERSION } from '@shadergrove/shared/version';
 import { AuthService } from '../auth/auth.service';
 import { DesktopPlatform } from '../desktop/desktop-platform';
+import { isOutputWindow } from '../output-mode';
+import { PluginCatalogueService } from './plugin-catalogue';
 import { PluginHost } from './plugin-host';
 import {
   DesktopPluginStore,
@@ -25,12 +30,16 @@ import {
   type StoredPlugin,
 } from './plugin-store';
 
-/** The store for one profile. Replaced in tests. */
+/**
+ * The store for one profile. Replaced in tests. The output window manages no
+ * plugins — the desktop's main process would refuse it anyway — so it gets none.
+ */
 export const PLUGIN_STORE = new InjectionToken<(profile: string) => PluginStore>('PLUGIN_STORE', {
   providedIn: 'root',
   factory: () => {
     const desktop = inject(DesktopPlatform);
     return (profile: string) => {
+      if (isOutputWindow()) return new NoPluginStore();
       if (desktop.available) return new DesktopPluginStore();
       if (typeof indexedDB === 'undefined') return new NoPluginStore();
       return new IndexedDbPluginStore(`shadergrove-plugins:${profile}`);
@@ -85,6 +94,15 @@ export interface InstalledPlugin {
  * store, so nothing installed under one account runs under another.
  *
  * Removing a package never touches a shader: an effect taken from it was copied.
+ *
+ * The default packages (`DEFAULT_PACKAGE_IDS`, the app's own list) are the one
+ * exception to installing switched off: once a profile has loaded, each default
+ * it never had is installed from this release's catalogue, switched on, and
+ * remembered as seeded, so it is never installed again — not after it is
+ * switched off, removed, or the app is upgraded. Removing one is remembered
+ * before it is deleted. Seeding is serialized across tabs and windows, writes
+ * only to the profile it started for, and a default that could not be
+ * installed is simply tried again next time; the app works without it.
  */
 @Injectable({ providedIn: 'root' })
 export class PluginInstallations {
@@ -104,9 +122,19 @@ export class PluginInstallations {
   private readonly pluginsSignal = signal<InstalledPlugin[]>([]);
   readonly plugins = this.pluginsSignal.asReadonly();
   readonly loading = signal(true);
+  /**
+   * Whether the current profile's defaults are settled: seeded, found seeded,
+   * failed for now, or never seeded here. Until then a missing default may be
+   * on its way, so whatever would migrate a preference onto one waits for this.
+   */
+  readonly defaultsSettled = signal(false);
 
+  private readonly catalogue = inject(PluginCatalogueService);
   private store: PluginStore = new NoPluginStore();
   private loads = 0;
+  /** Bumped on every profile switch: work started under an older one stops writing. */
+  private generation = 0;
+  private queue: Promise<unknown> = Promise.resolve();
   /** Work under way per package; aborted when the package is switched off, replaced or removed. */
   private readonly pending = new Map<string, Set<AbortController>>();
 
@@ -184,7 +212,21 @@ export class PluginInstallations {
 
   async remove(id: string): Promise<void> {
     this.abortPending(id);
-    await this.store.remove(id);
+    const store = this.store;
+    const profile = this.profile();
+    if (isDefaultPackageId(id) && profile !== null) {
+      // Remembered first: if the delete never happens, it is still not seeded again.
+      await this.exclusive(profile, async () => {
+        const state = await store.readBootstrap();
+        if (state) {
+          state.packages[id] = 'removed';
+          await store.writeBootstrap(state);
+        }
+        await store.remove(id);
+      });
+    } else {
+      await store.remove(id);
+    }
     await this.reload();
   }
 
@@ -251,8 +293,11 @@ export class PluginInstallations {
   }
 
   private async switchTo(profile: string | null): Promise<void> {
+    const generation = ++this.generation;
+    const current = () => generation === this.generation;
     this.abortPending();
     this.pluginsSignal.set([]);
+    this.defaultsSettled.set(false);
     if (profile === null) {
       // Any load still in flight belongs to a profile that is no longer current.
       this.loads++;
@@ -260,8 +305,89 @@ export class PluginInstallations {
       this.loading.set(true);
       return;
     }
-    this.store = this.storeFor(profile);
-    await this.reload();
+    const store = (this.store = this.storeFor(profile));
+    try {
+      await this.reload();
+      await this.seedDefaults(profile, store, current);
+    } catch (error) {
+      // Nothing installed is readable here (a window that manages no plugins, storage
+      // refused): the app runs on its fallbacks.
+      console.warn('Plugins could not be loaded', error);
+    } finally {
+      if (current()) this.defaultsSettled.set(true);
+    }
+  }
+
+  /** Installs, switched on, each default this profile never had. See the class comment. */
+  private async seedDefaults(
+    profile: string,
+    store: PluginStore,
+    current: () => boolean,
+  ): Promise<void> {
+    let installedAny = false;
+    await this.exclusive(profile, async () => {
+      // Read again inside the lock: another tab may have just seeded, or a removal landed.
+      const state = await store.readBootstrap();
+      if (!state || !current()) return;
+      const missing = DEFAULT_PACKAGE_IDS.filter((id) => state.packages[id] === undefined);
+      if (missing.length === 0) return;
+      const installed = new Set((await store.list()).map((record) => record.id));
+      for (const id of missing) {
+        try {
+          // Installed by the user, or by a seed interrupted before it was recorded: kept as it is.
+          if (!installed.has(id)) {
+            const text = await this.defaultPackageText(id);
+            if (!current()) return;
+            await store.put({ id, text, enabled: true, installedAt: new Date().toISOString() });
+            installedAny = true;
+          }
+          if (!current()) return;
+          state.packages[id] = 'seeded';
+          state.version = DEFAULT_PACKAGES_VERSION;
+          await store.writeBootstrap(state);
+        } catch (error) {
+          // Left unrecorded, so it is tried again next time; what did succeed stays done.
+          console.warn(`The default package ${id} could not be installed`, error);
+        }
+      }
+    });
+    if (installedAny && current()) await this.reload();
+  }
+
+  /**
+   * A default's package text, from this release's catalogue and checked
+   * against its entry. Only data — themes and languages — is ever installed
+   * this way, whatever the catalogue says.
+   */
+  private async defaultPackageText(id: string): Promise<string> {
+    const entry = await this.catalogue.entry(id);
+    if (!entry) throw new Error("It is not in this release's catalogue");
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(
+      await this.catalogue.fetchPackage(entry),
+    );
+    const parsed = parsePluginPackage(text);
+    if (!parsed.ok) throw new Error(parsed.errors[0]);
+    const { manifest, code, glsl } = parsed.value;
+    if (
+      code !== undefined ||
+      Object.keys(glsl).length > 0 ||
+      manifest.contributions.some(({ kind }) => kind !== 'theme' && kind !== 'language')
+    ) {
+      throw new Error('A default package must hold themes or languages only');
+    }
+    if (!isPluginCompatible(manifest, APP_VERSION)) {
+      throw new Error('It is not made for this version of the app');
+    }
+    return text;
+  }
+
+  /** Runs `work` alone among every tab and window of this profile; one at a time here otherwise. */
+  private exclusive(profile: string, work: () => Promise<void>): Promise<void> {
+    const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+    if (locks) return locks.request(`shadergrove-plugin-defaults:${profile}`, work);
+    const run = this.queue.then(work, work);
+    this.queue = run.catch(() => undefined);
+    return run;
   }
 
   private async reload(): Promise<void> {

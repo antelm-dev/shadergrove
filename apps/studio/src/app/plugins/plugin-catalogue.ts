@@ -39,15 +39,30 @@ export class PluginCatalogueService {
 
   private readonly stateSignal = signal<CatalogueState>({ status: 'idle' });
   readonly state = this.stateSignal.asReadonly();
+  private loading: Promise<void> | null = null;
 
   /** For tests. */
   useFetch(fetcher: CatalogueFetch): void {
     this.fetcher = fetcher;
   }
 
-  async load(): Promise<void> {
-    if (!this.browser) return;
-    if (this.stateSignal().status === 'loading') return;
+  /** Reads the catalogue; a load already under way is shared rather than started twice. */
+  load(): Promise<void> {
+    if (!this.browser) return Promise.resolve();
+    return (this.loading ??= this.fetchCatalogue().finally(() => (this.loading = null)));
+  }
+
+  /** The listed entry of a package, loading the catalogue once if it never loaded; `null` if not listed. */
+  async entry(id: string): Promise<CatalogueEntry | null> {
+    if (this.stateSignal().status !== 'ready') await this.load();
+    const state = this.stateSignal();
+    if (state.status === 'error') throw new Error(state.message);
+    return state.status === 'ready'
+      ? (state.packages.find((entry) => entry.id === id) ?? null)
+      : null;
+  }
+
+  private async fetchCatalogue(): Promise<void> {
     this.stateSignal.set({ status: 'loading' });
     try {
       const bytes = await this.read(this.url(CATALOGUE_PATH), CATALOGUE_MAX_BYTES);

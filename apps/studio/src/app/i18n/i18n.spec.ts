@@ -18,7 +18,7 @@ class FakeCatalog extends I18nCatalog {
 }
 
 describe('I18n', () => {
-  const state = signal({ language: 'en' as 'en' | 'fr' });
+  const state = signal({ language: 'en' as string });
 
   beforeEach(async () => {
     state.set({ language: 'en' });

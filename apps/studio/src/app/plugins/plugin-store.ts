@@ -1,3 +1,4 @@
+import { sanitizeBootstrapState, type PluginBootstrapState } from '@shadergrove/shared/plugin';
 import type { StoredPlugin } from '../../desktop/contracts/contracts';
 
 export type { StoredPlugin };
@@ -11,6 +12,12 @@ export interface PluginStore {
   /** Keyed by `record.id`, the id from the package's own manifest. */
   put(record: StoredPlugin): Promise<void>;
   remove(id: string): Promise<void>;
+  /**
+   * What this profile remembers of the default packages, kept apart from the
+   * packages themselves; `null` where defaults are never seeded.
+   */
+  readBootstrap(): Promise<PluginBootstrapState | null>;
+  writeBootstrap(state: PluginBootstrapState): Promise<void>;
 }
 
 /**
@@ -20,8 +27,33 @@ export interface PluginStore {
  */
 export class IndexedDbPluginStore implements PluginStore {
   private db: Promise<IDBDatabase> | null = null;
+  private bootstrapDb: Promise<IDBDatabase> | null = null;
 
+  /**
+   * The bootstrap state lives in a companion database (`<name>:bootstrap`): the
+   * packages' own database keeps its schema and version, so an older release
+   * still opens it after a downgrade.
+   */
   constructor(private readonly name: string) {}
+
+  async readBootstrap(): Promise<PluginBootstrapState> {
+    const db = await (this.bootstrapDb ??= openDatabase(`${this.name}:bootstrap`, 'state'));
+    return new Promise((resolve, reject) => {
+      const request = db.transaction('state', 'readonly').objectStore('state').get('bootstrap');
+      request.onsuccess = () => resolve(sanitizeBootstrapState(request.result));
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async writeBootstrap(state: PluginBootstrapState): Promise<void> {
+    const db = await (this.bootstrapDb ??= openDatabase(`${this.name}:bootstrap`, 'state'));
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction('state', 'readwrite');
+      transaction.objectStore('state').put(sanitizeBootstrapState(state), 'bootstrap');
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error);
+    });
+  }
 
   /**
    * Each record under its own string key, whatever it holds: a value damaged outside
@@ -59,13 +91,7 @@ export class IndexedDbPluginStore implements PluginStore {
   }
 
   private open(): Promise<IDBDatabase> {
-    this.db ??= new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.name, 1);
-      request.onupgradeneeded = () => request.result.createObjectStore('plugins');
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    return this.db;
+    return (this.db ??= openDatabase(this.name, 'plugins'));
   }
 
   private async request(
@@ -84,6 +110,16 @@ export class IndexedDbPluginStore implements PluginStore {
   }
 }
 
+/** One object store, version 1. */
+function openDatabase(name: string, store: string): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(store);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 /** The desktop app's: files under `<userData>/plugins`, written by the main process. */
 export class DesktopPluginStore implements PluginStore {
   list(): Promise<StoredPlugin[]> {
@@ -98,6 +134,14 @@ export class DesktopPluginStore implements PluginStore {
   async remove(id: string): Promise<void> {
     await window.electron.bridge.plugins.remove(id);
   }
+
+  async readBootstrap(): Promise<PluginBootstrapState> {
+    return sanitizeBootstrapState(await window.electron.bridge.plugins.bootstrap());
+  }
+
+  async writeBootstrap(state: PluginBootstrapState): Promise<void> {
+    await window.electron.bridge.plugins.saveBootstrap(state);
+  }
 }
 
 /** Where there is nowhere to keep anything: the server, or a browser without IndexedDB. */
@@ -109,4 +153,8 @@ export class NoPluginStore implements PluginStore {
     throw new Error('Plugins cannot be installed here');
   }
   async remove(): Promise<void> {}
+  async readBootstrap(): Promise<null> {
+    return null;
+  }
+  async writeBootstrap(): Promise<void> {}
 }

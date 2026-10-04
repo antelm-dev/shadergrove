@@ -309,6 +309,7 @@ prepare({
       // Only the main window manages plugins; output and satellite windows do not.
       plugins: createPluginsIpc(
         join(userData, 'plugins'),
+        join(userData, 'plugin-bootstrap.json'),
         (sender) => sender === mainWindow?.webContents,
       ),
     });
