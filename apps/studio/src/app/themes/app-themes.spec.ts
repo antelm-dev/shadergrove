@@ -68,7 +68,7 @@ class MemoryStores {
         return true;
       },
       replace: async (record) => {
-        if (!records.has(record.id)) return false;
+        if (records.get(record.id)?.installedAt !== record.installedAt) return false;
         records.set(record.id, record);
         return true;
       },

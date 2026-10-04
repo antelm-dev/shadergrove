@@ -236,8 +236,8 @@ export class PluginInstallations {
     if (!installed) return;
     if (enabled && installed.problem) throw new Error(installed.problem);
     if (!enabled) this.abortPending(id);
-    // Only over the record that is still there: another window may have removed it since
-    // this one listed it, and switching it must not bring it back.
+    // Only over the install this window lists: another window may have removed or updated
+    // it since, and switching it must neither bring it back nor undo the update.
     await this.store.replace({ ...installed.stored, enabled });
     await this.changed();
   }

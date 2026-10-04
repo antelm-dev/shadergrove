@@ -18,10 +18,11 @@ export interface PluginStore {
    */
   add(record: StoredPlugin): Promise<boolean>;
   /**
-   * Writes `record` only over a record of its id, in one step where the store
-   * allows it; whether it wrote. A change to an installed package — switching
-   * it — so a window still showing a package another one removed cannot
-   * bring it back.
+   * Writes `record` only over the same install — a record of its id and
+   * `installedAt` — in one step where the store allows it; whether it wrote.
+   * A change to an installed package, switching it: a window still showing a
+   * package another one removed, or replaced with another version, can
+   * neither bring it back nor write the old version over the new.
    */
   replace(record: StoredPlugin): Promise<boolean>;
   remove(id: string): Promise<void>;
@@ -123,9 +124,10 @@ export class IndexedDbPluginStore implements PluginStore {
       const transaction = db.transaction('plugins', 'readwrite');
       const store = transaction.objectStore('plugins');
       let replaced = false;
-      const existing = store.getKey(record.id);
+      const existing = store.get(record.id);
       existing.onsuccess = () => {
-        if (existing.result === undefined) return;
+        const value = existing.result as Partial<StoredPlugin> | undefined;
+        if (value?.installedAt !== record.installedAt) return;
         replaced = true;
         store.put(record, record.id);
       };
@@ -187,7 +189,9 @@ export class DesktopPluginStore implements PluginStore {
   }
 
   async replace(record: StoredPlugin): Promise<boolean> {
-    if (!(await this.list()).some((stored) => stored.id === record.id)) return false;
+    const same = (stored: StoredPlugin) =>
+      stored.id === record.id && stored.installedAt === record.installedAt;
+    if (!(await this.list()).some(same)) return false;
     await this.put(record);
     return true;
   }

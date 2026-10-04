@@ -40,7 +40,7 @@ class MemoryStores {
         return true;
       },
       replace: async (record) => {
-        if (!records.has(record.id)) return false;
+        if (records.get(record.id)?.installedAt !== record.installedAt) return false;
         records.set(record.id, record);
         return true;
       },
@@ -422,7 +422,7 @@ class SeedingStores {
         return true;
       },
       replace: async (record) => {
-        if (!records.has(record.id)) return false;
+        if (records.get(record.id)?.installedAt !== record.installedAt) return false;
         this.writes.push(`${profile}:put:${record.id}`);
         records.set(record.id, record);
         return true;
@@ -706,6 +706,31 @@ describe('PluginInstallations — default packages', () => {
     await second.setEnabled(themes, false);
     expect(stores.records.get('anonymous')!.has(themes)).toBe(false);
     await vi.waitFor(() => expect(second.find(themes)).toBeUndefined());
+  });
+
+  it('does not write an old version over an update another window made', async () => {
+    const first = setup();
+    await settled(first);
+    const second = TestBed.runInInjectionContext(() => new PluginInstallations());
+    await settled(second);
+    const v1 = first.review(bytes(packageText()));
+    if (!v1.ok) throw new Error(v1.errors.join());
+    await first.install(v1);
+    await vi.waitFor(() => expect(second.find('dev.example.tint')).toBeDefined());
+
+    // Installs are told apart by their install time: let the clock move on.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const v2 = first.review(bytes(packageText({ version: '2.0.0' })));
+    if (!v2.ok) throw new Error(v2.errors.join());
+    await first.install(v2);
+    // The second window still lists version 1 when it is switched there.
+    await second.setEnabled('dev.example.tint', true);
+    const stored = stores.records.get('anonymous')!.get('dev.example.tint')!;
+    expect(JSON.parse(stored.text).manifest.version).toBe('2.0.0');
+    expect(stored.enabled).toBe(false);
+    await vi.waitFor(() =>
+      expect(second.find('dev.example.tint')?.plugin?.manifest.version).toBe('2.0.0'),
+    );
   });
 
   it("shows another window's changes at once, the output window's included", async () => {
