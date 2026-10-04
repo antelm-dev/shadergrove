@@ -12,8 +12,12 @@ import { Preferences } from './preferences';
 
 const STORAGE_KEY = 'shader-studio.preferences';
 
+/** What another window's save looks like to this one. */
+let storageListeners: ((event: { key: string | null; newValue: string | null }) => void)[] = [];
+
 function makePreferences(storageData?: string): Preferences {
   const storage = new Map<string, string>();
+  storageListeners = [];
   if (storageData !== undefined) storage.set(STORAGE_KEY, storageData);
 
   const mockStorage = {
@@ -30,6 +34,9 @@ function makePreferences(storageData?: string): Preferences {
           defaultView: {
             localStorage: mockStorage,
             matchMedia: () => null,
+            addEventListener: (type: string, listener: (typeof storageListeners)[number]) => {
+              if (type === 'storage') storageListeners.push(listener);
+            },
           },
           documentElement: { style: {} },
         },
@@ -215,6 +222,28 @@ describe('Preferences theme fields', () => {
       languagePackId: null,
       appThemeMode: 'fixed',
     });
+  });
+
+  it("wears another window's theme and language, keeping its own layout", () => {
+    const prefs = makePreferences(JSON.stringify({ browserWidth: 300 }));
+    const saved = {
+      appThemeId: 'plugin:dev.shadergrove.default-themes/light',
+      appThemeMode: 'system',
+      colorScheme: 'system',
+      language: 'fr',
+      languagePackId: 'plugin:dev.shadergrove.language-fr/french',
+      browserWidth: 420,
+    };
+    const storage = TestBed.inject(DOCUMENT).defaultView!.localStorage;
+    storage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    for (const listener of storageListeners) {
+      listener({ key: 'something-else', newValue: '{}' });
+      listener({ key: STORAGE_KEY, newValue: JSON.stringify(saved) });
+    }
+    const { browserWidth, ...appearance } = saved;
+    expect(prefs.value()).toMatchObject(appearance);
+    expect(prefs.value().browserWidth).toBe(300);
+    expect(browserWidth).toBe(420);
   });
 
   it('leaves the root colour scheme to the theme service', () => {

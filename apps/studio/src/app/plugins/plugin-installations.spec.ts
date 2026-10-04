@@ -652,6 +652,24 @@ describe('PluginInstallations — default packages', () => {
     expect(ids(second)).toEqual(DEFAULT_PACKAGE_IDS.map((id) => [id, true]).sort());
   });
 
+  it("shows another window's changes at once, the output window's included", async () => {
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    const main = setup();
+    await settled(main);
+    const output = TestBed.runInInjectionContext(() => new PluginInstallations());
+    await settled(output);
+    expect(output.find(themes)?.active).toBe(true);
+
+    await main.setEnabled(themes, false);
+    await vi.waitFor(() => expect(output.find(themes)?.active).toBe(false));
+    await main.remove(themes);
+    await vi.waitFor(() => expect(output.find(themes)).toBeUndefined());
+    const review = main.review(bytes(packageText()));
+    if (!review.ok) throw new Error(review.errors.join());
+    await main.install(review);
+    await vi.waitFor(() => expect(output.find('dev.example.tint')).toBeDefined());
+  });
+
   it('lets an install of a default made during a slow seed win, switched off', async () => {
     const [themes] = DEFAULT_PACKAGE_IDS as [string];
     let open!: () => void;

@@ -138,6 +138,12 @@ export class PluginInstallations {
   /** Bumped on every profile switch: work started under an older one stops writing. */
   private generation = 0;
   private queue: Promise<unknown> = Promise.resolve();
+  /**
+   * Tells the other windows and tabs of this origin that a profile's packages
+   * changed, so the one still showing it reloads — the output window included.
+   */
+  private readonly channel =
+    typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('shadergrove-plugins');
   /** Work under way per package; aborted when the package is switched off, replaced or removed. */
   private readonly pending = new Map<string, Set<AbortController>>();
 
@@ -145,6 +151,10 @@ export class PluginInstallations {
     effect(() => {
       const profile = this.profile();
       untracked(() => void this.switchTo(profile));
+    });
+    this.channel?.addEventListener('message', (event: MessageEvent<{ profile?: unknown }>) => {
+      if (event.data?.profile !== this.profile()) return;
+      this.reload().catch((error: unknown) => console.warn('Plugins could not be reloaded', error));
     });
   }
 
@@ -197,7 +207,7 @@ export class PluginInstallations {
     // A default can be seeding right now: the user's install waits for it, and then wins.
     if (isDefaultPackageId(id)) await this.exclusive(review.profile, write);
     else await write();
-    await this.reload();
+    await this.changed();
   }
 
   /**
@@ -221,7 +231,7 @@ export class PluginInstallations {
     if (enabled && installed.problem) throw new Error(installed.problem);
     if (!enabled) this.abortPending(id);
     await this.store.put({ ...installed.stored, enabled });
-    await this.reload();
+    await this.changed();
   }
 
   async remove(id: string): Promise<void> {
@@ -241,7 +251,7 @@ export class PluginInstallations {
     } else {
       await store.remove(id);
     }
-    await this.reload();
+    await this.changed();
   }
 
   /** The context an operation on an active package starts under, or `null` if it may not start. */
@@ -374,8 +384,15 @@ export class PluginInstallations {
       }
     });
     // Reloaded even when nothing was written here: another tab may have seeded this profile
-    // after the first load of this one.
-    if (seeds && current()) await this.reload();
+    // after the first load of this one. And announced, for a window that loaded before it.
+    if (seeds && current()) await this.changed();
+  }
+
+  /** Reloads after a write here, and has the other windows of the same profile reload too. */
+  private async changed(): Promise<void> {
+    const profile = this.profile();
+    if (profile !== null) this.channel?.postMessage({ profile });
+    await this.reload();
   }
 
   private async removeOwnWrite(store: PluginStore, record: StoredPlugin): Promise<void> {

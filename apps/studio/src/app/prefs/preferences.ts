@@ -202,6 +202,15 @@ function sanitizeColorScheme(value: unknown): ColorScheme {
     : DEFAULTS.colorScheme;
 }
 
+/** The appearance every window of the app shares: what it is painted with, and what it says. */
+const SHARED_KEYS = [
+  'appThemeId',
+  'appThemeMode',
+  'colorScheme',
+  'language',
+  'languagePackId',
+] as const satisfies readonly (keyof WorkspacePreferences)[];
+
 export function createDefaultWorkspacePreferences(): WorkspacePreferences {
   return { ...DEFAULTS };
 }
@@ -247,6 +256,14 @@ export class Preferences {
       }
 
       effect(() => this.persist(this.state()));
+
+      // Another window of the app saved its preferences: wear the same theme and speak the
+      // same language here. Layout and the rest stay this window's own.
+      this.document.defaultView?.addEventListener?.('storage', (event) => {
+        if (event.key !== STORAGE_KEY || event.newValue === null) return;
+        const saved = this.load();
+        this.patch(Object.fromEntries(SHARED_KEYS.map((key) => [key, saved[key]])));
+      });
     }
   }
 
