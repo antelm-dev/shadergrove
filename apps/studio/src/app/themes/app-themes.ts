@@ -11,38 +11,46 @@ import {
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 
-import type { PluginThemeRef } from '@shadergrove/shared/plugin';
+import { DEFAULT_THEME_REFS, type PluginThemeRef } from '@shadergrove/shared/plugin';
 
 import { EditorSettings } from '../editor/editor-settings';
 import { toMonacoTheme, type MonacoApi } from '../editor/monaco-loader';
 import { PluginInstallations } from '../plugins/plugin-installations';
-import { Preferences, colorSchemeIcon, type ColorScheme } from '../prefs/preferences';
+import { Preferences, colorSchemeIcon } from '../prefs/preferences';
 import {
   UI_THEME_PROPERTIES,
+  findPluginTheme,
+  pairKey,
   pluginThemeEntries,
   resolveAppTheme,
   resolveEditorTheme,
+  themePairs,
   uiThemeProperties,
   type PluginThemeEntry,
   type ResolvedAppTheme,
   type ResolvedEditorTheme,
+  type ThemePair,
 } from './theme-catalog';
 
 /**
  * The one owner of what the app and its editor are painted with.
  *
- * Merges the built-in theme with the theme contributions of the current
- * profile's active packages, resolves the stored choices against that catalogue,
- * and applies the result: the root `color-scheme` and the Material colour tokens
- * for the chrome — overlays, lil-gui and the glass surfaces all derive from
- * those — and Monaco's global theme for every editor. Nothing else writes
- * either; `Preferences` only stores the choices.
+ * Every theme on offer is a theme contribution of the current profile's active
+ * packages — the official Light and Dark too, which the app installs once as a
+ * default pack. This resolves the stored choice against them, follows the OS
+ * for a paired theme in System mode, and applies the result: the root
+ * `color-scheme` and the Material colour tokens for the chrome — overlays,
+ * lil-gui and the glass surfaces all derive from those — and Monaco's global
+ * theme for every editor. Nothing else writes either; `Preferences` only
+ * stores the choices.
  *
- * Until the session and the plugins have loaded, the catalogue is empty and the
- * built-in theme is painted: never a palette of the previous profile, and never
- * one from a package that is no longer active. A stored reference is kept all
- * the while, and applies again as soon as its theme is back in the catalogue.
- * Listing or applying a theme starts no plugin Worker: a theme is data.
+ * Until the session and the plugins have loaded — and whenever the chosen
+ * theme is not active — the catalogue has no match and the stylesheet's
+ * fallback (the house Light/Dark) is painted in the remembered scheme: never a
+ * palette of the previous profile, and never one from a package that is no
+ * longer active. The stored reference is kept all the while, and applies again
+ * as soon as its theme is back. Listing or applying a theme starts no plugin
+ * Worker: a theme is data.
  */
 @Injectable({ providedIn: 'root' })
 export class AppThemes {
@@ -62,12 +70,20 @@ export class AppThemes {
     this.installations ? pluginThemeEntries(this.installations.plugins()) : [],
   );
 
+  /** The light/dark pairs among them, each of which can follow the OS. */
+  readonly pairs = computed<readonly ThemePair[]>(() => themePairs(this.entries()));
+
+  /** Whether the chosen theme is worn as it is, or follows the OS within its pair. */
+  readonly mode = computed(() => this.preferences.value().appThemeMode);
+
   /** What the app wears now. */
   readonly app = computed<ResolvedAppTheme>(() =>
     resolveAppTheme(
       this.preferences.value().appThemeId,
       this.preferences.resolved(),
       this.entries(),
+      this.mode(),
+      this.preferences.systemScheme(),
     ),
   );
 
@@ -79,12 +95,14 @@ export class AppThemes {
     resolveEditorTheme(this.editorSettings.effective().theme, this.app(), this.entries()),
   );
 
-  /** The icon of the theme menu: the built-in scheme's, or a palette for a plugin theme. */
-  readonly icon = computed(() =>
-    this.app().kind === 'plugin'
-      ? 'palette'
-      : colorSchemeIcon(this.preferences.value().colorScheme),
-  );
+  /** The icon of the theme menu: System's, a paired theme's scheme, or a palette for any other. */
+  readonly icon = computed(() => {
+    const app = this.app();
+    if (app.kind === 'builtin') return colorSchemeIcon(this.preferences.value().colorScheme);
+    if (pairKey(app.entry) === null) return 'palette';
+    if (this.mode() === 'system') return colorSchemeIcon('system');
+    return colorSchemeIcon(app.scheme);
+  });
 
   /** Starts painting. Called once at startup in the browser; a no-op on the server. */
   start(): void {
@@ -99,6 +117,8 @@ export class AppThemes {
       const theme = this.editor();
       if (monaco) untracked(() => applyEditor(monaco, theme));
     }, options);
+
+    effect(() => this.migrateLegacyChoice(), options);
   }
 
   /**
@@ -113,24 +133,73 @@ export class AppThemes {
     this.monaco.set(monaco);
   }
 
-  /** Wear the built-in theme in this scheme. */
-  selectBuiltin(colorScheme: ColorScheme): void {
-    this.preferences.patch({ appThemeId: 'builtin', colorScheme });
-  }
-
-  /** Wear a plugin theme. The built-in scheme is left as it was, for when it comes back. */
+  /**
+   * Wear one theme as it is. Looked up again among the active themes — a menu
+   * or palette entry can outlive its package, its profile or its switch — and
+   * ignored if it is no longer there. The fallback takes its scheme.
+   */
   selectPlugin(ref: PluginThemeRef): void {
-    this.preferences.patch({ appThemeId: ref });
+    const entry = findPluginTheme(untracked(this.entries), ref);
+    if (!entry) return;
+    this.preferences.patch({
+      appThemeId: ref,
+      appThemeMode: 'fixed',
+      colorScheme: entry.theme.scheme,
+    });
   }
 
-  /** Whether the built-in theme is worn, in this scheme. */
-  isBuiltinSelected(colorScheme: ColorScheme): boolean {
-    return this.app().kind === 'builtin' && this.preferences.value().colorScheme === colorScheme;
+  /** Wear a pair, following the OS between its light and dark theme; ignored if it is gone. */
+  selectSystem(key: string): void {
+    const pair = untracked(this.pairs).find((candidate) => candidate.key === key);
+    if (!pair) return;
+    this.preferences.patch({
+      appThemeId: pair[untracked(this.preferences.systemScheme)].ref,
+      appThemeMode: 'system',
+      colorScheme: 'system',
+    });
   }
 
+  /** Whether this theme is the one worn now, in either mode. */
   isPluginSelected(ref: PluginThemeRef): boolean {
     const app = this.app();
     return app.kind === 'plugin' && app.entry.ref === ref;
+  }
+
+  /** Whether this theme is chosen as it is: the radio state of its row. */
+  isFixed(ref: PluginThemeRef): boolean {
+    return this.mode() === 'fixed' && this.isPluginSelected(ref);
+  }
+
+  /** Whether this pair is worn in System mode. */
+  isSystemSelected(key: string): boolean {
+    const app = this.app();
+    return this.mode() === 'system' && app.kind === 'plugin' && pairKey(app.entry) === key;
+  }
+
+  /**
+   * Once, the first time the official Light and Dark are both active after the
+   * defaults settle: a preference from before themes were packages (`builtin`)
+   * becomes the official theme it was showing — System mode for `system`.
+   * Never onto a theme that is not there, so a profile without them keeps the
+   * fallback and is migrated if they come back; after that, nothing sets
+   * `builtin` again.
+   */
+  private migrateLegacyChoice(): void {
+    const installations = this.installations;
+    if (!installations?.defaultsSettled() || installations.loading()) return;
+    const { appThemeId, colorScheme } = this.preferences.value();
+    if (appThemeId !== 'builtin') return;
+    const entries = this.entries();
+    if (!findPluginTheme(entries, DEFAULT_THEME_REFS.light)) return;
+    if (!findPluginTheme(entries, DEFAULT_THEME_REFS.dark)) return;
+    const system = colorScheme === 'system';
+    const scheme = system ? this.preferences.systemScheme() : colorScheme;
+    untracked(() =>
+      this.preferences.patch({
+        appThemeId: DEFAULT_THEME_REFS[scheme],
+        appThemeMode: system ? 'system' : 'fixed',
+      }),
+    );
   }
 
   private applyUi(app: ResolvedAppTheme): void {

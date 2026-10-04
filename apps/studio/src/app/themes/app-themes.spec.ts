@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { DEFAULT_THEMES_PACKAGE_ID, DEFAULT_THEME_REFS } from '@shadergrove/shared/plugin';
+
 import { AuthService } from '../auth/auth.service';
 import { EditorSettings } from '../editor/editor-settings';
 import { monacoThemeId } from '../editor/editor-themes';
@@ -24,6 +26,20 @@ const amberText = readFileSync(
   resolve(
     import.meta.dirname,
     '../../../../../tools/workspace/fixtures/plugins/themes/grove-amber.sgplugin.json',
+  ),
+  'utf8',
+);
+
+/** The official Light/Dark pack, exactly as this release ships it. */
+const pluginsDir = resolve(import.meta.dirname, '../../plugins');
+const defaultThemesText = readFileSync(
+  resolve(
+    pluginsDir,
+    (
+      JSON.parse(readFileSync(resolve(pluginsDir, 'catalogue.json'), 'utf8')) as {
+        packages: { id: string; file: string }[];
+      }
+    ).packages.find((entry) => entry.id === DEFAULT_THEMES_PACKAGE_ID)!.file,
   ),
   'utf8',
 );
@@ -52,10 +68,10 @@ class MemoryStores {
     };
   }
 
-  seed(profile: string, text: string, enabled: boolean): void {
+  seed(profile: string, text: string, enabled: boolean, id = PACKAGE_ID): void {
     void this.for(profile);
-    this.byProfile.get(profile)!.set(PACKAGE_ID, {
-      id: PACKAGE_ID,
+    this.byProfile.get(profile)!.set(id, {
+      id,
       text,
       enabled,
       installedAt: '2026-10-02T00:00:00.000Z',
@@ -87,6 +103,15 @@ describe('AppThemes', () => {
   const user = signal<{ id: string } | null>(null);
   const status = signal<'loading' | 'anonymous' | 'authenticated'>('anonymous');
   const workers = vi.fn();
+  /** The OS's light/dark setting, as `matchMedia` reports it. */
+  const os = {
+    dark: true,
+    listeners: new Set<(event: { matches: boolean }) => void>(),
+    set(dark: boolean) {
+      this.dark = dark;
+      for (const listener of this.listeners) listener({ matches: dark });
+    },
+  };
 
   function setup(stored?: object): {
     themes: AppThemes;
@@ -107,7 +132,13 @@ describe('AppThemes', () => {
                 getItem: (key: string) => storage.get(key) ?? null,
                 setItem: (key: string, value: string) => storage.set(key, value),
               },
-              matchMedia: () => null,
+              matchMedia: () => ({
+                get matches() {
+                  return os.dark;
+                },
+                addEventListener: (_: string, listener: (event: { matches: boolean }) => void) =>
+                  os.listeners.add(listener),
+              }),
             },
             documentElement: root,
           },
@@ -147,6 +178,8 @@ describe('AppThemes', () => {
     status.set('anonymous');
     workers.mockReset();
     vi.stubGlobal('Worker', workers);
+    os.dark = true;
+    os.listeners.clear();
   });
 
   afterEach(() => {
@@ -188,13 +221,15 @@ describe('AppThemes', () => {
     expect(css('--mat-sys-primary')).toBe('#8a5100');
     expect(root.dataset['appTheme']).toBe(LIGHT);
     expect(themes.icon()).toBe('palette');
-    expect(preferences.value()).toMatchObject({ appThemeId: LIGHT, colorScheme: 'dark' });
+    // The fallback takes the theme's scheme, so losing the theme does not flip light to dark.
+    expect(preferences.value()).toMatchObject({
+      appThemeId: LIGHT,
+      appThemeMode: 'fixed',
+      colorScheme: 'light',
+    });
     expect(JSON.parse(storage.get(STORAGE_KEY)!).appThemeId).toBe(LIGHT);
-
-    themes.selectBuiltin('system');
-    await settle();
-    expect(preferences.value()).toMatchObject({ appThemeId: 'builtin', colorScheme: 'system' });
-    expect(painted()).toEqual([]);
+    expect(themes.isFixed(LIGHT)).toBe(true);
+    expect(themes.pairs()).toEqual([]);
   });
 
   it('clears the roles of a complete theme before applying a partial one', async () => {
@@ -306,6 +341,141 @@ describe('AppThemes', () => {
     themes.attachMonaco(fakeMonaco().api);
     await settle();
     expect(workers).not.toHaveBeenCalled();
+  });
+
+  describe('the default Light/Dark pack', () => {
+    const { light: OFFICIAL_LIGHT, dark: OFFICIAL_DARK } = DEFAULT_THEME_REFS;
+    const KEY = `${DEFAULT_THEMES_PACKAGE_ID}/default`;
+
+    it('migrates a legacy fixed scheme once, onto the official theme it was showing', async () => {
+      stores.seed('anonymous', defaultThemesText, true, DEFAULT_THEMES_PACKAGE_ID);
+      let { themes, preferences } = setup({ colorScheme: 'light' });
+      await settle();
+      expect(preferences.value()).toMatchObject({
+        appThemeId: OFFICIAL_LIGHT,
+        appThemeMode: 'fixed',
+        colorScheme: 'light',
+      });
+      expect(themes.isFixed(OFFICIAL_LIGHT)).toBe(true);
+      expect(root.style.colorScheme).toBe('light');
+      // The same colours the stylesheet's fallback paints, now inline.
+      expect(css('--mat-sys-surface')).toBe('#f7f7f8');
+      expect(css('--mat-sys-primary')).toBe('#276c00');
+      expect(themes.icon()).toBe('light_mode');
+
+      // A later choice is never overwritten again, on restart or anywhere else.
+      themes.selectPlugin(OFFICIAL_DARK);
+      await settle();
+      TestBed.resetTestingModule();
+      ({ themes, preferences } = setup());
+      await settle();
+      expect(preferences.value().appThemeId).toBe(OFFICIAL_DARK);
+      expect(css('--mat-sys-surface')).toBe('#141416');
+    });
+
+    it('migrates legacy System to System mode, which follows the OS in the UI and Monaco', async () => {
+      stores.seed('anonymous', defaultThemesText, true, DEFAULT_THEMES_PACKAGE_ID);
+      os.dark = false;
+      const { themes, preferences } = setup({ colorScheme: 'system' });
+      await settle();
+      expect(preferences.value()).toMatchObject({
+        appThemeId: OFFICIAL_LIGHT,
+        appThemeMode: 'system',
+        colorScheme: 'system',
+      });
+      expect(themes.isSystemSelected(KEY)).toBe(true);
+      expect(themes.isFixed(OFFICIAL_LIGHT)).toBe(false);
+      expect(themes.icon()).toBe('contrast');
+      const monaco = fakeMonaco();
+      themes.attachMonaco(monaco.api);
+      expect(monaco.current()).toBe(pluginMonacoThemeId(OFFICIAL_LIGHT));
+
+      os.set(true);
+      await settle();
+      expect(themes.app()).toMatchObject({ kind: 'plugin', scheme: 'dark' });
+      expect(root.style.colorScheme).toBe('dark');
+      expect(css('--mat-sys-surface')).toBe('#141416');
+      expect(monaco.current()).toBe(pluginMonacoThemeId(OFFICIAL_DARK));
+      // The stored choice did not move; only what it resolves to.
+      expect(preferences.value().appThemeId).toBe(OFFICIAL_LIGHT);
+
+      themes.selectPlugin(OFFICIAL_LIGHT);
+      await settle();
+      os.set(false);
+      os.set(true);
+      await settle();
+      expect(themes.app()).toMatchObject({ scheme: 'light' });
+      expect(preferences.value()).toMatchObject({ appThemeMode: 'fixed', colorScheme: 'light' });
+
+      themes.selectSystem(KEY);
+      await settle();
+      expect(preferences.value()).toMatchObject({
+        appThemeId: OFFICIAL_DARK,
+        appThemeMode: 'system',
+        colorScheme: 'system',
+      });
+    });
+
+    it('never migrates onto a pack that is not active, and does once it is', async () => {
+      stores.seed('anonymous', defaultThemesText, false, DEFAULT_THEMES_PACKAGE_ID);
+      const { installations, preferences } = setup({ colorScheme: 'dark' });
+      await settle();
+      expect(preferences.value().appThemeId).toBe('builtin');
+      expect(painted()).toEqual([]);
+      expect(root.style.colorScheme).toBe('dark');
+
+      await installations.setEnabled(DEFAULT_THEMES_PACKAGE_ID, true);
+      await settle();
+      expect(preferences.value()).toMatchObject({
+        appThemeId: OFFICIAL_DARK,
+        appThemeMode: 'fixed',
+      });
+    });
+
+    it('keeps a third-party theme and a pinned editor theme as they were', async () => {
+      stores.seed('anonymous', amberText, true);
+      stores.seed('anonymous', defaultThemesText, true, DEFAULT_THEMES_PACKAGE_ID);
+      const { preferences } = setup({
+        appThemeId: DARK,
+        colorScheme: 'light',
+        editorAppearance: { theme: 'parchment' },
+      });
+      await settle();
+      expect(preferences.value()).toMatchObject({ appThemeId: DARK, appThemeMode: 'fixed' });
+      expect(preferences.value().editorAppearance.theme).toBe('parchment');
+      expect(css('--mat-sys-primary')).toBe('#f2a93b');
+    });
+
+    it('paints the fallback, keeping the choice, while the pack is off — and offers System only for pairs', async () => {
+      stores.seed('anonymous', amberText, true);
+      stores.seed('anonymous', defaultThemesText, true, DEFAULT_THEMES_PACKAGE_ID);
+      const { themes, installations, preferences } = setup({
+        appThemeId: OFFICIAL_DARK,
+        appThemeMode: 'system',
+        colorScheme: 'system',
+      });
+      await settle();
+      expect(themes.pairs().map((pair) => pair.key)).toEqual([KEY]);
+
+      await installations.setEnabled(DEFAULT_THEMES_PACKAGE_ID, false);
+      await settle();
+      expect(themes.app().kind).toBe('builtin');
+      expect(painted()).toEqual([]);
+      expect(themes.pairs()).toEqual([]);
+      expect(preferences.value()).toMatchObject({
+        appThemeId: OFFICIAL_DARK,
+        appThemeMode: 'system',
+      });
+
+      // A command kept from before cannot select what is no longer there.
+      themes.selectPlugin(OFFICIAL_LIGHT);
+      themes.selectSystem(KEY);
+      await settle();
+      expect(preferences.value()).toMatchObject({
+        appThemeId: OFFICIAL_DARK,
+        appThemeMode: 'system',
+      });
+    });
   });
 
   describe('Monaco', () => {

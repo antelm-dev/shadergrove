@@ -119,9 +119,11 @@ describe('AppTitlebar Help and View menus', () => {
           useValue: {
             icon: signal('dark_mode').asReadonly(),
             entries: signal([]).asReadonly(),
-            isBuiltinSelected: (scheme: string) => scheme === 'dark',
+            pairs: signal([]).asReadonly(),
+            isFixed: () => false,
+            isSystemSelected: () => false,
             isPluginSelected: () => false,
-            selectBuiltin: () => undefined,
+            selectSystem: () => undefined,
             selectPlugin: () => undefined,
           },
         },

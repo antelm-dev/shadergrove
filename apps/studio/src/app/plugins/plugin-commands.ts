@@ -3,7 +3,9 @@ import { Router } from '@angular/router';
 
 import { effectContributionCandidate, type EffectContribution } from '@shadergrove/shared/plugin';
 import { I18n } from '../i18n/i18n';
+import { colorSchemeIcon } from '../prefs/preferences';
 import { AppThemes } from '../themes/app-themes';
+import { officialThemeKey, pairKey } from '../themes/theme-catalog';
 import type { MenuCommand } from '../ui/menu-commands';
 import { ShaderStore } from '../workspace/shader-store';
 import { EffectAdoption, adoptionMessage } from './effect-adoption';
@@ -36,7 +38,8 @@ export interface PluginCommand extends MenuCommand {
  * - `projectExporter` → Import & export and the shader's own menu: exports the
  *   open shader directly, dimmed when none is open.
  * - `effect` → the palette's Shader section: adds the effect to the open shader.
- * - `theme` → the palette's Settings section (the Theme submenu lists them too).
+ * - `theme` → the palette's Settings section (the Theme submenu lists them
+ *   too), plus a System entry for each light/dark pair.
  *
  * The app owns the wording: an importer or exporter that uses a host adapter is
  * labelled by that adapter ("Import from Shadertoy…"); otherwise by its
@@ -113,15 +116,39 @@ export class PluginCommands {
     ),
   );
 
-  readonly themeCommands = computed<readonly PluginCommand[]>(() =>
-    this.themes.entries().map((entry) => ({
-      id: `plugin:${entry.ref}`,
-      ref: entry.ref,
-      icon: () => 'palette',
-      label: () => `${this.i18n.t('menu.theme')}: ${entry.theme.name}`,
-      action: () => this.themes.selectPlugin(entry.ref),
-    })),
-  );
+  /**
+   * Every active theme, and System for every pair. Selecting revalidates
+   * against the themes active then (`AppThemes.selectPlugin`/`selectSystem`), so
+   * an entry kept by an open palette cannot bring back a theme that is gone.
+   */
+  readonly themeCommands = computed<readonly PluginCommand[]>(() => {
+    const theme = (name: () => string) => () => `${this.i18n.t('menu.theme')}: ${name()}`;
+    const commands: PluginCommand[] = this.themes.entries().map((entry) => {
+      const key = officialThemeKey(entry.ref);
+      return {
+        id: `plugin:${entry.ref}`,
+        ref: entry.ref,
+        icon: () => (pairKey(entry) ? colorSchemeIcon(entry.theme.scheme) : 'palette'),
+        label: theme(() => (key ? this.i18n.t(key) : entry.theme.name)),
+        action: () => this.themes.selectPlugin(entry.ref),
+      };
+    });
+    for (const pair of this.themes.pairs()) {
+      const official = officialThemeKey(pair.light.ref) !== null;
+      commands.push({
+        id: `plugin-system:${pair.key}`,
+        ref: pair.key,
+        icon: () => colorSchemeIcon('system'),
+        label: theme(() =>
+          official
+            ? this.i18n.t('theme.system')
+            : `${this.i18n.t('theme.system')} (${pair.light.packageName})`,
+        ),
+        action: () => this.themes.selectSystem(pair.key),
+      });
+    }
+    return commands;
+  });
 
   private openInPlugins(packageId: string): Promise<boolean> {
     return this.router.navigate(['/plugins'], { queryParams: { use: packageId } });

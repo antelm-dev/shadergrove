@@ -560,6 +560,7 @@ export const TRANSLATION_KEYS = [
   'theme.dark',
   'theme.system',
   'theme.installed',
+  'theme.none',
   'editorTheme.followsApp',
   'explore.title',
   'explore.backToEditor',

@@ -550,6 +550,7 @@
   "theme.dark": "Sombre",
   "theme.system": "Système",
   "theme.installed": "Thèmes installés",
+  "theme.none": "Aucun thème n’est activé",
   "editorTheme.followsApp": "Suit le thème {theme} du studio",
   "explore.title": "Explorer",
   "explore.backToEditor": "Retour à l’éditeur",

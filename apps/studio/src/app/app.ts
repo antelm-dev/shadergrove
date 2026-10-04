@@ -28,7 +28,7 @@ import { map } from 'rxjs';
 
 import type { ImportMode } from '@shadergrove/shared/model';
 import { DEFAULT_PANEL_WIDTHS, PANEL_LIMITS } from '@shadergrove/shared/panel-prefs';
-import { COLOR_SCHEME_OPTIONS, Preferences } from './prefs/preferences';
+import { Preferences } from './prefs/preferences';
 import { AppThemes } from './themes/app-themes';
 import { ThemeMenu } from './themes/theme-menu';
 import { DesktopAccount } from './desktop/desktop-account';
@@ -330,14 +330,6 @@ export class App {
 
   /** What the Settings section keeps behind submenus and dialogs, flattened for the palette. */
   private readonly settingsCommands: readonly MenuCommand[] = [
-    ...COLOR_SCHEME_OPTIONS.map(
-      (option): MenuCommand => ({
-        id: `theme-${option.value}`,
-        icon: () => option.icon,
-        label: () => `${this.i18n.t('menu.theme')}: ${this.i18n.t(`theme.${option.value}`)}`,
-        action: () => this.themes.selectBuiltin(option.value),
-      }),
-    ),
     {
       id: 'editor-appearance',
       icon: () => 'settings',
@@ -377,7 +369,7 @@ export class App {
         { label: this.i18n.t('menu.importExport'), commands: this.importExportCommands() },
         {
           label: this.i18n.t('menu.settings'),
-          commands: [...this.settingsCommands, ...this.pluginCommands.themeCommands()],
+          commands: [...this.pluginCommands.themeCommands(), ...this.settingsCommands],
         },
       ],
     };

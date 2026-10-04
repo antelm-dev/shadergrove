@@ -554,6 +554,7 @@ export const ENGLISH_MESSAGES: Readonly<Record<TranslationKey, string>> = {
   "theme.dark": "Dark",
   "theme.system": "System",
   "theme.installed": "Installed themes",
+  "theme.none": "No theme is switched on",
   "editorTheme.followsApp": "Follows the studio’s {theme} theme",
   "explore.title": "Explore",
   "explore.backToEditor": "Back to the editor",
