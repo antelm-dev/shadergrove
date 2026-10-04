@@ -30,6 +30,11 @@
             "polyfills": ["@angular/localize/init"],
             "assets": [
               {
+                "glob": "**/*",
+                "input": "src/assets",
+                "output": "/assets"
+              },
+              {
                 "glob": "plugin-sandbox.js",
                 "input": "src",
                 "output": "/"
@@ -141,6 +146,11 @@
             "inlineStyleLanguage": "scss",
             "polyfills": ["@angular/localize/init"],
             "assets": [
+              {
+                "glob": "**/*",
+                "input": "src/assets",
+                "output": "/assets"
+              },
               {
                 "glob": "plugin-sandbox.js",
                 "input": "src",
