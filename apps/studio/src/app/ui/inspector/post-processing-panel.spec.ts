@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
@@ -19,22 +16,12 @@ import {
   type RenderSettings,
   type VignetteEffect,
 } from '@shadergrove/shared/model';
-import { I18nCatalog, type I18nCatalogMap } from '../../i18n/catalog';
 import { I18n } from '../../i18n/i18n';
+import { provideTestLanguages } from '../../i18n/testing/languages';
 import { Preferences, createDefaultWorkspacePreferences } from '../../prefs/preferences';
 import { ShaderStore } from '../../workspace/shader-store';
 import { CustomEffectEditor } from './custom-effect-editor';
 import { PostProcessingPanel } from './post-processing-panel';
-
-class FileCatalog extends I18nCatalog {
-  override load(locale: 'en' | 'fr'): Promise<I18nCatalogMap> {
-    const raw = readFileSync(
-      resolve(import.meta.dirname, `../../../../../../i18n/${locale}.json`),
-      'utf8',
-    );
-    return Promise.resolve(JSON.parse(raw) as I18nCatalogMap);
-  }
-}
 
 /** Fires a real `input` + `change` cycle on a native input, the way a slider drag does. */
 function setInputValue(input: HTMLInputElement, value: number): void {
@@ -76,7 +63,7 @@ describe('PostProcessingPanel', () => {
       imports: [PostProcessingPanel],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: I18nCatalog, useClass: FileCatalog },
+        provideTestLanguages(),
         I18n,
         {
           provide: Preferences,
@@ -96,8 +83,6 @@ describe('PostProcessingPanel', () => {
         { provide: MatDialog, useValue: dialog },
       ],
     }).compileComponents();
-
-    await TestBed.inject(I18n).ensureLoaded('en');
   });
 
   afterEach(() => {

@@ -1,49 +1,35 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { I18nCatalog, type I18nCatalogMap } from '../../i18n/catalog';
 import { I18n } from '../../i18n/i18n';
+import { provideTestLanguages, speaking } from '../../i18n/testing/languages';
 import { Preferences, type WorkspacePreferences } from '../../prefs/preferences';
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog';
 import { SHORTCUT_CATALOG, SHORTCUT_ENTRY_IDS } from './shortcut-catalog';
 
-class FileCatalog extends I18nCatalog {
-  override load(locale: 'en' | 'fr'): Promise<I18nCatalogMap> {
-    const raw = readFileSync(
-      resolve(import.meta.dirname, `../../../../../../i18n/${locale}.json`),
-      'utf8',
-    );
-    return Promise.resolve(JSON.parse(raw) as I18nCatalogMap);
-  }
-}
-
 describe('KeyboardShortcutsDialog', () => {
-  const language = signal({ language: 'en' as string });
+  const language = signal(speaking('en'));
 
   beforeEach(async () => {
-    language.set({ language: 'en' });
+    language.set(speaking('en'));
     TestBed.configureTestingModule({
       imports: [KeyboardShortcutsDialog],
       providers: [
         provideZonelessChangeDetection(),
         I18n,
-        { provide: I18nCatalog, useClass: FileCatalog },
+        provideTestLanguages(),
         {
           provide: Preferences,
           useValue: {
             value: language.asReadonly(),
             patch: (patch: Partial<WorkspacePreferences>) => {
-              if (patch.language) language.set({ language: patch.language });
+              language.update((value) => ({ ...value, ...patch }));
             },
           },
         },
       ],
     });
-    await TestBed.inject(I18n).ensureLoaded('en');
   });
 
   afterEach(() => {
@@ -51,8 +37,7 @@ describe('KeyboardShortcutsDialog', () => {
   });
 
   const mount = async (locale: 'en' | 'fr' = 'en') => {
-    language.set({ language: locale });
-    await TestBed.inject(I18n).ensureLoaded(locale);
+    language.set(speaking(locale));
     const fixture = TestBed.createComponent(KeyboardShortcutsDialog);
     fixture.detectChanges();
     return fixture;

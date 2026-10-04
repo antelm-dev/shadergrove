@@ -9,8 +9,7 @@
  * the ones its English text uses (`ENGLISH_MESSAGES`).
  */
 export const TRANSLATION_KEYS = [
-  'language.english',
-  'language.french',
+  'language.fallback',
   'menu.file',
   'menu.view',
   'menu.window',
@@ -429,6 +428,7 @@ export const TRANSLATION_KEYS = [
   'dialog.renameHint',
   'dialog.duplicateShader',
   'dialog.duplicateName',
+  'dialog.copySuffix',
   'dialog.duplicateConfirm',
   'dialog.deleteShader',
   'dialog.deleteShaderMessage',
@@ -688,6 +688,8 @@ export const TRANSLATION_KEYS = [
   'plugins.languageDetail',
   'plugins.useTheme',
   'plugins.themeInUse',
+  'plugins.useLanguage',
+  'plugins.languageInUse',
   'plugins.limits',
   'plugins.controls',
   'plugins.accepts',

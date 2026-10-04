@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatMenuModule } from '@angular/material/menu';
@@ -16,8 +13,8 @@ import {
 } from '@shadergrove/shared/panel-prefs';
 import { DEFAULT_PREVIEW_WINDOW } from '@shadergrove/shared/preview-prefs';
 import { DesktopPlatform } from '../../desktop/desktop-platform';
-import { I18nCatalog, type I18nCatalogMap } from '../../i18n/catalog';
 import { I18n } from '../../i18n/i18n';
+import { provideTestLanguages, speaking } from '../../i18n/testing/languages';
 import {
   Preferences,
   createDefaultWorkspacePreferences,
@@ -31,16 +28,6 @@ import { MenuCommands, type MenuCommand } from '../menu-commands';
 import { WorkspaceActions } from '../workspace-actions';
 import { AppTitlebar } from './app-titlebar';
 
-class FileCatalog extends I18nCatalog {
-  override load(locale: 'en' | 'fr'): Promise<I18nCatalogMap> {
-    const raw = readFileSync(
-      resolve(import.meta.dirname, `../../../../../../i18n/${locale}.json`),
-      'utf8',
-    );
-    return Promise.resolve(JSON.parse(raw) as I18nCatalogMap);
-  }
-}
-
 function stubCommand(id: string): MenuCommand {
   return {
     id,
@@ -51,7 +38,7 @@ function stubCommand(id: string): MenuCommand {
 }
 
 describe('AppTitlebar Help and View menus', () => {
-  const language = signal({ language: 'en' as string });
+  const language = signal(speaking('en'));
   const pluginImports = signal<PluginCommand[]>([]);
   const pluginExports = signal<PluginCommand[]>([]);
   const openKeyboardShortcuts = vi.fn();
@@ -61,7 +48,7 @@ describe('AppTitlebar Help and View menus', () => {
   const openSupportLink = vi.fn();
 
   beforeEach(async () => {
-    language.set({ language: 'en' });
+    language.set(speaking('en'));
     openKeyboardShortcuts.mockReset();
     checkForUpdates.mockReset();
     openAboutShadergrove.mockReset();
@@ -104,13 +91,13 @@ describe('AppTitlebar Help and View menus', () => {
       providers: [
         provideZonelessChangeDetection(),
         I18n,
-        { provide: I18nCatalog, useClass: FileCatalog },
+        provideTestLanguages(),
         {
           provide: Preferences,
           useValue: {
             value: signal(prefs).asReadonly(),
             patch: (patch: Partial<WorkspacePreferences>) => {
-              if (patch.language) language.set({ language: patch.language });
+              language.update((value) => ({ ...value, ...patch }));
             },
           },
         },
@@ -185,8 +172,6 @@ describe('AppTitlebar Help and View menus', () => {
         },
       ],
     });
-
-    await TestBed.inject(I18n).ensureLoaded('en');
   });
 
   afterEach(() => {

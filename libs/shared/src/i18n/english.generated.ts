@@ -3,8 +3,7 @@ import type { TranslationKey } from './keys';
 
 /** The bundled English: what a key reads when no language pack translates it. */
 export const ENGLISH_MESSAGES: Readonly<Record<TranslationKey, string>> = {
-  "language.english": "English",
-  "language.french": "French",
+  "language.fallback": "English (built-in)",
   "menu.file": "File",
   "menu.view": "View",
   "menu.window": "Window",
@@ -423,6 +422,7 @@ export const ENGLISH_MESSAGES: Readonly<Record<TranslationKey, string>> = {
   "dialog.renameHint": "The name changes; links and files keep the same id",
   "dialog.duplicateShader": "Duplicate shader",
   "dialog.duplicateName": "Name of the copy",
+  "dialog.copySuffix": "copy",
   "dialog.duplicateConfirm": "Duplicate",
   "dialog.deleteShader": "Delete shader",
   "dialog.deleteShaderMessage": "“{name}” and all of its presets will be permanently deleted.",
@@ -682,6 +682,8 @@ export const ENGLISH_MESSAGES: Readonly<Record<TranslationKey, string>> = {
   "plugins.languageDetail": "{name} ({locale})",
   "plugins.useTheme": "Use as app theme",
   "plugins.themeInUse": "In use as the app theme",
+  "plugins.useLanguage": "Use as app language",
+  "plugins.languageInUse": "In use as the app language",
   "plugins.limits": "Limits: files up to {input} bytes, results up to {output} bytes, {seconds} s per call.",
   "plugins.controls": "{count} controls",
   "plugins.accepts": "reads {formats}",

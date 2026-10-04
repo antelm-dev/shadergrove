@@ -13,7 +13,8 @@ import {
 
 import { AuthService } from '../auth/auth.service';
 import { DesktopPlatform } from '../desktop/desktop-platform';
-import { I18n } from '../i18n/i18n';
+import { I18n, languageEntries, type LanguageEntry } from '../i18n/i18n';
+import { installedPackage } from '../i18n/testing/languages';
 import { WallpaperWebRuntime } from '../rendering/wallpaper-runtime';
 import { AppThemes } from '../themes/app-themes';
 import { pluginThemeEntries, themePairs, type PluginThemeEntry } from '../themes/theme-catalog';
@@ -75,6 +76,8 @@ function effectPackage(): string {
 const themeEntries = signal<PluginThemeEntry[]>([]);
 const selectPlugin = vi.fn();
 const selectSystem = vi.fn();
+const languages = signal<LanguageEntry[]>([]);
+const selectLanguage = vi.fn();
 
 describe('PluginCommands', () => {
   const user = signal<{ id: string } | null>(null);
@@ -118,6 +121,9 @@ describe('PluginCommands', () => {
           useValue: {
             t: (key: string, params?: object) =>
               params ? `${key} ${JSON.stringify(params)}` : key,
+            languages,
+            label: (entry: LanguageEntry) => entry.language.nativeName,
+            select: selectLanguage,
           },
         },
         { provide: WorkspaceActions, useValue: {} },
@@ -210,6 +216,24 @@ describe('PluginCommands', () => {
 
     themeEntries.set([]);
     expect(commands.themeCommands()).toEqual([]);
+  });
+
+  it('offers every active language, then the bundled English, choosing through I18n', async () => {
+    languages.set(languageEntries([installedPackage(text('dev.shadergrove.language-fr'))]));
+    const { commands } = setup();
+    await settle();
+    expect(labels(commands.languageCommands())).toEqual([
+      'menu.language: Français',
+      'menu.language: language.fallback',
+    ]);
+    commands.languageCommands()[0]!.action();
+    commands.languageCommands()[1]!.action();
+    expect(selectLanguage.mock.calls).toEqual([
+      ['plugin:dev.shadergrove.language-fr/french'],
+      ['fallback-en'],
+    ]);
+    languages.set([]);
+    expect(labels(commands.languageCommands())).toEqual(['menu.language: language.fallback']);
   });
 
   it('offers nothing for a package that is missing, or installed but switched off', async () => {
