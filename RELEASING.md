@@ -21,11 +21,18 @@ trip. This is a build-time setting, not an installer preference; see
 In **Settings → Actions → General**, enable **Allow GitHub Actions to create and
 approve pull requests** so Release Please can maintain its release pull request.
 
-The workflow uses `GITHUB_TOKEN` by default. Optionally add a
-`RELEASE_PLEASE_TOKEN` repository secret backed by a fine-grained token with
-Contents, Issues, and Pull requests read/write permissions. Resources created
-with that token can trigger the normal pull-request CI; resources created with
-`GITHUB_TOKEN` do not start new workflows.
+Add a `RELEASE_PLEASE_TOKEN` repository secret backed by a fine-grained token
+with Contents, Issues, and Pull requests read/write permissions. Without it the
+workflow falls back to `GITHUB_TOKEN`, and pull requests created with
+`GITHUB_TOKEN` do not start CI, so the release pull request would show no checks.
+
+Merge feature pull requests with **Squash and merge** and give each one a
+Conventional Commit title describing the delivered behavior, for example
+`feat(plugins): add Shadertoy import and Wallpaper Engine export`. Release Please
+lists every commit that reaches `master`, so merge commits and individual
+development commits would otherwise appear as duplicate changelog entries. Keep
+any `BREAKING CHANGE:` footer in the pull request description so it survives the
+squash.
 
 ## Preview builds
 
@@ -44,11 +51,25 @@ request from Conventional Commits:
 - `feat!:` or a `BREAKING CHANGE:` footer produces a major release.
 
 Merge the generated release pull request
-when the accumulated changes are ready. Release Please updates `CHANGELOG.md`
-and `package.json`, creates the `v<version>` tag and a draft GitHub Release.
-The Windows job attaches the NSIS installer, portable executable, blockmap, and
-`latest.yml`, then publishes the release. This prevents installed copies from
-seeing a release before its update manifest is available.
+when the accumulated changes are ready and its CI has passed. Release Please
+updates `CHANGELOG.md`, `package.json` and `APP_VERSION`, creates the
+`v<version>` tag and a draft GitHub Release. The workflow then:
+
+1. checks that the tag, `package.json` and `APP_VERSION` agree, and runs
+   `pnpm run ci` on the tagged commit;
+2. builds and attaches the NSIS installer, portable executable, blockmap, and
+   `latest.yml` to the draft;
+3. checks that every asset is present and that `latest.yml` names this version's
+   installer at its uploaded size;
+4. publishes the release.
+
+Installed copies therefore never see a release before its update manifest is
+available. A failure at any step leaves the release as a draft.
+
+To retry a failed publication, open **Actions → Release → Run workflow** and
+enter the tag, for example `v2.0.0`. The run skips Release Please, checks that
+the tag's commit is on `master` and that the release is still a draft, then
+repeats steps 1–4. A published release is never rebuilt.
 
 Stable installers consume the `latest` update channel.
 
@@ -57,9 +78,11 @@ Stable installers consume the `latest` update channel.
 Open **Actions → Beta release → Run workflow**, choose the commit or branch to
 promote, and enter a unique version such as `1.1.0-beta.1`.
 
-The workflow validates the version, creates a draft GitHub prerelease, builds
-and uploads the Windows updater assets on the `beta` channel, then publishes the
-prerelease only after the build succeeds. A failed build leaves a draft that a
+The workflow writes the version into both `package.json` and `APP_VERSION`, runs
+`pnpm run ci`, creates a draft GitHub prerelease, builds and uploads the Windows
+updater assets on the `beta` channel, verifies them, then publishes the
+prerelease. Plugin compatibility treats a beta as the release it leads to:
+`2.0.0-beta.1` accepts the plugins whose `appVersionRange` includes `2.0.0`. A failed build leaves a draft that a
 rerun with the same version can reuse.
 
 Users opt into beta updates by installing a beta build. Beta builds consume the

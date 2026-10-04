@@ -568,7 +568,11 @@ export function isPluginCompatible(manifest: PluginManifest, appVersion: string)
   return isAppVersionInRange(manifest.appVersionRange, appVersion);
 }
 
-/** Whether `appVersion` satisfies an `appVersionRange` such as `>=1.4.0 <2.0.0`. */
+/**
+ * Whether `appVersion` satisfies an `appVersionRange` such as `>=1.4.0 <2.0.0`.
+ * A beta counts as the release it leads to (`2.0.0-beta.1` as `2.0.0`), so it
+ * accepts exactly the plugins that release will.
+ */
 export function isAppVersionInRange(appVersionRange: string, appVersion: string): boolean {
   const app = triple(appVersion);
   const range = parseRange(appVersionRange);

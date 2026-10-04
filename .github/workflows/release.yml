@@ -4,6 +4,11 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Finish publishing an existing draft release (for example, v2.0.0). Leave empty to run Release Please.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -17,25 +22,54 @@ jobs:
       issues: write
       pull-requests: write
     outputs:
-      created: ${{ steps.release.outputs.release_created }}
-      sha: ${{ steps.release.outputs.sha }}
-      tag: ${{ steps.release.outputs.tag_name }}
+      created: ${{ steps.target.outputs.created }}
+      sha: ${{ steps.target.outputs.sha }}
+      tag: ${{ steps.target.outputs.tag }}
 
     steps:
       - name: Create or update release pull request
         id: release
+        if: ${{ !inputs.tag }}
         uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
-  windows:
-    name: Publish Windows desktop release
+      # A rerun cannot rely on Release Please reporting `release_created` again,
+      # so recovery names the tag and publishes whatever commit it points at,
+      # provided that commit is on master.
+      - name: Resolve release target
+        id: target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_TAG: ${{ inputs.tag }}
+          CREATED: ${{ steps.release.outputs.release_created }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+            SHA="$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)"
+            STATUS="$(gh api "repos/$GH_REPO/compare/master...$SHA" --jq .status)"
+            [[ "$STATUS" == identical || "$STATUS" == behind ]] || {
+              echo "$TAG points at $SHA, which is not on master"
+              exit 1
+            }
+            CREATED=true
+          fi
+          {
+            echo "created=${CREATED:-false}"
+            echo "tag=$TAG"
+            echo "sha=$SHA"
+          } >> "$GITHUB_OUTPUT"
+
+  validate:
+    name: Validate tagged commit
     needs: version
     if: needs.version.outputs.created == 'true'
-    runs-on: windows-latest
-    timeout-minutes: 25
-    permissions:
-      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v6
@@ -47,27 +81,74 @@ jobs:
           node-version: '26.5.0'
           cache: pnpm
 
-      - name: Check tag matches package version
+      - name: Check release version
         shell: bash
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: bash .github/scripts/release-version.sh stable "${TAG#v}"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint, check, typecheck, test and build
+        run: pnpm run ci
+
+  windows:
+    name: Publish Windows desktop release
+    needs: [version, validate]
+    runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-${{ needs.version.outputs.tag }}
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '26.5.0'
+          cache: pnpm
+
+      # electron-builder will upload to a recently published release, so a
+      # published release is refused here rather than having its assets replaced.
+      - name: Require a draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
         run: |
-          VERSION="$(node -p "require('./package.json').version")"
-          test "${{ needs.version.outputs.tag }}" = "v$VERSION" || {
-            echo "Tag ${{ needs.version.outputs.tag }} does not match package version $VERSION"
+          test "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "true" || {
+            echo "Release $TAG is already published"
             exit 1
           }
 
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Build and publish installers
+      - name: Build and upload installers
         run: pnpm dist:win
         env:
           ELECTRON_BUILDER_PUBLISH: always
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: bash .github/scripts/verify-release-assets.sh "$TAG" latest
+
       - name: Publish release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.version.outputs.tag }}
         run: gh release edit "$TAG" --draft=false
