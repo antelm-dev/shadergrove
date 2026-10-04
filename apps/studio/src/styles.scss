@@ -112,7 +112,7 @@ html {
         // Selection is a quiet tint of the accent rather than a second hue.
         secondary-container:
           color-mix(in srgb, var(--mat-sys-primary) 14%, var(--mat-sys-surface-container)),
-        on-secondary-container: var(--mat-sys-on-surface),
+        on-secondary-container: var(--mat-sys-on-surface)
       )
     )
   );
