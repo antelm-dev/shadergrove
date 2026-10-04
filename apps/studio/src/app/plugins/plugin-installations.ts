@@ -179,8 +179,18 @@ export class PluginInstallations {
     const id = review.plugin.manifest.id;
     this.abortPending(id);
     const store = this.store;
-    const write = () =>
-      store.put({ id, text: review.text, enabled: false, installedAt: new Date().toISOString() });
+    const write = async () => {
+      // Checked again once the lock is ours: the account can change while an install waits.
+      if (this.profile() !== review.profile || this.store !== store) {
+        throw new Error('The account changed since this package was picked; pick it again');
+      }
+      await store.put({
+        id,
+        text: review.text,
+        enabled: false,
+        installedAt: new Date().toISOString(),
+      });
+    };
     // A default can be seeding right now: the user's install waits for it, and then wins.
     if (isDefaultPackageId(id)) await this.exclusive(review.profile, write);
     else await write();
@@ -337,16 +347,17 @@ export class PluginInstallations {
           if (!(await this.isInstalled(store, id))) {
             const text = await this.defaultPackageText(id);
             if (!current()) return;
-            // Checked again after the fetch, against what is stored now — not what was
-            // listed before it: without Web Locks, another tab may have installed or
-            // removed it meanwhile. Installed by anyone, it is kept as it is.
+            // Checked again after the fetch, against what is stored now: without Web Locks
+            // another window may have removed it meanwhile. And written only if still absent,
+            // in one step, so an install made meanwhile — anywhere — is kept as it is.
             const now = await store.readBootstrap();
-            if (now?.packages[id] === undefined && !(await this.isInstalled(store, id))) {
-              await store.put({ id, text, enabled: true, installedAt: new Date().toISOString() });
+            const record = { id, text, enabled: true, installedAt: new Date().toISOString() };
+            if (now?.packages[id] === undefined && (await store.add(record))) {
               // A removal records itself before it deletes: if one was recorded by the time
-              // this write landed, its delete may already have run, so undo the write.
+              // this write landed, its delete may already have run, so undo the write — this
+              // write only, never an install made after it.
               if ((await store.readBootstrap())?.packages[id] === 'removed') {
-                await store.remove(id);
+                await this.removeOwnWrite(store, record);
                 continue;
               }
             }
@@ -362,6 +373,13 @@ export class PluginInstallations {
     // Reloaded even when nothing was written here: another tab may have seeded this profile
     // after the first load of this one.
     if (seeds && current()) await this.reload();
+  }
+
+  private async removeOwnWrite(store: PluginStore, record: StoredPlugin): Promise<void> {
+    const stored = (await store.list()).find((candidate) => candidate.id === record.id);
+    if (stored?.installedAt === record.installedAt && stored.text === record.text) {
+      await store.remove(record.id);
+    }
   }
 
   private async isInstalled(store: PluginStore, id: string): Promise<boolean> {

@@ -62,6 +62,11 @@ class MemoryStores {
     return {
       list: async () => [...records.values()],
       put: async (record) => void records.set(record.id, record),
+      add: async (record) => {
+        if (records.has(record.id)) return false;
+        records.set(record.id, record);
+        return true;
+      },
       remove: async (id) => void records.delete(id),
       readBootstrap: async () => null,
       writeBootstrap: async () => undefined,

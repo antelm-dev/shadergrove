@@ -34,6 +34,11 @@ class MemoryStores {
     return {
       list: async () => [...records.values()],
       put: async (record) => void records.set(record.id, record),
+      add: async (record) => {
+        if (records.has(record.id)) return false;
+        records.set(record.id, record);
+        return true;
+      },
       remove: async (id) => void records.delete(id),
       readBootstrap: async () => null,
       writeBootstrap: async () => undefined,
@@ -384,6 +389,8 @@ class SeedingStores {
   readonly writes: string[] = [];
   /** Runs before a write lands, as another window would between a check and the write. */
   beforePut: ((profile: string, record: StoredPlugin) => Promise<void>) | null = null;
+  /** Runs right after a seed's write lands, as another window would. */
+  afterAdd: ((profile: string, record: StoredPlugin) => Promise<void>) | null = null;
 
   for(profile: string): PluginStore {
     const records = this.records.get(profile) ?? new Map<string, StoredPlugin>();
@@ -396,6 +403,18 @@ class SeedingStores {
         await before?.(profile, record);
         this.writes.push(`${profile}:put:${record.id}`);
         records.set(record.id, record);
+      },
+      add: async (record) => {
+        const before = this.beforePut;
+        this.beforePut = null;
+        await before?.(profile, record);
+        if (records.has(record.id)) return false;
+        this.writes.push(`${profile}:put:${record.id}`);
+        records.set(record.id, record);
+        const after = this.afterAdd;
+        this.afterAdd = null;
+        await after?.(profile, record);
+        return true;
       },
       remove: async (id) => {
         this.writes.push(`${profile}:remove:${id}`);
@@ -489,6 +508,13 @@ describe('PluginInstallations — default packages', () => {
 
   const ids = (installations: PluginInstallations) =>
     installations.plugins().map((installed) => [installed.id, installed.active]);
+
+  /** For the rest of a test: a browser without Web Locks, each window serializing only itself. */
+  function withoutWebLocks(): void {
+    restoreLocks();
+    Object.defineProperty(navigator, 'locks', { value: undefined, configurable: true });
+    restoreLocks = () => delete (navigator as { locks?: unknown }).locks;
+  }
 
   beforeEach(() => {
     stores = new SeedingStores();
@@ -648,9 +674,7 @@ describe('PluginInstallations — default packages', () => {
   });
 
   it('undoes its own write when a removal lands between its last check and the write', async () => {
-    restoreLocks();
-    Object.defineProperty(navigator, 'locks', { value: undefined, configurable: true });
-    restoreLocks = () => delete (navigator as { locks?: unknown }).locks;
+    withoutWebLocks();
     const [themes] = DEFAULT_PACKAGE_IDS as [string];
     // Another window removes it — recorded, then deleted — just before this one's write lands.
     stores.beforePut = async (profile, record) => {
@@ -669,10 +693,78 @@ describe('PluginInstallations — default packages', () => {
     expect(installations.find(themes)).toBeUndefined();
   });
 
+  it('without Web Locks, keeps an install another window made while the seed was fetching', async () => {
+    withoutWebLocks();
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    let open!: () => void;
+    catalogue.gates.push(new Promise((resolve) => (open = resolve)));
+    const seeding = setup();
+    TestBed.tick();
+    await vi.waitFor(() => expect(catalogue.fetched).toEqual([themes]));
+    // Another window installs it from a file — switched off — right before the seed's write.
+    stores.beforePut = async (profile) => {
+      stores.records.get(profile)!.set(themes, {
+        id: themes,
+        text: defaultText(themes, '2.0.0'),
+        enabled: false,
+        installedAt: '2026-01-01T00:00:00.000Z',
+      });
+    };
+    open();
+    await settled(seeding);
+    const stored = stores.records.get('anonymous')!.get(themes)!;
+    expect(JSON.parse(stored.text).manifest.version).toBe('2.0.0');
+    expect(stored.enabled).toBe(false);
+  });
+
+  it('undoes only its own write: an install made after a removal is kept', async () => {
+    withoutWebLocks();
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    const reinstalled = {
+      id: themes,
+      text: defaultText(themes, '2.0.0'),
+      enabled: false,
+      installedAt: '2026-01-01T00:00:00.000Z',
+    };
+    // Right after the seed's write, another window removes it, then installs it again.
+    stores.afterAdd = async (profile) => {
+      const state = stores.states.get(profile) ?? emptyBootstrapState();
+      stores.states.set(profile, {
+        ...state,
+        packages: { ...state.packages, [themes]: 'removed' },
+      });
+      stores.records.get(profile)!.set(themes, reinstalled);
+    };
+    const installations = setup();
+    await settled(installations);
+    expect(stores.records.get('anonymous')!.get(themes)).toEqual(reinstalled);
+    expect(stores.states.get('anonymous')?.packages[themes]).toBe('removed');
+  });
+
+  it('refuses an install that waited for a seed while the account changed', async () => {
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    let open!: () => void;
+    catalogue.gate = new Promise((resolve) => (open = resolve));
+    const installations = setup();
+    TestBed.tick();
+    await vi.waitFor(() => expect(catalogue.fetched).toContain(themes));
+    const review = installations.review(bytes(defaultText(themes, '2.0.0')));
+    if (!review.ok) throw new Error(review.errors.join());
+    const install = installations.install(review);
+
+    user.set({ id: 'alice' });
+    status.set('authenticated');
+    TestBed.tick();
+    open();
+    await expect(install).rejects.toThrow(/account changed/);
+    await settled(installations);
+    const anonymous = [...(stores.records.get('anonymous')?.values() ?? [])];
+    expect(anonymous.some((record) => record.text.includes('"2.0.0"'))).toBe(false);
+    expect(stores.records.get('alice')?.get(themes)?.enabled).toBe(true);
+  });
+
   it('without Web Locks, a removal made while another window is still fetching stays removed', async () => {
-    restoreLocks();
-    Object.defineProperty(navigator, 'locks', { value: undefined, configurable: true });
-    restoreLocks = () => delete (navigator as { locks?: unknown }).locks;
+    withoutWebLocks();
     const [themes] = DEFAULT_PACKAGE_IDS as [string];
     // The slow window's first fetch is held; everything else goes through.
     let open!: () => void;

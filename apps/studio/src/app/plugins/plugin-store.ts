@@ -11,6 +11,12 @@ export interface PluginStore {
   list(): Promise<StoredPlugin[]>;
   /** Keyed by `record.id`, the id from the package's own manifest. */
   put(record: StoredPlugin): Promise<void>;
+  /**
+   * Writes `record` only if no record has its id, in one step where the store
+   * allows it; whether it wrote. What seeding uses, so it never replaces an
+   * install made meanwhile — in this window or another.
+   */
+  add(record: StoredPlugin): Promise<boolean>;
   remove(id: string): Promise<void>;
   /**
    * What this profile remembers of the default packages, kept apart from the
@@ -86,6 +92,23 @@ export class IndexedDbPluginStore implements PluginStore {
     await this.request('readwrite', (store) => store.put(record, record.id));
   }
 
+  async add(record: StoredPlugin): Promise<boolean> {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction('plugins', 'readwrite');
+      const request = transaction.objectStore('plugins').add(record, record.id);
+      let added = true;
+      request.onerror = (event) => {
+        // The id is taken: not a failure, and not one that may abort the transaction.
+        if (request.error?.name !== 'ConstraintError') return;
+        added = false;
+        event.preventDefault();
+      };
+      transaction.oncomplete = () => resolve(added);
+      transaction.onabort = () => reject(transaction.error ?? request.error);
+    });
+  }
+
   async remove(id: string): Promise<void> {
     await this.request('readwrite', (store) => store.delete(id));
   }
@@ -131,6 +154,13 @@ export class DesktopPluginStore implements PluginStore {
     await window.electron.bridge.plugins.put(record);
   }
 
+  /** Checked, then written: only the main window writes here, one operation at a time. */
+  async add(record: StoredPlugin): Promise<boolean> {
+    if ((await this.list()).some((stored) => stored.id === record.id)) return false;
+    await this.put(record);
+    return true;
+  }
+
   async remove(id: string): Promise<void> {
     await window.electron.bridge.plugins.remove(id);
   }
@@ -150,6 +180,9 @@ export class NoPluginStore implements PluginStore {
     return [];
   }
   async put(): Promise<void> {
+    throw new Error('Plugins cannot be installed here');
+  }
+  async add(): Promise<boolean> {
     throw new Error('Plugins cannot be installed here');
   }
   async remove(): Promise<void> {}
