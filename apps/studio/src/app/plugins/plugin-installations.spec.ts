@@ -411,6 +411,8 @@ class FakeCatalogue {
   texts = new Map(DEFAULT_PACKAGE_IDS.map((id) => [id, defaultText(id)]));
   /** Holds every fetch until opened. */
   gate: Promise<void> = Promise.resolve();
+  /** Held one by one, in fetch order, before `gate`. */
+  readonly gates: Promise<void>[] = [];
 
   async entry(id: string): Promise<CatalogueEntry | null> {
     return this.texts.has(id) ? ({ id } as CatalogueEntry) : null;
@@ -418,6 +420,7 @@ class FakeCatalogue {
 
   async fetchPackage(entry: CatalogueEntry): Promise<Uint8Array> {
     this.fetched.push(entry.id);
+    await this.gates.shift();
     await this.gate;
     if (this.failing.has(entry.id)) throw new Error('offline');
     return bytes(this.texts.get(entry.id)!);
@@ -613,6 +616,54 @@ describe('PluginInstallations — default packages', () => {
     expect(stores.writes.filter((write) => write.includes(':put:'))).toHaveLength(
       DEFAULT_PACKAGE_IDS.length,
     );
+    // The window that found them seeded by the other one loads them too.
+    expect(ids(second)).toEqual(ids(first));
+    expect(ids(second)).toEqual(DEFAULT_PACKAGE_IDS.map((id) => [id, true]).sort());
+  });
+
+  it('lets an install of a default made during a slow seed win, switched off', async () => {
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    let open!: () => void;
+    catalogue.gate = new Promise((resolve) => (open = resolve));
+    const installations = setup();
+    TestBed.tick();
+    await vi.waitFor(() => expect(catalogue.fetched).toContain(themes));
+
+    const review = installations.review(bytes(defaultText(themes, '2.0.0')));
+    if (!review.ok) throw new Error(review.errors.join());
+    const install = installations.install(review);
+    open();
+    await install;
+    await settled(installations);
+
+    const stored = stores.records.get('anonymous')!.get(themes)!;
+    expect(JSON.parse(stored.text).manifest.version).toBe('2.0.0');
+    expect(stored.enabled).toBe(false);
+    expect(installations.find(themes)?.active).toBe(false);
+  });
+
+  it('without Web Locks, a removal made while another window is still fetching stays removed', async () => {
+    restoreLocks();
+    Object.defineProperty(navigator, 'locks', { value: undefined, configurable: true });
+    restoreLocks = () => delete (navigator as { locks?: unknown }).locks;
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    // The slow window's first fetch is held; everything else goes through.
+    let open!: () => void;
+    catalogue.gates.push(new Promise((resolve) => (open = resolve)));
+    const slow = setup();
+    TestBed.tick();
+    await vi.waitFor(() => expect(catalogue.fetched).toEqual([themes]));
+
+    const fast = TestBed.runInInjectionContext(() => new PluginInstallations());
+    await settled(fast);
+    expect(fast.find(themes)?.active).toBe(true);
+    await fast.remove(themes);
+
+    open();
+    await settled(slow);
+    expect(stores.records.get('anonymous')!.has(themes)).toBe(false);
+    expect(stores.states.get('anonymous')?.packages[themes]).toBe('removed');
+    expect(slow.find(themes)).toBeUndefined();
   });
 
   it('a removal during seeding waits for it, then stays removed', async () => {

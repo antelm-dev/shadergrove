@@ -176,13 +176,14 @@ export class PluginInstallations {
       throw new Error('The account changed since this package was picked; pick it again');
     }
     // A replacement must not let work started on the old version finish against the new one.
-    this.abortPending(review.plugin.manifest.id);
-    await this.store.put({
-      id: review.plugin.manifest.id,
-      text: review.text,
-      enabled: false,
-      installedAt: new Date().toISOString(),
-    });
+    const id = review.plugin.manifest.id;
+    this.abortPending(id);
+    const store = this.store;
+    const write = () =>
+      store.put({ id, text: review.text, enabled: false, installedAt: new Date().toISOString() });
+    // A default can be seeding right now: the user's install waits for it, and then wins.
+    if (isDefaultPackageId(id)) await this.exclusive(review.profile, write);
+    else await write();
     await this.reload();
   }
 
@@ -324,34 +325,50 @@ export class PluginInstallations {
     store: PluginStore,
     current: () => boolean,
   ): Promise<void> {
-    let installedAny = false;
+    let seeds = false;
     await this.exclusive(profile, async () => {
-      // Read again inside the lock: another tab may have just seeded, or a removal landed.
+      // Read inside the lock: another tab may have just seeded, or a removal landed.
       const state = await store.readBootstrap();
       if (!state || !current()) return;
+      seeds = true;
       const missing = DEFAULT_PACKAGE_IDS.filter((id) => state.packages[id] === undefined);
-      if (missing.length === 0) return;
-      const installed = new Set((await store.list()).map((record) => record.id));
       for (const id of missing) {
         try {
-          // Installed by the user, or by a seed interrupted before it was recorded: kept as it is.
-          if (!installed.has(id)) {
+          if (!(await this.isInstalled(store, id))) {
             const text = await this.defaultPackageText(id);
             if (!current()) return;
-            await store.put({ id, text, enabled: true, installedAt: new Date().toISOString() });
-            installedAny = true;
+            // Checked again after the fetch, against what is stored now — not what was
+            // listed before it: without Web Locks, another tab may have installed or
+            // removed it meanwhile. Installed by anyone, it is kept as it is.
+            const now = await store.readBootstrap();
+            if (now?.packages[id] === undefined && !(await this.isInstalled(store, id))) {
+              await store.put({ id, text, enabled: true, installedAt: new Date().toISOString() });
+            }
           }
           if (!current()) return;
-          state.packages[id] = 'seeded';
-          state.version = DEFAULT_PACKAGES_VERSION;
-          await store.writeBootstrap(state);
+          await this.recordSeeded(store, id);
         } catch (error) {
           // Left unrecorded, so it is tried again next time; what did succeed stays done.
           console.warn(`The default package ${id} could not be installed`, error);
         }
       }
     });
-    if (installedAny && current()) await this.reload();
+    // Reloaded even when nothing was written here: another tab may have seeded this profile
+    // after the first load of this one.
+    if (seeds && current()) await this.reload();
+  }
+
+  private async isInstalled(store: PluginStore, id: string): Promise<boolean> {
+    return (await store.list()).some((record) => record.id === id);
+  }
+
+  /** Records a default as seeded on top of the state stored now, so a removal recorded meanwhile wins. */
+  private async recordSeeded(store: PluginStore, id: string): Promise<void> {
+    const state = await store.readBootstrap();
+    if (!state || state.packages[id] !== undefined) return;
+    state.packages[id] = 'seeded';
+    state.version = DEFAULT_PACKAGES_VERSION;
+    await store.writeBootstrap(state);
   }
 
   /**
