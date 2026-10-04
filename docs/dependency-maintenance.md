@@ -44,6 +44,12 @@ node .github/scripts/check-runtime-deps.mjs
 node --test .github/scripts/dependency-security.test.mjs
 ```
 
+The final studio image removes npm and its bundled dependencies: installation
+happens in the build stage and the runtime uses Node directly. The website image
+applies Alpine package updates to receive security fixes between nginx base image
+rebuilds. OS packages therefore remain updated at build time; the npm runtime tree
+is locked separately.
+
 ## CI and releases
 
 PRs get Dependency Review, failing on newly introduced HIGH/CRITICAL known

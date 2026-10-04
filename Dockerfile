@@ -42,6 +42,10 @@ RUN cd /runtime-deps && npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 # ---- runtime ----------------------------------------------------------------
 FROM node:24-alpine AS runtime
 
+# Package installation happens in the build stage; the server only needs Node.
+# Remove npm and its bundled dependencies from the shipped image.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 WORKDIR /app
 
 ENV NODE_ENV=production \

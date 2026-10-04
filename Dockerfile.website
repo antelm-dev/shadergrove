@@ -29,6 +29,9 @@ RUN pnpm --filter @shadergrove/website build
 
 FROM nginx:stable-alpine AS runtime
 
+# Apply Alpine security fixes that may precede a rebuilt upstream nginx image.
+RUN apk upgrade --no-cache
+
 COPY ops/website/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/apps/website/out /usr/share/nginx/html
 
