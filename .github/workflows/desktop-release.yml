@@ -46,7 +46,7 @@ jobs:
       matrix: ${{ steps.platforms.outputs.matrix }}
       platforms: ${{ steps.platforms.outputs.platforms }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ inputs.sha }}
       - name: Resolve platforms and require the correct draft
@@ -102,12 +102,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ inputs.sha }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
       - name: Check or set the build version
@@ -149,7 +150,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.platform == 'macos' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ matrix.platform == 'macos' && secrets.APPLE_TEAM_ID || '' }}
       - name: Collect distributables and updater files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: desktop-release-${{ matrix.platform }}
           if-no-files-found: error
@@ -172,21 +173,27 @@ jobs:
     steps:
       # Recovery may target a commit predating the verifier. Build artifacts
       # remain pinned to inputs.sha; verification tooling follows this workflow.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.workflow_sha }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
       - name: Install verification tools
         run: pnpm install --filter @shadergrove/workspace-tools --frozen-lockfile
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: desktop-release-*
           path: release-assets
           merge-multiple: true
+      - name: Download release inventories
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dependency-security
+          path: tmp/security
       - name: Upload, verify and publish
         shell: bash
         env:
@@ -198,7 +205,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = true
-          gh release upload "$TAG" release-assets/* --clobber
+          gh release upload "$TAG" release-assets/* tmp/security/*.cdx.json --clobber
           manifest=latest
           [ "$CHANNEL" = beta ] && manifest=beta
           pnpm --filter @shadergrove/workspace-tools verify:release "$TAG" "$manifest" "$PLATFORMS"

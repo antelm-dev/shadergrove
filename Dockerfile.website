@@ -5,6 +5,7 @@ FROM node:24-alpine AS build
 WORKDIR /app
 ENV CI=true
 
+# renovate: datasource=npm depName=pnpm
 RUN npm install --global pnpm@10.28.2
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./

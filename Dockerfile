@@ -9,6 +9,7 @@ ENV CI=true \
     NG_CLI_ANALYTICS=false \
     ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
+# renovate: datasource=npm depName=pnpm
 RUN npm install --global pnpm@10.28.2
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -35,9 +36,8 @@ RUN pnpm gen:ipc \
 # The SSR output keeps PostgreSQL and Swagger external. Install their runtime
 # dependencies into an isolated tree; Swagger must remain external because its
 # CommonJS internals are not compatible with the bundled ESM server.
-RUN mkdir -p /runtime-deps && cd /runtime-deps \
-    && npm init -y >/dev/null 2>&1 \
-    && npm install --omit=dev --no-package-lock pg@8.22.0 @nestjs/swagger@11.4.6
+COPY ops/runtime-deps/package.json ops/runtime-deps/package-lock.json /runtime-deps/
+RUN cd /runtime-deps && npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
 # ---- runtime ----------------------------------------------------------------
 FROM node:24-alpine AS runtime

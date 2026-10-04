@@ -40,6 +40,8 @@ export function expectedAssets(
   });
 }
 
+export const sbomAssets = ['workspace.cdx.json', 'studio-image.cdx.json', 'website-image.cdx.json'];
+
 export function verifyAssets(
   version: string,
   channel: 'latest' | 'beta',
@@ -48,7 +50,7 @@ export function verifyAssets(
   manifests: Record<string, string>,
 ): void {
   const byName = new Map(assets.map((asset) => [asset.name, asset.size]));
-  const required = expectedAssets(version, channel, platforms);
+  const required = [...expectedAssets(version, channel, platforms), ...sbomAssets];
   for (const name of required) {
     const size = byName.get(name);
     if (size === undefined || !Number.isSafeInteger(size) || size <= 0)
