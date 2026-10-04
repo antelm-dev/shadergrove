@@ -55,7 +55,8 @@ import { TransportBar } from './ui/layout/transport-bar';
 import { StartupCoordinator } from './workspace/startup-coordinator';
 import { WorkspaceActions } from './ui/workspace-actions';
 import { PluginCommands } from './plugins/plugin-commands';
-import { I18n, LANGUAGE_OPTIONS, type AppLocale } from './i18n/i18n';
+import { FALLBACK_LANGUAGE_ID } from '@shadergrove/shared/plugin';
+import { I18n } from './i18n/i18n';
 import { TranslatePipe } from './i18n/translate.pipe';
 import { AuthService } from './auth/auth.service';
 import { AuthPrompt } from './auth/auth-prompt';
@@ -154,7 +155,7 @@ export class App {
     this.isHandset() ? this.handsetDrawerOpen() : this.preferences.value().browserOpen,
   );
 
-  protected readonly languageOptions = LANGUAGE_OPTIONS;
+  protected readonly fallbackLanguage = FALLBACK_LANGUAGE_ID;
 
   protected readonly inspectorOpen = computed(() => this.layout.inspectorOpen());
 
@@ -377,7 +378,11 @@ export class App {
         { label: this.i18n.t('menu.importExport'), commands: this.importExportCommands() },
         {
           label: this.i18n.t('menu.settings'),
-          commands: [...this.settingsCommands, ...this.pluginCommands.themeCommands()],
+          commands: [
+            ...this.settingsCommands,
+            ...this.pluginCommands.themeCommands(),
+            ...this.pluginCommands.languageCommands(),
+          ],
         },
       ],
     };
@@ -505,10 +510,6 @@ export class App {
   protected commitBrowserWidth(width: number): void {
     this.liveBrowserWidth.set(null);
     this.preferences.patch({ browserWidth: width });
-  }
-
-  protected setLanguage(language: AppLocale): void {
-    this.i18n.setLocale(language);
   }
 
   protected toggleBrowser(): void {

@@ -1,27 +1,14 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatDialogRef } from '@angular/material/dialog';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthService, SESSION_NOT_FRESH, type AuthSession } from '../../auth/auth.service';
-import { I18nCatalog, type I18nCatalogMap } from '../../i18n/catalog';
 import { I18n } from '../../i18n/i18n';
+import { provideTestLanguages } from '../../i18n/testing/languages';
 import { Preferences } from '../../prefs/preferences';
 import { WorkspaceActions } from '../workspace-actions';
 import { AccountDialog } from './account-dialog';
-
-class FileCatalog extends I18nCatalog {
-  override load(locale: 'en' | 'fr'): Promise<I18nCatalogMap> {
-    const raw = readFileSync(
-      resolve(import.meta.dirname, `../../../../../../i18n/${locale}.json`),
-      'utf8',
-    );
-    return Promise.resolve(JSON.parse(raw) as I18nCatalogMap);
-  }
-}
 
 const SESSION: AuthSession = {
   id: 's1',
@@ -55,7 +42,7 @@ describe('AccountDialog', () => {
       providers: [
         provideZonelessChangeDetection(),
         I18n,
-        { provide: I18nCatalog, useClass: FileCatalog },
+        provideTestLanguages(),
         { provide: Preferences, useValue: { value: signal({ language: 'en' }) } },
         { provide: AuthService, useValue: auth },
         { provide: MatDialogRef, useValue: { close } },
@@ -65,7 +52,6 @@ describe('AccountDialog', () => {
         },
       ],
     });
-    await TestBed.inject(I18n).ensureLoaded('en');
   });
 
   afterEach(() => {

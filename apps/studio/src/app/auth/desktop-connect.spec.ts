@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
@@ -14,8 +11,8 @@ import {
 } from '@angular/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { I18nCatalog, type I18nCatalogMap } from '../i18n/catalog';
 import { I18n } from '../i18n/i18n';
+import { provideTestLanguages } from '../i18n/testing/languages';
 import { Preferences } from '../prefs/preferences';
 import { AuthService, type AuthStatus } from './auth.service';
 import { DesktopConnect, desktopConnectLink } from './desktop-connect';
@@ -46,16 +43,6 @@ describe('desktopConnectLink', () => {
   });
 });
 
-class FileCatalog extends I18nCatalog {
-  override load(locale: 'en' | 'fr'): Promise<I18nCatalogMap> {
-    const raw = readFileSync(
-      resolve(import.meta.dirname, `../../../../../i18n/${locale}.json`),
-      'utf8',
-    );
-    return Promise.resolve(JSON.parse(raw) as I18nCatalogMap);
-  }
-}
-
 describe('DesktopConnect', () => {
   const status = signal<AuthStatus>('error');
   const verified = signal(false);
@@ -81,7 +68,7 @@ describe('DesktopConnect', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         I18n,
-        { provide: I18nCatalog, useClass: FileCatalog },
+        provideTestLanguages(),
         { provide: Preferences, useValue: { value: signal({ language: 'en' }) } },
         { provide: AuthService, useValue: auth },
         {
@@ -94,7 +81,6 @@ describe('DesktopConnect', () => {
         },
       ],
     });
-    await TestBed.inject(I18n).ensureLoaded('en');
     const fixture = TestBed.createComponent(DesktopConnect);
     await settle(fixture);
     return fixture;

@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,8 +7,8 @@ import {
   type ProfilerSnapshot,
 } from '../../rendering/performance-profiler';
 import { RendererHandle } from '../../rendering/renderer-handle';
-import { I18nCatalog, type I18nCatalogMap } from '../../i18n/catalog';
 import { I18n } from '../../i18n/i18n';
+import { provideTestLanguages } from '../../i18n/testing/languages';
 import {
   Preferences,
   createDefaultWorkspacePreferences,
@@ -29,16 +26,6 @@ import {
   recommendLowerScale,
   roundScaleDown,
 } from './profiler-recommendation';
-
-class FileCatalog extends I18nCatalog {
-  override load(locale: 'en' | 'fr'): Promise<I18nCatalogMap> {
-    const raw = readFileSync(
-      resolve(import.meta.dirname, `../../../../../../i18n/${locale}.json`),
-      'utf8',
-    );
-    return Promise.resolve(JSON.parse(raw) as I18nCatalogMap);
-  }
-}
 
 function emptySnapshot(overrides: Partial<ProfilerSnapshot> = {}): ProfilerSnapshot {
   return {
@@ -176,7 +163,7 @@ describe('ProfilerPanel', () => {
       imports: [ProfilerPanel],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: I18nCatalog, useClass: FileCatalog },
+        provideTestLanguages(),
         I18n,
         {
           provide: Preferences,
@@ -205,8 +192,6 @@ describe('ProfilerPanel', () => {
         },
       ],
     }).compileComponents();
-
-    await TestBed.inject(I18n).ensureLoaded('en');
   });
 
   afterEach(() => {

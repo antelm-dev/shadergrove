@@ -1,7 +1,11 @@
 import { Injectable, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 
-import { effectContributionCandidate, type EffectContribution } from '@shadergrove/shared/plugin';
+import {
+  FALLBACK_LANGUAGE_ID,
+  effectContributionCandidate,
+  type EffectContribution,
+} from '@shadergrove/shared/plugin';
 import { I18n } from '../i18n/i18n';
 import { AppThemes } from '../themes/app-themes';
 import type { MenuCommand } from '../ui/menu-commands';
@@ -37,6 +41,8 @@ export interface PluginCommand extends MenuCommand {
  *   open shader directly, dimmed when none is open.
  * - `effect` → the palette's Shader section: adds the effect to the open shader.
  * - `theme` → the palette's Settings section (the Theme submenu lists them too).
+ * - `language` → the palette's Settings section (the Language submenu lists
+ *   them too), beside the bundled English, which is always there.
  *
  * The app owns the wording: an importer or exporter that uses a host adapter is
  * labelled by that adapter ("Import from Shadertoy…"); otherwise by its
@@ -122,6 +128,28 @@ export class PluginCommands {
       action: () => this.themes.selectPlugin(entry.ref),
     })),
   );
+
+  /**
+   * Every active language, then the bundled English. Selecting looks the
+   * language up again (`I18n.select`), so an entry kept by an open palette
+   * cannot bring back one whose package is off, removed or another profile's.
+   */
+  readonly languageCommands = computed<readonly PluginCommand[]>(() => [
+    ...this.i18n.languages().map((entry) => ({
+      id: `plugin:${entry.ref}`,
+      ref: entry.ref,
+      icon: () => 'translate',
+      label: () => `${this.i18n.t('menu.language')}: ${this.i18n.label(entry)}`,
+      action: () => this.i18n.select(entry.ref),
+    })),
+    {
+      id: `language:${FALLBACK_LANGUAGE_ID}`,
+      ref: FALLBACK_LANGUAGE_ID,
+      icon: () => 'language',
+      label: () => `${this.i18n.t('menu.language')}: ${this.i18n.t('language.fallback')}`,
+      action: () => this.i18n.select(FALLBACK_LANGUAGE_ID),
+    },
+  ]);
 
   private openInPlugins(packageId: string): Promise<boolean> {
     return this.router.navigate(['/plugins'], { queryParams: { use: packageId } });

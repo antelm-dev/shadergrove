@@ -1,0 +1,33 @@
+{
+  "manifest": {
+    "id": "dev.shadergrove.test-spanish",
+    "version": "1.0.0",
+    "protocolVersion": 3,
+    "appVersionRange": ">=1.5.0 <2.0.0",
+    "name": "Spanish (test fixture)",
+    "publisher": "Shadergrove tests",
+    "license": "CC0-1.0",
+    "contributions": [
+      {
+        "kind": "language",
+        "id": "spanish",
+        "name": "Spanish (test fixture)",
+        "schemaVersion": 1,
+        "locale": "es",
+        "nativeName": "Español",
+        "direction": "ltr",
+        "messages": {
+          "menu.view": "Vista",
+          "menu.settings": "Ajustes",
+          "menu.language": "Idioma",
+          "menu.theme": "Tema",
+          "browser.title": "Sombreadores",
+          "browser.filter": "Filtrar",
+          "browser.controlMany": "{count} controles",
+          "action.addPluginEffect": "Añadir efecto: {name}",
+          "plugins.languageInUse": "En uso como idioma de la app"
+        }
+      }
+    ]
+  }
+}

@@ -388,6 +388,24 @@ type AvailableState = 'install' | 'update' | 'installed';
                           </button>
                         }
                       }
+                      @case ('language') {
+                        <!-- Data like a theme: choosing it is all there is to do with it. -->
+                        @let ref = themeRef(installed, contribution);
+                        @if (i18n.isSelected(ref)) {
+                          <p class="muted" [attr.data-testid]="'language-in-use-' + key">
+                            {{ 'plugins.languageInUse' | translate }}
+                          </p>
+                        } @else {
+                          <button
+                            matButton="tonal"
+                            type="button"
+                            [attr.data-testid]="'use-language-' + key"
+                            (click)="i18n.select(ref)"
+                          >
+                            {{ 'plugins.useLanguage' | translate }}
+                          </button>
+                        }
+                      }
                       @case ('projectImporter') {
                         @let importer = asProjectImporter(contribution);
                         @let provider = providerOf(importer);
@@ -767,7 +785,7 @@ export class PluginsPage {
   private readonly adoption = inject(EffectAdoption);
   private readonly store = inject(ShaderStore);
   private readonly desktop = inject(DesktopPlatform);
-  private readonly i18n = inject(I18n);
+  protected readonly i18n = inject(I18n);
   private readonly preferences = inject(Preferences);
   private readonly adapters = inject(HostAdapters);
   private readonly host: ElementRef<HTMLElement> = inject(ElementRef);

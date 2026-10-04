@@ -13,7 +13,6 @@ import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
 import { HttpShaderApi, ShaderApi } from './api/shader-api';
 import { authInterceptor } from './auth/auth.interceptor';
-import { HttpI18nCatalog } from './i18n/catalog';
 import { provideI18n } from './i18n/provide-i18n';
 import { provideHostAdapters } from './plugins/host-adapters';
 import { ShadertoyApiProvider } from './plugins/providers/shadertoy-provider';
@@ -30,7 +29,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([authInterceptor])),
     HttpShaderApi,
     { provide: ShaderApi, useExisting: HttpShaderApi },
-    provideI18n(HttpI18nCatalog),
+    provideI18n(),
     // The host halves of the official plugins: what their manifests may name, nothing more.
     provideHostAdapters({
       sourceProviders: [ShadertoyApiProvider],

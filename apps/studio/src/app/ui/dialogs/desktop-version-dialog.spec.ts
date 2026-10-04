@@ -8,24 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UpdateState } from '../../../desktop/contracts/contracts';
 import { DesktopPlatform } from '../../desktop/desktop-platform';
 import { DesktopUpdater } from '../../desktop/desktop-updater';
-import { I18nCatalog, type I18nCatalogMap } from '../../i18n/catalog';
 import { I18n } from '../../i18n/i18n';
+import { provideTestLanguages, speaking } from '../../i18n/testing/languages';
 import { Preferences, type WorkspacePreferences } from '../../prefs/preferences';
 import { AboutShadergroveDialog, DesktopVersionDialog } from './desktop-version-dialog';
 
-class FileCatalog extends I18nCatalog {
-  override load(locale: 'en' | 'fr'): Promise<I18nCatalogMap> {
-    const raw = readFileSync(
-      resolve(import.meta.dirname, `../../../../../../i18n/${locale}.json`),
-      'utf8',
-    );
-    return Promise.resolve(JSON.parse(raw) as I18nCatalogMap);
-  }
-}
-
 describe('DesktopVersionDialog', () => {
   const platform = { available: true };
-  const language = signal({ language: 'en' as string });
+  const language = signal(speaking('en'));
   const updateState = signal<UpdateState>({
     status: 'up-to-date',
     currentVersion: '1.2.3',
@@ -34,7 +24,7 @@ describe('DesktopVersionDialog', () => {
   const update = vi.fn();
 
   beforeEach(async () => {
-    language.set({ language: 'en' });
+    language.set(speaking('en'));
     updateState.set({ status: 'up-to-date', currentVersion: '1.2.3' });
     platform.available = true;
     check.mockReset();
@@ -45,13 +35,13 @@ describe('DesktopVersionDialog', () => {
       providers: [
         provideZonelessChangeDetection(),
         I18n,
-        { provide: I18nCatalog, useClass: FileCatalog },
+        provideTestLanguages(),
         {
           provide: Preferences,
           useValue: {
             value: language.asReadonly(),
             patch: (patch: Partial<WorkspacePreferences>) => {
-              if (patch.language) language.set({ language: patch.language });
+              language.update((value) => ({ ...value, ...patch }));
             },
           },
         },
@@ -66,7 +56,6 @@ describe('DesktopVersionDialog', () => {
         },
       ],
     });
-    await TestBed.inject(I18n).ensureLoaded('en');
   });
 
   afterEach(() => {
@@ -74,8 +63,7 @@ describe('DesktopVersionDialog', () => {
   });
 
   const mount = async (locale: 'en' | 'fr' = 'en') => {
-    language.set({ language: locale });
-    await TestBed.inject(I18n).ensureLoaded(locale);
+    language.set(speaking(locale));
     const fixture = TestBed.createComponent(DesktopVersionDialog);
     fixture.detectChanges();
     return fixture;

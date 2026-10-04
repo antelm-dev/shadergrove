@@ -36,8 +36,8 @@
       "protocolVersion": 3,
       "appVersionRange": ">=1.5.0 <2.0.0",
       "file": "dev.shadergrove.language-en-1.0.0.sgplugin.json",
-      "bytes": 44501,
-      "sha256": "78ecbccded90205c0e0a8c22d464637d673cef6fa0767abf2959933715eb01a1",
+      "bytes": 44634,
+      "sha256": "cf80fc6f33d5dced2b62eec849b6186154be7953a0d5ae455851787c477c880f",
       "contributions": [
         {
           "kind": "language",
@@ -56,8 +56,8 @@
       "protocolVersion": 3,
       "appVersionRange": ">=1.5.0 <2.0.0",
       "file": "dev.shadergrove.language-fr-1.0.0.sgplugin.json",
-      "bytes": 48908,
-      "sha256": "9a912a3ec2dec6da269f034f385e7b989df5543dbdc0da2f93f3cbaf3ad30fc3",
+      "bytes": 49053,
+      "sha256": "a97dc2cd059d33680fbdbe07ad9036219443a15298f8e0d25cb51c4967dee218",
       "contributions": [
         {
           "kind": "language",
