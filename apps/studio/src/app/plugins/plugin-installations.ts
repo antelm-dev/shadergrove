@@ -378,7 +378,7 @@ export class PluginInstallations {
               // this write landed, its delete may already have run, so undo the write — this
               // write only, never an install made after it.
               if ((await store.readBootstrap())?.packages[id] === 'removed') {
-                await this.removeOwnWrite(store, record);
+                await store.removeIf(record);
                 continue;
               }
             }
@@ -401,13 +401,6 @@ export class PluginInstallations {
     const profile = this.profile();
     if (profile !== null) this.channel?.postMessage({ profile });
     await this.reload();
-  }
-
-  private async removeOwnWrite(store: PluginStore, record: StoredPlugin): Promise<void> {
-    const stored = (await store.list()).find((candidate) => candidate.id === record.id);
-    if (stored?.installedAt === record.installedAt && stored.text === record.text) {
-      await store.remove(record.id);
-    }
   }
 
   private async isInstalled(store: PluginStore, id: string): Promise<boolean> {

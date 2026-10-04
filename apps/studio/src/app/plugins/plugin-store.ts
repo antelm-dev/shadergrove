@@ -27,6 +27,12 @@ export interface PluginStore {
   replace(record: StoredPlugin): Promise<boolean>;
   remove(id: string): Promise<void>;
   /**
+   * Deletes the record of `expected.id` only if it is still exactly `expected`
+   * (text, switch, install time), in one step; whether it did. How seeding
+   * undoes its own write without ever deleting an install made after it.
+   */
+  removeIf(expected: StoredPlugin): Promise<boolean>;
+  /**
    * What this profile remembers of the default packages, kept apart from the
    * packages themselves; `null` where defaults are never seeded.
    */
@@ -140,6 +146,24 @@ export class IndexedDbPluginStore implements PluginStore {
     await this.request('readwrite', (store) => store.delete(id));
   }
 
+  async removeIf(expected: StoredPlugin): Promise<boolean> {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      // Read, compared and deleted in one transaction: no write can land in between.
+      const transaction = db.transaction('plugins', 'readwrite');
+      const store = transaction.objectStore('plugins');
+      let removed = false;
+      const existing = store.get(expected.id);
+      existing.onsuccess = () => {
+        if (!sameRecord(existing.result as Partial<StoredPlugin> | undefined, expected)) return;
+        removed = true;
+        store.delete(expected.id);
+      };
+      transaction.oncomplete = () => resolve(removed);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  }
+
   private open(): Promise<IDBDatabase> {
     return (this.db ??= openDatabase(this.name, 'plugins'));
   }
@@ -158,6 +182,16 @@ export class IndexedDbPluginStore implements PluginStore {
       transaction.onabort = () => reject(transaction.error ?? request.error);
     });
   }
+}
+
+/** The same install, unchanged: id, text, switch and install time. */
+function sameRecord(stored: Partial<StoredPlugin> | undefined, expected: StoredPlugin): boolean {
+  return (
+    stored?.id === expected.id &&
+    stored.text === expected.text &&
+    stored.enabled === expected.enabled &&
+    stored.installedAt === expected.installedAt
+  );
 }
 
 /** One object store, version 1. */
@@ -200,6 +234,11 @@ export class DesktopPluginStore implements PluginStore {
     await window.electron.bridge.plugins.remove(id);
   }
 
+  removeIf(expected: StoredPlugin): Promise<boolean> {
+    // The main process reads, compares and deletes as one serialized write.
+    return window.electron.bridge.plugins.removeIf(expected);
+  }
+
   async readBootstrap(): Promise<PluginBootstrapState | null> {
     const state = await window.electron.bridge.plugins.bootstrap();
     return state === null ? null : sanitizeBootstrapState(state);
@@ -225,6 +264,9 @@ export class NoPluginStore implements PluginStore {
     throw new Error('Plugins cannot be installed here');
   }
   async remove(): Promise<void> {}
+  async removeIf(): Promise<boolean> {
+    return false;
+  }
   async readBootstrap(): Promise<null> {
     return null;
   }

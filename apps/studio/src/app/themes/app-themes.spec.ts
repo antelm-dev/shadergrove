@@ -72,6 +72,12 @@ class MemoryStores {
         records.set(record.id, record);
         return true;
       },
+      removeIf: async (expected) => {
+        const stored = records.get(expected.id);
+        if (JSON.stringify(stored) !== JSON.stringify(expected)) return false;
+        records.delete(expected.id);
+        return true;
+      },
       remove: async (id) => void records.delete(id),
       readBootstrap: async () => null,
       writeBootstrap: async () => undefined,

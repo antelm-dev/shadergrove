@@ -44,6 +44,12 @@ class MemoryStores {
         records.set(record.id, record);
         return true;
       },
+      removeIf: async (expected) => {
+        const stored = records.get(expected.id);
+        if (JSON.stringify(stored) !== JSON.stringify(expected)) return false;
+        records.delete(expected.id);
+        return true;
+      },
       remove: async (id) => void records.delete(id),
       readBootstrap: async () => null,
       writeBootstrap: async () => undefined,
@@ -396,6 +402,8 @@ class SeedingStores {
   beforePut: ((profile: string, record: StoredPlugin) => Promise<void>) | null = null;
   /** Runs right after a seed's write lands, as another window would. */
   afterAdd: ((profile: string, record: StoredPlugin) => Promise<void>) | null = null;
+  /** Runs right before a compare-and-delete reads, as another window would. */
+  beforeRemoveIf: ((profile: string, expected: StoredPlugin) => Promise<void>) | null = null;
 
   for(profile: string): PluginStore {
     const records = this.records.get(profile) ?? new Map<string, StoredPlugin>();
@@ -425,6 +433,16 @@ class SeedingStores {
         if (records.get(record.id)?.installedAt !== record.installedAt) return false;
         this.writes.push(`${profile}:put:${record.id}`);
         records.set(record.id, record);
+        return true;
+      },
+      // One step, like the real stores: read, compared and deleted with nothing between.
+      removeIf: async (expected) => {
+        const before = this.beforeRemoveIf;
+        this.beforeRemoveIf = null;
+        await before?.(profile, expected);
+        if (JSON.stringify(records.get(expected.id)) !== JSON.stringify(expected)) return false;
+        this.writes.push(`${profile}:remove:${expected.id}`);
+        records.delete(expected.id);
         return true;
       },
       remove: async (id) => {
@@ -860,6 +878,45 @@ describe('PluginInstallations — default packages', () => {
     const anonymous = [...(stores.records.get('anonymous')?.values() ?? [])];
     expect(anonymous.some((record) => record.text.includes('"2.0.0"'))).toBe(false);
     expect(stores.records.get('alice')?.get(themes)?.enabled).toBe(true);
+  });
+
+  it('never deletes a reinstall made just before it undoes its own write', async () => {
+    withoutWebLocks();
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    // Another profile's copy, which nothing here may touch.
+    const alices = {
+      id: themes,
+      text: defaultText(themes, '0.9.0'),
+      enabled: false,
+      installedAt: '2025-01-01T00:00:00.000Z',
+    };
+    await stores.for('alice').put(alices);
+    const reinstalled = {
+      id: themes,
+      text: defaultText(themes, '2.0.0'),
+      enabled: false,
+      installedAt: '2026-01-01T00:00:00.000Z',
+    };
+    // Right after the seed's write, another window records a removal, so the seed undoes it;
+    // and right before that undo, the user reinstalls the pack there, switched off.
+    stores.afterAdd = async (profile) => {
+      const state = stores.states.get(profile) ?? emptyBootstrapState();
+      stores.states.set(profile, {
+        ...state,
+        packages: { ...state.packages, [themes]: 'removed' },
+      });
+      stores.records.get(profile)!.delete(themes);
+    };
+    stores.beforeRemoveIf = async (profile, expected) => {
+      expect(expected.id).toBe(themes);
+      stores.records.get(profile)!.set(themes, reinstalled);
+    };
+    const installations = setup();
+    await settled(installations);
+    expect(stores.records.get('anonymous')!.get(themes)).toEqual(reinstalled);
+    expect(stores.states.get('anonymous')?.packages[themes]).toBe('removed');
+    expect(stores.records.get('alice')!.get(themes)).toEqual(alices);
+    expect(stores.writes.some((write) => write.startsWith('alice:remove'))).toBe(false);
   });
 
   it('without Web Locks, a removal made while another window is still fetching stays removed', async () => {

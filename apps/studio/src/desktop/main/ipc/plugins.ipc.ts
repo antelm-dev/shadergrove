@@ -35,6 +35,21 @@ export function createPluginFiles(dir: string) {
   const fileFor = (id: string) =>
     join(dir, `${createHash('sha256').update(id).digest('hex').slice(0, 32)}.json`);
 
+  // Writes run one at a time, so a compare-and-delete reads and deletes with nothing between.
+  let tail: Promise<unknown> = Promise.resolve();
+  const serial = <T>(work: () => Promise<T>): Promise<T> => {
+    const run = tail.then(work, work);
+    tail = run.catch(() => undefined);
+    return run;
+  };
+
+  const readRecord = async (id: string): Promise<StoredPlugin | null> => {
+    const record = await readFile(fileFor(id), 'utf8')
+      .then((text) => (text.length <= MAX_RECORD_BYTES ? (JSON.parse(text) as unknown) : null))
+      .catch(() => null);
+    return isStoredPlugin(record) && record.id === id ? record : null;
+  };
+
   return {
     async list(): Promise<StoredPlugin[]> {
       const names = await readdir(dir).catch(() => [] as string[]);
@@ -55,32 +70,58 @@ export function createPluginFiles(dir: string) {
     },
 
     /** Stores a package under the id its own manifest declares; refuses one that does not validate. */
-    async put(record: StoredPlugin): Promise<string> {
-      if (!isStoredPlugin(record)) throw new Error('Not a plugin record');
-      const parsed = parsePluginPackage(record.text);
-      if (!parsed.ok) throw new Error(`Invalid plugin package: ${parsed.errors.join('; ')}`);
-      const id = parsed.value.manifest.id;
-      if (record.id !== id) throw new Error('The record id does not match its package');
-      await mkdir(dir, { recursive: true });
-      const path = fileFor(id);
-      const temp = `${path}.${randomBytes(6).toString('hex')}.tmp`;
-      try {
-        await writeFile(temp, JSON.stringify(record));
-        await rename(temp, path);
-      } catch (error) {
-        await rm(temp, { force: true }).catch(() => undefined);
-        throw error;
-      }
-      return id;
+    put(record: StoredPlugin): Promise<string> {
+      return serial(() => write(record));
     },
 
-    async remove(id: string): Promise<void> {
+    remove(id: string): Promise<void> {
       if (typeof id !== 'string' || id.length === 0 || id.length > 64) {
-        throw new Error('Not a plugin id');
+        return Promise.reject(new Error('Not a plugin id'));
       }
-      await rm(fileFor(id), { force: true });
+      return serial(() => rm(fileFor(id), { force: true }));
+    },
+
+    /**
+     * Deletes the record of `expected.id` only if it is still exactly `expected` —
+     * same text, switch and install time — and says whether it did. Read and
+     * deleted within one serialized write, so nothing written meanwhile is lost.
+     */
+    removeIf(expected: StoredPlugin): Promise<boolean> {
+      if (!isStoredPlugin(expected)) return Promise.reject(new Error('Not a plugin record'));
+      return serial(async () => {
+        const stored = await readRecord(expected.id);
+        if (!stored || !sameRecord(stored, expected)) return false;
+        await rm(fileFor(expected.id), { force: true });
+        return true;
+      });
     },
   };
+
+  async function write(record: StoredPlugin): Promise<string> {
+    if (!isStoredPlugin(record)) throw new Error('Not a plugin record');
+    const parsed = parsePluginPackage(record.text);
+    if (!parsed.ok) throw new Error(`Invalid plugin package: ${parsed.errors.join('; ')}`);
+    const id = parsed.value.manifest.id;
+    if (record.id !== id) throw new Error('The record id does not match its package');
+    await mkdir(dir, { recursive: true });
+    const path = fileFor(id);
+    const temp = `${path}.${randomBytes(6).toString('hex')}.tmp`;
+    try {
+      await writeFile(temp, JSON.stringify(record));
+      await rename(temp, path);
+    } catch (error) {
+      await rm(temp, { force: true }).catch(() => undefined);
+      throw error;
+    }
+    return id;
+  }
+}
+
+/** The same install, unchanged: what a compare-and-delete compares. */
+function sameRecord(a: StoredPlugin, b: StoredPlugin): boolean {
+  return (
+    a.id === b.id && a.text === b.text && a.enabled === b.enabled && a.installedAt === b.installedAt
+  );
 }
 
 /**
@@ -172,6 +213,10 @@ export function createPluginsIpc(
     remove: handle(async (event, id: string): Promise<void> => {
       guard(event.sender);
       await files.remove(id);
+    }),
+    removeIf: handle(async (event, expected: StoredPlugin): Promise<boolean> => {
+      guard(event.sender);
+      return files.removeIf(expected);
     }),
     // `null` elsewhere: only the main window seeds the defaults.
     bootstrap: handle(
