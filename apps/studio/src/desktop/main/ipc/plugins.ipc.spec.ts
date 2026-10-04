@@ -28,6 +28,33 @@ function packageText(id: string, version = '1.0.0'): string {
   });
 }
 
+/** A data-only package: one partial language. */
+function languagePackText(): string {
+  return JSON.stringify({
+    manifest: {
+      id: 'dev.example.spanish',
+      version: '1.0.0',
+      protocolVersion: 3,
+      appVersionRange: '>=1.0.0',
+      name: 'Spanish',
+      publisher: 'Example',
+      license: 'MIT',
+      contributions: [
+        {
+          kind: 'language',
+          id: 'spanish',
+          name: 'Spanish',
+          schemaVersion: 1,
+          locale: 'es',
+          nativeName: 'Español',
+          direction: 'ltr',
+          messages: { 'menu.file': 'Archivo' },
+        },
+      ],
+    },
+  });
+}
+
 const record = (text: string, enabled = false) => ({
   id: JSON.parse(text).manifest?.id ?? 'unknown',
   text,
@@ -114,7 +141,7 @@ describe('plugin files', () => {
 });
 
 describe('the plugins IPC module', () => {
-  it('answers the main window only', async () => {
+  it('lets only the main window write, and shows other windows the data-only packages', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'sg-plugins-ipc-'));
     const main = { id: 1 };
     const output = { id: 2 };
@@ -131,18 +158,33 @@ describe('the plugins IPC module', () => {
     };
     try {
       await expect(handlers.list({ sender: main })).resolves.toEqual([]);
-      await expect(handlers.list({ sender: output })).rejects.toThrow(/main window/);
+      await expect(handlers.list({ sender: output })).resolves.toEqual([]);
       await expect(
         handlers.put({ sender: output }, record(packageText('dev.example.tint'))),
       ).rejects.toThrow(/main window/);
       await expect(handlers.remove({ sender: output }, 'dev.example.tint')).rejects.toThrow(
         /main window/,
       );
-      await expect(handlers.bootstrap({ sender: output })).rejects.toThrow(/main window/);
+      // Nothing to seed outside the main window.
+      await expect(handlers.bootstrap({ sender: output })).resolves.toBeNull();
+      await expect(handlers.bootstrap({ sender: main })).resolves.toEqual({
+        version: 0,
+        packages: {},
+      });
       await expect(
         handlers.saveBootstrap({ sender: output }, { version: 1, packages: {} }),
       ).rejects.toThrow(/main window/);
       expect(await readdir(dir)).toEqual([]);
+
+      // With a theme pack and a package with GLSL installed, the output window sees the theme only.
+      const theme = record(languagePackText(), true);
+      const effect = record(packageText('dev.example.tint'), true);
+      await handlers.put({ sender: main }, theme);
+      await handlers.put({ sender: main }, effect);
+      expect(
+        ((await handlers.list({ sender: main })) as { id: string }[]).map((r) => r.id).sort(),
+      ).toEqual(['dev.example.spanish', 'dev.example.tint']);
+      await expect(handlers.list({ sender: output })).resolves.toEqual([theme]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

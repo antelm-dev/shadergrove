@@ -8,6 +8,7 @@
  * one holds themes or languages only — no code, GLSL or URL — and is installed
  * from this release's own catalogue, checked against its size and hash.
  */
+import type { PluginPackage } from './package';
 import { pluginContributionRef, type PluginContributionRef } from './refs';
 
 /**
@@ -28,6 +29,19 @@ export const DEFAULT_PACKAGE_IDS: readonly string[] = [
 
 export function isDefaultPackageId(id: string): boolean {
   return DEFAULT_PACKAGE_IDS.includes(id);
+}
+
+/**
+ * Whether a package is data and nothing else — themes and languages, no code
+ * and no GLSL. The only kind the app installs by itself, and the only kind a
+ * window that manages no plugins (the output and satellite windows) may read.
+ */
+export function isDataOnlyPackage(plugin: PluginPackage): boolean {
+  return (
+    plugin.code === undefined &&
+    Object.keys(plugin.glsl).length === 0 &&
+    plugin.manifest.contributions.every(({ kind }) => kind === 'theme' || kind === 'language')
+  );
 }
 
 /** The official Light and Dark themes: one pair, `default`. */

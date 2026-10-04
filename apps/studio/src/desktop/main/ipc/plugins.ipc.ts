@@ -7,6 +7,7 @@ import { defineIpcModule, handle } from 'electron-ipc-module';
 import {
   PLUGIN_BOOTSTRAP_MAX_BYTES,
   PLUGIN_LIMITS,
+  isDataOnlyPackage,
   parsePluginPackage,
   sanitizeBootstrapState,
   type PluginBootstrapState,
@@ -135,8 +136,10 @@ function isStoredPlugin(value: unknown): value is StoredPlugin {
 }
 
 /**
- * `isMainWindow` gates every call: output and satellite windows render
- * shaders, they do not get to install or remove code.
+ * `isMainWindow` gates every write: output and satellite windows render
+ * shaders, they do not get to install, remove or seed anything. They may read
+ * the data-only packages — themes and languages — so they dress and speak like
+ * the main window; no package with code is ever handed to them.
  */
 export function createPluginsIpc(
   dir: string,
@@ -150,9 +153,17 @@ export function createPluginsIpc(
   };
 
   return defineIpcModule('plugins', {
+    // Any window may read: the others see only the data-only packages, so their theme and
+    // language follow the main window's without any plugin code reaching them.
     list: handle(async (event): Promise<StoredPlugin[]> => {
-      guard(event.sender);
-      return files.list();
+      const stored = await files.list();
+      if (isMainWindow(event.sender)) return stored;
+      return stored.filter((record) => {
+        const parsed = parsePluginPackage(record.text);
+        return (
+          parsed.ok && parsed.value.manifest.id === record.id && isDataOnlyPackage(parsed.value)
+        );
+      });
     }),
     put: handle(async (event, record: StoredPlugin): Promise<string> => {
       guard(event.sender);
@@ -162,10 +173,11 @@ export function createPluginsIpc(
       guard(event.sender);
       await files.remove(id);
     }),
-    bootstrap: handle(async (event): Promise<PluginBootstrapState> => {
-      guard(event.sender);
-      return bootstrap.read();
-    }),
+    // `null` elsewhere: only the main window seeds the defaults.
+    bootstrap: handle(
+      async (event): Promise<PluginBootstrapState | null> =>
+        isMainWindow(event.sender) ? bootstrap.read() : null,
+    ),
     saveBootstrap: handle(async (event, state: PluginBootstrapState): Promise<void> => {
       guard(event.sender);
       await bootstrap.write(state);

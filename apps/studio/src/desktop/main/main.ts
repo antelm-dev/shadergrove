@@ -306,7 +306,7 @@ prepare({
       update: createUpdateIpc(updates),
       account: createAccountIpc(account),
       sync: createSyncIpc(sync),
-      // Only the main window manages plugins; output and satellite windows do not.
+      // Only the main window manages plugins; output and satellite windows read the data-only ones.
       plugins: createPluginsIpc(
         join(userData, 'plugins'),
         join(userData, 'plugin-bootstrap.json'),

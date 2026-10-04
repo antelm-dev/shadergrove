@@ -11,6 +11,7 @@ import {
 import {
   DEFAULT_PACKAGES_VERSION,
   DEFAULT_PACKAGE_IDS,
+  isDataOnlyPackage,
   isDefaultPackageId,
   isPluginCompatible,
   parsePluginPackage,
@@ -31,16 +32,18 @@ import {
 } from './plugin-store';
 
 /**
- * The store for one profile. Replaced in tests. The output window manages no
- * plugins — the desktop's main process would refuse it anyway — so it gets none.
+ * The store for one profile. Replaced in tests. On the desktop every window
+ * reads the one store, but only the main window manages it: the main process
+ * shows the output and satellite windows the data-only packages (themes and
+ * languages) and nothing to seed. On the web, the output view gets none.
  */
 export const PLUGIN_STORE = new InjectionToken<(profile: string) => PluginStore>('PLUGIN_STORE', {
   providedIn: 'root',
   factory: () => {
     const desktop = inject(DesktopPlatform);
     return (profile: string) => {
-      if (isOutputWindow()) return new NoPluginStore();
       if (desktop.available) return new DesktopPluginStore();
+      if (isOutputWindow()) return new NoPluginStore();
       if (typeof indexedDB === 'undefined') return new NoPluginStore();
       return new IndexedDbPluginStore(`shadergrove-plugins:${profile}`);
     };
@@ -408,15 +411,10 @@ export class PluginInstallations {
     );
     const parsed = parsePluginPackage(text);
     if (!parsed.ok) throw new Error(parsed.errors[0]);
-    const { manifest, code, glsl } = parsed.value;
-    if (
-      code !== undefined ||
-      Object.keys(glsl).length > 0 ||
-      manifest.contributions.some(({ kind }) => kind !== 'theme' && kind !== 'language')
-    ) {
+    if (!isDataOnlyPackage(parsed.value)) {
       throw new Error('A default package must hold themes or languages only');
     }
-    if (!isPluginCompatible(manifest, APP_VERSION)) {
+    if (!isPluginCompatible(parsed.value.manifest, APP_VERSION)) {
       throw new Error('It is not made for this version of the app');
     }
     return text;

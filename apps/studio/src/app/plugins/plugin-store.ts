@@ -165,8 +165,9 @@ export class DesktopPluginStore implements PluginStore {
     await window.electron.bridge.plugins.remove(id);
   }
 
-  async readBootstrap(): Promise<PluginBootstrapState> {
-    return sanitizeBootstrapState(await window.electron.bridge.plugins.bootstrap());
+  async readBootstrap(): Promise<PluginBootstrapState | null> {
+    const state = await window.electron.bridge.plugins.bootstrap();
+    return state === null ? null : sanitizeBootstrapState(state);
   }
 
   async writeBootstrap(state: PluginBootstrapState): Promise<void> {
