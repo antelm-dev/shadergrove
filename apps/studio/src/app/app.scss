@@ -59,9 +59,15 @@ app-titlebar {
   // Material's default toolbar and icon-button metrics are intentionally roomy.
   // Keep the app chrome compact so it does not compete with the shader canvas.
   button[matIconButton] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
     width: 32px;
     height: 32px;
     padding: 6px;
+    --mat-icon-button-state-layer-size: 32px;
+    --mat-icon-button-icon-size: 20px;
 
     mat-icon {
       width: 20px;

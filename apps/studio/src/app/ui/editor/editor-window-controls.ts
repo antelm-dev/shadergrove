@@ -105,15 +105,27 @@ const DOCK_ICONS: Record<EditorDockSide, string> = {
     :host {
       display: flex;
       align-items: center;
+      flex: 0 0 auto;
       gap: 0;
     }
 
     .control {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
       width: 28px;
       height: 28px;
-      padding: 5px;
+      padding: 6px;
       --mat-icon-button-state-layer-size: 28px;
       --mat-icon-button-icon-size: 16px;
+    }
+
+    .control mat-icon {
+      width: 16px;
+      height: 16px;
+      font-size: 16px;
+      line-height: 16px;
     }
 
     .check {
