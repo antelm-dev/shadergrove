@@ -382,6 +382,8 @@ class SeedingStores {
   readonly records = new Map<string, Map<string, StoredPlugin>>();
   readonly states = new Map<string, PluginBootstrapState>();
   readonly writes: string[] = [];
+  /** Runs before a write lands, as another window would between a check and the write. */
+  beforePut: ((profile: string, record: StoredPlugin) => Promise<void>) | null = null;
 
   for(profile: string): PluginStore {
     const records = this.records.get(profile) ?? new Map<string, StoredPlugin>();
@@ -389,6 +391,9 @@ class SeedingStores {
     return {
       list: async () => [...records.values()],
       put: async (record) => {
+        const before = this.beforePut;
+        this.beforePut = null;
+        await before?.(profile, record);
         this.writes.push(`${profile}:put:${record.id}`);
         records.set(record.id, record);
       },
@@ -640,6 +645,28 @@ describe('PluginInstallations — default packages', () => {
     expect(JSON.parse(stored.text).manifest.version).toBe('2.0.0');
     expect(stored.enabled).toBe(false);
     expect(installations.find(themes)?.active).toBe(false);
+  });
+
+  it('undoes its own write when a removal lands between its last check and the write', async () => {
+    restoreLocks();
+    Object.defineProperty(navigator, 'locks', { value: undefined, configurable: true });
+    restoreLocks = () => delete (navigator as { locks?: unknown }).locks;
+    const [themes] = DEFAULT_PACKAGE_IDS as [string];
+    // Another window removes it — recorded, then deleted — just before this one's write lands.
+    stores.beforePut = async (profile, record) => {
+      expect(record.id).toBe(themes);
+      const state = stores.states.get(profile) ?? emptyBootstrapState();
+      stores.states.set(profile, {
+        ...state,
+        packages: { ...state.packages, [themes]: 'removed' },
+      });
+      stores.records.get(profile)?.delete(themes);
+    };
+    const installations = setup();
+    await settled(installations);
+    expect(stores.records.get('anonymous')!.has(themes)).toBe(false);
+    expect(stores.states.get('anonymous')?.packages[themes]).toBe('removed');
+    expect(installations.find(themes)).toBeUndefined();
   });
 
   it('without Web Locks, a removal made while another window is still fetching stays removed', async () => {

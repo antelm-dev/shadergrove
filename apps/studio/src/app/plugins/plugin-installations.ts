@@ -343,6 +343,12 @@ export class PluginInstallations {
             const now = await store.readBootstrap();
             if (now?.packages[id] === undefined && !(await this.isInstalled(store, id))) {
               await store.put({ id, text, enabled: true, installedAt: new Date().toISOString() });
+              // A removal records itself before it deletes: if one was recorded by the time
+              // this write landed, its delete may already have run, so undo the write.
+              if ((await store.readBootstrap())?.packages[id] === 'removed') {
+                await store.remove(id);
+                continue;
+              }
             }
           }
           if (!current()) return;
