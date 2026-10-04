@@ -149,6 +149,11 @@ describe('isPluginCompatible', () => {
     expect(isPluginCompatible(manifest('1.4.0'), '1.4.0')).toBe(true);
     expect(isPluginCompatible(manifest('>=1.4.0'), 'garbage')).toBe(false);
   });
+
+  it('treats a beta as the release it leads to', () => {
+    expect(isPluginCompatible(manifest('>=2.0.0'), '2.0.0-beta.1')).toBe(true);
+    expect(isPluginCompatible(manifest('>=1.5.0 <2.0.0'), '2.0.0-beta.1')).toBe(false);
+  });
 });
 
 describe('validateEffectCandidate', () => {
