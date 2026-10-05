@@ -441,6 +441,9 @@ export class ShaderStore {
 
       await this.refreshList();
       this.documentState.notify(`Saved “${result.record.name}”`, false);
+      // A legacy shared example saves under a new personal id. Its old draft
+      // is now saved too; leaving it behind could offer it for another fork.
+      if (record.id !== result.record.id) this.recovery.forget(record.id);
       this.recovery.forget(result.record.id);
       void this.capturePreview(result.record.id);
       return true;

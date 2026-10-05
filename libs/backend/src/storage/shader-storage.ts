@@ -130,7 +130,7 @@ export class ShaderStorage {
         process.env['SHADER_EXAMPLES_DIR'] ??
         path.join(workspaceRoot, 'examples'),
     );
-    this.seed = options.seed ?? process.env['SHADER_SEED'] !== '0';
+    this.seed = options.seed ?? false;
   }
 
   private shaderDir(id: string): string {

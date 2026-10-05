@@ -46,14 +46,12 @@ WORKDIR /app
 
 ENV NODE_ENV=production \
     PORT=4000 \
-    SHADER_DATA_DIR=/data \
-    SHADER_EXAMPLES_DIR=/app/examples
+    SHADER_DATA_DIR=/data
 
-# SSR bundle + examples + i18n catalogs + the CLI, plus the PostgreSQL and
+# SSR bundle + i18n catalogs + the CLI, plus the PostgreSQL and
 # Swagger runtime dependencies. Express and Angular are inlined
 # into the bundle.
 COPY --from=build /app/dist/shadergrove ./dist/shadergrove
-COPY --from=build /app/examples ./examples
 COPY --from=build /app/i18n ./i18n
 COPY --from=build /runtime-deps/node_modules ./node_modules
 

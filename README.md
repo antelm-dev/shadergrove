@@ -113,8 +113,8 @@ docker compose up -d --build
 
 Compose publishes the app on port 4000. Put an HTTPS reverse proxy in front of
 it and open the origin configured in `BETTER_AUTH_URL`; production session
-cookies require HTTPS. The five bundled examples are seeded as shared, read-only
-templates. Sign up and verify your address to create your private library.
+cookies require HTTPS. Sign up and verify your address to create your private
+library, which starts empty.
 
 Each web user gets a private library, so the deployment needs a few things
 before it will start: `BETTER_AUTH_SECRET`, the public `BETTER_AUTH_URL`, and an
@@ -145,7 +145,7 @@ otherwise the request is rejected:
 SHADER_ALLOWED_HOSTS=localhost,127.0.0.1,[::1],shaders.example.com
 ```
 
-`.env` also sets `SHADER_PORT` (host port, default `4000`) and `SHADER_SEED`. To
+`.env` also sets `SHADER_PORT` (host port, default `4000`). To
 upgrade, `docker compose up -d --build`; the volume and its data are left alone.
 
 ### From source
@@ -176,21 +176,19 @@ are allowed to reach SSR.
 The server reads these directly; under Compose they are derived from `.env`
 (see [`.env.example`](.env.example)).
 
-| Variable              | Default                                | Purpose                                                                      |
-| --------------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`  | Development fallback only              | Cookie-signing secret; required in production                                |
-| `BETTER_AUTH_URL`     | `http://localhost:4200` in development | Public app origin; required in production                                    |
-| `MAIL_SMTP_URL`       | Console links in development           | SMTP transport; required in production                                       |
-| `MAIL_FROM`           | `Shadergrove <no-reply@localhost>`     | Transactional email sender                                                   |
-| `AUTH_REGISTRATION`   | `open`                                 | `invite-only` closes sign-up while allowing sign-in                          |
-| `TRUST_PROXY`         | `0`                                    | Enable only behind a reverse proxy you control                               |
-| `DATABASE_URL`        | —                                      | PostgreSQL connection string; when set, selects PostgreSQL, otherwise SQLite |
-| `PORT`                | `4000`                                 | Port for the SSR server                                                      |
-| `SHADER_DATA_DIR`     | `./data`                               | SQLite database directory (used only when `DATABASE_URL` is unset)           |
-| `SHADER_EXAMPLES_DIR` | `./examples`                           | Source directory for the bundled examples that seed an empty store           |
-| `SHADER_SEED`         | —                                      | Set to `0` to disable seeding an empty store                                 |
-| `NG_ALLOWED_HOSTS`    | `localhost,127.0.0.1,[::1]`            | Comma-separated hosts SSR may render for; set this when deploying            |
-| `DATABASE_POOL_MAX`   | `10`                                   | Maximum PostgreSQL pool connections                                          |
+| Variable             | Default                                | Purpose                                                                      |
+| -------------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET` | Development fallback only              | Cookie-signing secret; required in production                                |
+| `BETTER_AUTH_URL`    | `http://localhost:4200` in development | Public app origin; required in production                                    |
+| `MAIL_SMTP_URL`      | Console links in development           | SMTP transport; required in production                                       |
+| `MAIL_FROM`          | `Shadergrove <no-reply@localhost>`     | Transactional email sender                                                   |
+| `AUTH_REGISTRATION`  | `open`                                 | `invite-only` closes sign-up while allowing sign-in                          |
+| `TRUST_PROXY`        | `0`                                    | Enable only behind a reverse proxy you control                               |
+| `DATABASE_URL`       | —                                      | PostgreSQL connection string; when set, selects PostgreSQL, otherwise SQLite |
+| `PORT`               | `4000`                                 | Port for the SSR server                                                      |
+| `SHADER_DATA_DIR`    | `./data`                               | SQLite database directory (used only when `DATABASE_URL` is unset)           |
+| `NG_ALLOWED_HOSTS`   | `localhost,127.0.0.1,[::1]`            | Comma-separated hosts SSR may render for; set this when deploying            |
+| `DATABASE_POOL_MAX`  | `10`                                   | Maximum PostgreSQL pool connections                                          |
 
 Public Explore — publishing shader snapshots for anyone to browse and copy — is
 off unless `PUBLIC_EXPLORE_ENABLED=1`, and moderated by the account ids listed
@@ -234,9 +232,10 @@ docker compose --profile migrate run --rm migrate --source=/legacy-data
 # add --mode=overwrite to replace shaders whose id already exists (default: rename)
 ```
 
-**Disabling examples.** Set `SHADER_SEED=0` to start with an empty library.
-Seeding is idempotent and versioned in the database, so it never overwrites your
-shaders and a deleted example does not reappear.
+**Examples.** New libraries start empty on web and desktop. The shaders in
+`examples/` remain available to import manually. Old shared example templates
+are omitted from libraries and collection exports; personal copies and existing
+desktop shaders are preserved. `SHADER_SEED` no longer enables startup seeding.
 
 **Diagnostics.** The app fails fast and loudly if the database is unreachable or
 its schema cannot be brought to the expected version — check the container logs
@@ -324,9 +323,8 @@ three.js, lil-gui, and Monaco.
 | `Shift`+`Alt`+`F` | Format the GLSL in the editor |
 
 Web library requests require a signed-in account; mutations require a verified
-email address. Shared example templates are available within the signed-in
-library; editing a template creates your own copy. Desktop editing needs no
-account.
+email address. Each account's library contains its own shaders. Desktop editing
+needs no account.
 
 ### The editor
 
@@ -388,7 +386,7 @@ apps/
     src/
       app/               Angular workspace state, rendering, editor, and UI
       server/            Express host: security headers, /api mount, static, SSR
-        create-library.ts  picks PostgreSQL (DATABASE_URL) or SQLite, then seeds
+        create-library.ts  picks PostgreSQL (DATABASE_URL) or SQLite
         api/             NestJS modules: core, system, shaders, auth, publications, admin
       desktop/
         main/            Electron lifecycle, windows, updates, and IPC handlers
@@ -1017,7 +1015,7 @@ pnpm test
   shaders; they do not download the entire account library or propagate every
   deletion in both directions.
 - **No public shader publishing or Explore feed.** Web libraries are private to
-  their accounts, alongside shared read-only example templates.
+  their accounts.
 - **Plugins are local and official only.** Packages come from a file or from the
   catalogue that ships with the release; there is no hosted marketplace,
   publisher signing or automatic update, and the protocol is versioned but young.

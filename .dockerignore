@@ -18,7 +18,7 @@ __screenshots__
 apps/website/out
 apps/website/design
 
-# User shaders created at runtime — the container seeds its own store from examples/.
+# User shaders created at runtime.
 data
 
 # Compose secrets are runtime inputs, never image-build inputs.
