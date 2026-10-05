@@ -58,10 +58,6 @@ for (const side of ['left', 'right', 'bottom'] as const) {
     await expect(shell.locator('.dirty')).toContainText('Unsaved changes');
     await shell.getByRole('button', { name: 'Collapse the editor', exact: true }).click();
     await expect(shell.locator('.editor-body')).toBeHidden();
-    await testInfo.attach('minimized-editor', {
-      body: await shell.screenshot(),
-      contentType: 'image/png',
-    });
     await expect(shell).toHaveClass(new RegExp(`dock-${side}`));
     await expect(shell.locator('.config-toggle')).toHaveCount(0);
     await expect.poll(async () => (await shell.boundingBox())!.height).toBeLessThan(50);
@@ -70,6 +66,12 @@ for (const side of ['left', 'right', 'bottom'] as const) {
     const status = (await shell.locator('.dirty').boundingBox())!;
     const controls = (await shell.locator('app-editor-window-controls').boundingBox())!;
     expect(status.x + status.width).toBeLessThanOrEqual(controls.x);
+    // Capture the viewport coordinates asserted above. A fixed, minimized dock
+    // does not need locator.screenshot()'s scroll-into-view step.
+    await testInfo.attach('minimized-editor', {
+      body: await page.screenshot({ clip: (await shell.boundingBox())!, timeout: 10_000 }),
+      contentType: 'image/png',
+    });
     await shell.getByRole('button', { name: 'Expand the editor', exact: true }).click();
     await expect(shell.locator('.monaco-editor')).toBeVisible();
     await expect(shell.locator('.view-lines')).toContainText('// chrome regression');
