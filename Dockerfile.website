@@ -10,15 +10,19 @@ RUN npm install --global pnpm@10.28.2
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 COPY apps/website/package.json ./apps/website/
 COPY libs/brand/package.json ./libs/brand/
+COPY libs/shared/package.json ./libs/shared/
 
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --filter @shadergrove/website... --frozen-lockfile
 
 COPY apps/website ./apps/website
 COPY libs/brand ./libs/brand
+COPY libs/shared ./libs/shared
 
 ARG NEXT_PUBLIC_STUDIO_URL
 ENV NEXT_PUBLIC_STUDIO_URL=${NEXT_PUBLIC_STUDIO_URL}
+ARG NEXT_PUBLIC_RELEASES_API_URL
+ENV NEXT_PUBLIC_RELEASES_API_URL=${NEXT_PUBLIC_RELEASES_API_URL}
 
 RUN pnpm --filter @shadergrove/website build
 

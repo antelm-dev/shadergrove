@@ -13,15 +13,20 @@
     "generate:isf-plugin": "tsx src/generate/isf-plugin.ts",
     "generate:plugins": "tsx src/generate/official-plugins.ts",
     "smoke": "tsx src/smoke.ts",
+    "smoke:website": "tsx src/website-smoke.ts",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p ../../plugins/official/tsconfig.json",
-    "smoke:ssr": "tsx src/ssr-smoke.ts"
+    "smoke:ssr": "tsx src/ssr-smoke.ts",
+    "verify:release": "tsx src/release/verify-assets.ts"
   },
   "devDependencies": {
     "@types/node": "^20.17.19",
     "esbuild": "^0.25.12",
     "playwright": "^1.57.0",
     "tsx": "^4.23.1",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "vitest": "4.0.8",
+    "yaml": "^2.9.1"
   },
   "nx": {
     "targets": {
@@ -53,6 +58,9 @@
         ]
       },
       "smoke": {
+        "cache": false
+      },
+      "smoke:website": {
         "cache": false
       },
       "smoke:ssr": {

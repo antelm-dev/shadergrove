@@ -93,62 +93,16 @@ jobs:
       - name: Lint, check, typecheck, test and build
         run: pnpm run ci
 
-  windows:
-    name: Publish Windows desktop release
+  desktop:
+    name: Publish desktop release
     needs: [version, validate]
-    runs-on: windows-latest
-    timeout-minutes: 25
     permissions:
       contents: write
-    concurrency:
-      group: publish-${{ needs.version.outputs.tag }}
-      cancel-in-progress: false
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.version.outputs.sha }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '26.5.0'
-          cache: pnpm
-
-      # electron-builder will upload to a recently published release, so a
-      # published release is refused here rather than having its assets replaced.
-      - name: Require a draft release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ needs.version.outputs.tag }}
-        run: |
-          test "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "true" || {
-            echo "Release $TAG is already published"
-            exit 1
-          }
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
-
-      - name: Build and upload installers
-        run: pnpm dist:win
-        env:
-          ELECTRON_BUILDER_PUBLISH: always
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Verify release assets
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ needs.version.outputs.tag }}
-        run: bash .github/scripts/verify-release-assets.sh "$TAG" latest
-
-      - name: Publish release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ needs.version.outputs.tag }}
-        run: gh release edit "$TAG" --draft=false
+    uses: ./.github/workflows/desktop-release.yml
+    with:
+      sha: ${{ needs.version.outputs.sha }}
+      tag: ${{ needs.version.outputs.tag }}
+      channel: stable
+      linux: ${{ vars.DESKTOP_LINUX_RELEASE_ENABLED == 'true' }}
+      macos: ${{ vars.DESKTOP_MACOS_RELEASE_ENABLED == 'true' }}
+    secrets: inherit

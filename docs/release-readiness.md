@@ -72,6 +72,11 @@ settings. Keep real credentials out of release evidence.
 
 The release workflow runs on `master` (or manual dispatch). Release Please
 prepares the release PR; when a release is created, the workflow builds and
-publishes Windows installers. The MCP package has separate build/pack/verify
+publishes Windows installers plus the Linux/macOS platforms explicitly enabled
+in Actions variables. A shared publication job verifies all required installers
+and update manifests before making the draft public. See
+[website releases and desktop distribution](website-releases.md) for activation,
+signing prerequisites, catalogue URLs and changelog content.
+The MCP package has separate build/pack/verify
 commands; these release workflows do not publish it. CI's Docker job builds the
 image but does not run a production deployment or backup/restore check.

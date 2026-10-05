@@ -84,6 +84,8 @@ jobs:
         run: pnpm --filter @shadergrove/workspace-tools exec playwright install chromium --with-deps
       - name: Smoke
         run: pnpm smoke
+      - name: Website release pages smoke
+        run: pnpm build:website && pnpm smoke:website
 
   e2e:
     name: E2E

@@ -28,10 +28,10 @@ export function Hero() {
             >
               Start creating <span aria-hidden="true">↗</span>
             </a>
-            <a className="text-link" href="#playground">
-              Meet the grove{' '}
+            <a className="text-link" href="/download">
+              Download desktop{' '}
               <span className="arrow" aria-hidden="true">
-                ↓
+                ↗
               </span>
             </a>
           </div>

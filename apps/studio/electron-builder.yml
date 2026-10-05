@@ -31,6 +31,23 @@ nsis:
   allowToChangeInstallationDirectory: true
 portable:
   artifactName: ${name}-${version}-portable.${ext}
+linux:
+  target:
+    - AppImage
+    - deb
+  executableName: shadergrove
+  category: Development
+  maintainer: Adel Terki
+  artifactName: ${name}-${version}-${arch}.${ext}
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.developer-tools
+  artifactName: ${name}-${version}-${arch}.${ext}
+  hardenedRuntime: true
+  forceCodeSigning: true
+  notarize: true
 publish:
   provider: github
   owner: antelm-dev

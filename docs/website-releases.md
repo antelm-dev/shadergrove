@@ -1,0 +1,98 @@
+# Website releases and desktop distribution
+
+## Source and public API
+
+GitHub Releases in `antelm-dev/shadergrove` remain the source for version, date,
+Markdown notes and binaries. The website offers `/download` and `/changelog`;
+version links use `?version=<semver>` so future releases work with the static export.
+Stable releases are the default, and `?channel=beta` explicitly selects previews.
+The complete release body is displayed on the changelog, and each version links to
+its own downloads rather than silently downloading a newer version.
+
+Studio exposes anonymous GET endpoints:
+
+- `/api/releases?channel=stable&page=1`: `{ releases, nextPage }`, in published-date
+  order within each upstream page. Pages contain 20 upstream releases before channel
+  filtering; an empty page may still have `nextPage`. Pagination is bounded to 100 pages.
+- `/api/releases/latest?channel=stable`: `{ release }`, using GitHub's designated latest
+  stable release. Beta searches the first 100 upstream releases and never returns stable.
+  A missing latest release returns `{ release: null }`.
+- `/api/releases/1.5.0`: a single published version, or 404. Drafts remain invisible
+  even if a server token can read them. Only stable and `-beta.N` versions are supported.
+
+The DTO is defined in `libs/shared/src/model/releases.ts`. Only uploaded, nonempty
+installers with canonical filenames and download URLs from this repository are
+admitted. Source archives, blockmaps and updater manifests are not download options.
+Legacy `shader-studio-*` binaries before the rename remain downloadable. Windows
+filenames without an architecture identify x64; new Linux and macOS
+filenames include the architecture.
+
+GitHub calls have an eight-second timeout, five-minute cache, shared in-flight requests,
+a bounded cache, and a one-minute retry delay after failures. Successful cached data
+can remain available for up to 24 hours during a transient outage; a definitive 404
+invalidates it. Successful HTTP responses are publicly cacheable for one minute.
+Failures return a sanitized, uncached 503. Wildcard CORS applies only to these public
+GET routes, with no credentials, leaving account and shader routes unchanged.
+
+`GITHUB_RELEASES_TOKEN` is an optional server-only token for a higher GitHub API quota.
+Never include it in website build arguments. Configure `NEXT_PUBLIC_STUDIO_URL` or
+`NEXT_PUBLIC_RELEASES_API_URL` for the website as described in its README. Deploy the
+Studio API before the website; an old API without these routes returns an explicit
+unavailable state. A first deployment still requires rebuilding the website image.
+
+## Notes
+
+Review the notes in the release PR before merging it. The body of the published
+GitHub release is the website changelog: use concise sections for new features,
+fixes and upgrade instructions. An edit to published release notes reaches the site
+after the cache refreshes, without maintaining a second handwritten changelog.
+Beta releases remain visibly separate. Raw HTML, unsafe link protocols and remote
+images are disabled by the website's Markdown renderer.
+
+## Publication pipeline
+
+Stable and beta workflows call `.github/workflows/desktop-release.yml` after validation
+of the exact commit. That workflow validates the draft and its target, builds all
+enabled platforms, collects artifacts, uploads to the draft, verifies every required
+installer and updater manifest, and only then publishes the release. A failed platform
+leaves the release in draft. Builds do not independently publish from matrix jobs.
+Retries can replace draft assets, but already published releases are refused.
+Verification tools follow the workflow revision while application builds stay pinned
+to the release commit, allowing recovery of older Windows drafts that predate those tools.
+
+Windows x64 remains enabled by default and retains installer identity and filenames.
+Linux and macOS are prepared but opt in through repository Actions variables:
+
+| Variable                        | Value to enable | Packages                                              |
+| ------------------------------- | --------------- | ----------------------------------------------------- |
+| `DESKTOP_LINUX_RELEASE_ENABLED` | `true`          | x64 AppImage and `.deb` on Ubuntu 22.04               |
+| `DESKTOP_MACOS_RELEASE_ENABLED` | `true`          | Intel and Apple Silicon `.dmg` and `.zip` on macOS 15 |
+
+Absent or false variables keep those platforms out of the required release matrix.
+The website displays their files automatically once present in a published release.
+Both macOS architectures are built together so their updater entries share one
+combined manifest rather than overwriting each other from separate jobs.
+
+Before enabling macOS, configure `CSC_LINK` (Developer ID Application certificate),
+`CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`.
+The workflow refuses missing credentials. macOS packaging requires signing and
+notarization; local unsigned development should not use the public `dist:mac` target.
+
+Local commands are `pnpm dist:win`, `pnpm pack:linux`, `pnpm dist:linux` and
+`pnpm dist:mac`. Use the appropriate OS runner for each distributable. Linux/macOS
+startup, sandbox behavior, persistence, GPU rendering, exports and OS protocol/account
+integration must be checked on installed packages before enabling public releases.
+Automatic updates in the application currently remain Windows-installer-only;
+Linux and macOS users download subsequent versions manually.
+
+## Validation
+
+- `pnpm --filter @shadergrove/studio test:server`: API/cache/filtering and HTTP contracts.
+- `pnpm --filter @shadergrove/workspace-tools test`: complete-release verification.
+- `pnpm build:website && pnpm smoke:website`: browser coverage against the static export.
+- `pnpm --filter @shadergrove/workspace-tools verify:release v1.5.0 latest windows`:
+  read-only verification of published or draft release assets (requires authenticated `gh`).
+
+The new pipeline still requires an actual GitHub Actions run; unit tests and local
+website checks do not establish Linux/macOS installed-package readiness. Follow the
+[release-readiness checklist](release-readiness.md) before activating those platforms.

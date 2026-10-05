@@ -12,8 +12,8 @@ version="$2"
 version_file=libs/shared/src/version.ts
 
 case "$channel" in
-  stable) pattern='^[0-9]+\.[0-9]+\.[0-9]+$' ;;
-  beta) pattern='^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$' ;;
+  stable) pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' ;;
+  beta) pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-beta\.(0|[1-9][0-9]*)$' ;;
   *) echo "Unknown channel: $channel" >&2; exit 1 ;;
 esac
 [[ "$version" =~ $pattern ]] || {
@@ -23,7 +23,17 @@ esac
 
 if [[ "${3:-}" == --write ]]; then
   npm version "$version" --no-git-tag-version --allow-same-version >/dev/null
-  sed -i -E "s|'[^']*'(; // x-release-please-version)|'$version'\1|" "$version_file"
+  # Node avoids the incompatible GNU/BSD sed -i syntax on the macOS runner.
+  node --input-type=module - "$version" "$version_file" <<'NODE'
+  import { readFileSync, writeFileSync } from 'node:fs';
+  const [version, file] = process.argv.slice(2);
+  const source = readFileSync(file, 'utf8');
+  const next = source.replace(/'[^']*'(; \/\/ x-release-please-version)/, `'${version}'$1`);
+  if (source === next && !source.includes(`'${version}'; // x-release-please-version`)) {
+    throw new Error('APP_VERSION release marker is missing');
+  }
+  writeFileSync(file, next);
+NODE
 fi
 
 package_version="$(node -p "require('./package.json').version")"

@@ -41,69 +41,16 @@ jobs:
       - name: Lint, check, typecheck, test and build
         run: pnpm run ci
 
-  windows:
-    name: Publish Windows beta
+  desktop:
+    name: Publish desktop beta
     needs: validate
-    runs-on: windows-latest
-    timeout-minutes: 25
     permissions:
       contents: write
-
-    steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '26.5.0'
-          cache: pnpm
-
-      - name: Set build version
-        shell: bash
-        env:
-          VERSION: ${{ inputs.version }}
-        run: bash .github/scripts/release-version.sh beta "$VERSION" --write
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
-
-      - name: Create draft prerelease
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ inputs.version }}
-        run: |
-          if gh release view "v$VERSION" >/dev/null 2>&1; then
-            test "$(gh release view "v$VERSION" --json isDraft --jq .isDraft)" = "true" || {
-              echo "Release v$VERSION already exists and is not a draft"
-              exit 1
-            }
-            echo "Reusing draft release v$VERSION"
-          else
-            gh release create "v$VERSION" \
-              --target "$GITHUB_SHA" \
-              --title "Shadergrove v$VERSION" \
-              --generate-notes \
-              --prerelease \
-              --draft
-          fi
-
-      - name: Build and upload beta updater
-        run: pnpm dist:win
-        env:
-          ELECTRON_BUILDER_PUBLISH: always
-          ELECTRON_UPDATE_CHANNEL: beta
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Verify release assets
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ inputs.version }}
-        run: bash .github/scripts/verify-release-assets.sh "v$VERSION" beta
-
-      - name: Publish prerelease
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ inputs.version }}
-        run: gh release edit "v$VERSION" --draft=false --prerelease
+    uses: ./.github/workflows/desktop-release.yml
+    with:
+      sha: ${{ github.sha }}
+      tag: v${{ inputs.version }}
+      channel: beta
+      linux: ${{ vars.DESKTOP_LINUX_RELEASE_ENABLED == 'true' }}
+      macos: ${{ vars.DESKTOP_MACOS_RELEASE_ENABLED == 'true' }}
+    secrets: inherit
