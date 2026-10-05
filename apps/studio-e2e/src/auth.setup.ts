@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { test as setup, expect } from '@playwright/test';
 
 import { STORAGE_STATE } from './fixtures';
@@ -33,9 +34,24 @@ setup('sign up the test account', async ({ request, baseURL }) => {
   }
 
   // Routing tests use explicit, account-owned fixtures, not startup examples.
-  for (const name of ['Aurora Veil', 'Hex Pulse', 'Warp Tunnel']) {
-    const created = await request.post('/api/shaders', { data: { name } });
+  for (const id of ['aurora-veil', 'hex-pulse', 'warp-tunnel']) {
+    const directory = resolve(import.meta.dirname, '../../../examples/shaders', id);
+    const meta = JSON.parse(readFileSync(join(directory, 'meta.json'), 'utf8'));
+    const created = await request.post('/api/shaders', {
+      data: {
+        name: meta.name,
+        controls: meta.controls,
+        render: meta.render,
+        fragment: readFileSync(join(directory, 'fragment.glsl'), 'utf8'),
+        vertex: readFileSync(join(directory, 'vertex.glsl'), 'utf8'),
+      },
+    });
     expect(created.ok(), await created.text()).toBe(true);
+    const { presets } = JSON.parse(readFileSync(join(directory, 'presets.json'), 'utf8'));
+    for (const preset of presets) {
+      const saved = await request.post(`/api/shaders/${id}/presets`, { data: preset });
+      expect(saved.ok(), await saved.text()).toBe(true);
+    }
   }
   await request.storageState({ path: STORAGE_STATE });
 });

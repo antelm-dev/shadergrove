@@ -192,9 +192,9 @@ describe('built server.mjs', () => {
       const stderrChunks: string[] = [];
       child.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk.toString('utf8')));
       await waitFor(
-        () => stderrChunks.join('').includes('listening'),
+        () => stderrChunks.join('').includes('MCP server ready'),
         5000,
-        'bridge listening log',
+        'server ready after shutdown handlers are installed',
       );
 
       child.kill(signal);

@@ -12,6 +12,7 @@ test('website changes skip all studio workloads', () => {
     'libs/brand/src/shader.ts',
     'ops/website/nginx.conf',
     'Dockerfile.website',
+    'tools/workspace/src/website-smoke.ts',
   ]) {
     assert.deepEqual(classifyChanges([path]), { studio: false, website: true }, path);
   }
@@ -22,7 +23,6 @@ test('studio dependencies, assets and tooling skip website workloads', () => {
     'apps/studio/src/server/index.ts',
     'apps/studio-e2e/test.spec.ts',
     'libs/backend/src/index.ts',
-    'libs/shared/src/version.ts',
     'libs/future-library/src/index.ts',
     'tools/mcp/src/index.ts',
     'tools/workspace/src/smoke.ts',
@@ -44,6 +44,8 @@ test('shared configuration and CI changes validate both applications', () => {
     'pnpm-workspace.yaml',
     'nx.json',
     'tsconfig.json',
+    'libs/shared/src/model/releases.ts',
+    'libs/shared/src/version.ts',
     '.dockerignore',
     '.oxlintrc.json',
     '.github/workflows/ci.yml',

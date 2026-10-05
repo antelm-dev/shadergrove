@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -19,6 +19,7 @@ const ngCli = require.resolve('@angular/cli/bin/ng.js');
 const PORT = Number(process.env['SMOKE_PORT'] ?? 4321);
 const BASE = `http://127.0.0.1:${PORT}`;
 const READY = /Local:\s+http:\/\/(?:localhost|127\.0\.0\.1):/;
+const dataDir = mkdtempSync(join(tmpdir(), 'shader-studio-smoke-'));
 
 const ipc = spawnSync('pnpm', ['--filter', '@shadergrove/studio', 'gen:ipc'], {
   cwd: root,
@@ -33,21 +34,26 @@ if (ipc.status !== 0) {
   process.exit(ipc.status ?? 1);
 }
 
-const server = spawn(process.execPath, [ngCli, 'serve', `--port=${PORT}`, '--host=127.0.0.1'], {
-  cwd: webDir,
-  env: {
-    ...process.env,
-    FORCE_COLOR: '0',
-    // A throwaway store, and an account that can sign in without a mailbox or
-    // a round-trip to Have I Been Pwned — the smoke drives the editor, not auth.
-    SHADER_DATA_DIR: mkdtempSync(join(tmpdir(), 'shader-studio-smoke-')),
-    BETTER_AUTH_URL: BASE,
-    AUTH_REQUIRE_VERIFIED_EMAIL: '0',
-    AUTH_CHECK_COMPROMISED_PASSWORDS: '0',
+const server = spawn(
+  process.execPath,
+  [ngCli, 'serve', `--port=${PORT}`, '--host=127.0.0.1', '--no-hmr', '--no-live-reload'],
+  {
+    cwd: webDir,
+    env: {
+      ...process.env,
+      FORCE_COLOR: '0',
+      DATABASE_URL: '',
+      // A throwaway store, and an account that can sign in without a mailbox or
+      // a round-trip to Have I Been Pwned — the smoke drives the editor, not auth.
+      SHADER_DATA_DIR: dataDir,
+      BETTER_AUTH_URL: BASE,
+      AUTH_REQUIRE_VERIFIED_EMAIL: '0',
+      AUTH_CHECK_COMPROMISED_PASSWORDS: '0',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   },
-  stdio: ['ignore', 'pipe', 'pipe'],
-  windowsHide: true,
-});
+);
 
 let output = '';
 const onChunk = (chunk: Buffer) => {
@@ -96,7 +102,39 @@ try {
   });
   if (!signUp.ok()) throw new Error(`Sign-up failed: ${signUp.status()} ${await signUp.text()}`);
 
-  await page.goto(BASE, { waitUntil: 'networkidle', timeout: 60_000 });
+  // New accounts have empty libraries. Verify this throwaway account and create
+  // an explicit fixture rather than relying on startup example seeding.
+  const { DatabaseSync } = require('node:sqlite') as {
+    DatabaseSync: new (path: string) => {
+      prepare(sql: string): { run(...values: unknown[]): unknown };
+      close(): void;
+    };
+  };
+  const db = new DatabaseSync(join(dataDir, 'shader-studio.sqlite'));
+  try {
+    db.prepare('UPDATE users SET email_verified = 1 WHERE email = ?').run('smoke@example.test');
+  } finally {
+    db.close();
+  }
+  const fixtureDir = resolve(root, 'examples/shaders/aurora-veil');
+  const meta = JSON.parse(readFileSync(join(fixtureDir, 'meta.json'), 'utf8'));
+  const fixture = await page.request.post(`${BASE}/api/shaders`, {
+    data: {
+      name: meta.name,
+      controls: meta.controls,
+      render: meta.render,
+      fragment: readFileSync(join(fixtureDir, 'fragment.glsl'), 'utf8'),
+      vertex: readFileSync(join(fixtureDir, 'vertex.glsl'), 'utf8'),
+    },
+  });
+  if (!fixture.ok()) throw new Error(`Fixture failed: ${fixture.status()} ${await fixture.text()}`);
+  const signIn = await page.request.post(`${BASE}/api/auth/sign-in/email`, {
+    headers: { origin: BASE },
+    data: { email: 'smoke@example.test', password: 'smoke-test-password' },
+  });
+  if (!signIn.ok()) throw new Error(`Sign-in failed: ${signIn.status()}`);
+
+  await page.goto(`${BASE}/shaders/aurora-veil`, { waitUntil: 'networkidle', timeout: 60_000 });
   if ((await page.title()) !== 'Shadergrove') throw new Error('Unexpected application title');
   await page
     .locator('.brand-title')

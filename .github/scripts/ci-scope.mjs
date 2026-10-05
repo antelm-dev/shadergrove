@@ -12,10 +12,12 @@ export function classifyChanges(paths, full = false) {
       path.startsWith('apps/website/') ||
       path.startsWith('libs/brand/') ||
       path.startsWith('ops/website/') ||
+      path === 'tools/workspace/src/website-smoke.ts' ||
       path === 'Dockerfile.website'
     ) {
       website = true;
     } else if (
+      path.startsWith('libs/shared/') ||
       path === '.github/workflows/ci.yml' ||
       path.startsWith('.github/scripts/ci-scope') ||
       path === '.github/scripts/queue-deploy.sh' ||

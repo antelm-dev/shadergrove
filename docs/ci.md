@@ -5,12 +5,12 @@ each affected application independently. No application jobs run for docs-only
 changes. A manual workflow dispatch validates both applications; a push to
 `preview` always produces the Windows preview package.
 
-| Changed files                                                                                                                                     | Application checks and deployment |
-| ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `apps/website/`, `libs/brand/`, `ops/website/`, `Dockerfile.website`                                                                              | Website                           |
-| `apps/studio/`, `apps/studio-e2e/`, other `libs/`, `tools/`, `plugins/`, `examples/`, `i18n/`, `ops/staging/`, `Dockerfile`, `docker-compose.yml` | Studio                            |
-| CI routing, the shared SSH deploy scripts, root configuration, lockfile, unknown paths                                                            | Both                              |
-| `docs/`, root Markdown, `.bruno/`, `LICENSE`, `NOTICE`                                                                                            | Neither                           |
+| Changed files                                                                                                                                           | Application checks and deployment |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `apps/website/`, `libs/brand/`, `ops/website/`, `Dockerfile.website`, `tools/workspace/src/website-smoke.ts`                                            | Website                           |
+| `apps/studio/`, `apps/studio-e2e/`, other `libs/`, other `tools/`, `plugins/`, `examples/`, `i18n/`, `ops/staging/`, `Dockerfile`, `docker-compose.yml` | Studio                            |
+| `libs/shared/`, CI routing, the shared SSH deploy scripts, root configuration, lockfile, unknown paths                                                  | Both                              |
+| `docs/`, root Markdown, `.bruno/`, `LICENSE`, `NOTICE`                                                                                                  | Neither                           |
 
 The branding library currently belongs to the website dependency graph. If the
 studio starts consuming it, update `.github/scripts/ci-scope.mjs` and its tests
@@ -26,7 +26,8 @@ Studio validation retains domain/library/MCP tests, repository checks, productio
 SSR smoke, browser smoke, E2E, its Docker image and Windows packaging. Nx caches
 its typecheck/test/build tasks. Website validation installs its filtered workspace
 dependencies, typechecks the website and brand, runs brand tests and builds the
-static export and its Docker image.
+static export and its Docker image. It also runs the release pages browser smoke
+against the static export before deployment.
 
 On `develop`, `deploy-staging` waits for common checks plus studio validation,
 browser smoke, E2E and the studio image. `deploy-website` waits for common checks
