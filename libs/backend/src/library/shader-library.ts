@@ -142,23 +142,28 @@ export class ShaderLibrary {
 
   async list(): Promise<ShaderSummary[]> {
     const rows = await this.repo.listShaders(this.scope);
-    return rows
-      .map(
-        (row): ShaderSummary => ({
-          id: row.id,
-          kind: row.kind,
-          name: row.name,
-          description: row.description,
-          updatedAt: row.updatedAt,
-          revision: row.revision,
-          controlCount: row.controlCount,
-          presetCount: row.presetCount,
-          thumbnail: row.thumbnail
-            ? { ext: row.thumbnail.extension, updatedAt: row.thumbnail.updatedAt }
-            : null,
-        }),
-      )
-      .sort((a, b) => a.name.localeCompare(b.name));
+    return (
+      rows
+        // Old shared examples remain readable through saved links, but are no
+        // longer part of anyone's library. Personal copies are ordinary shaders.
+        .filter((row) => row.kind === 'shader')
+        .map(
+          (row): ShaderSummary => ({
+            id: row.id,
+            kind: row.kind,
+            name: row.name,
+            description: row.description,
+            updatedAt: row.updatedAt,
+            revision: row.revision,
+            controlCount: row.controlCount,
+            presetCount: row.presetCount,
+            thumbnail: row.thumbnail
+              ? { ext: row.thumbnail.extension, updatedAt: row.thumbnail.updatedAt }
+              : null,
+          }),
+        )
+        .sort((a, b) => a.name.localeCompare(b.name))
+    );
   }
 
   async read(id: string): Promise<ShaderRecord> {
@@ -711,7 +716,7 @@ export class ShaderLibrary {
   }
 
   async exportAll(): Promise<ShaderPayload[]> {
-    const summaries = await this.repo.listShaders(this.scope);
+    const summaries = await this.list();
     const payloads: ShaderPayload[] = [];
     for (const summary of summaries) {
       try {
@@ -796,7 +801,7 @@ export class ShaderLibrary {
    * Installs the bundled examples once per seed version, idempotently: it only
    * inserts examples whose id is not already present, so it never overwrites a
    * user's shader, and it records the seed version so a deleted example does not
-   * come back on the next start. Gated by `enabled` (SHADER_SEED).
+   * come back on the next start. Only explicit callers install examples.
    */
   async installExamples(
     source: PayloadSource,

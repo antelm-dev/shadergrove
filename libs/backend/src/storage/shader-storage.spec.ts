@@ -605,7 +605,7 @@ describe('import / export', () => {
 });
 
 describe('seeding', () => {
-  it('copies the examples into an empty store', async () => {
+  it('starts empty and copies examples only when explicitly requested', async () => {
     const examples = path.join(root, 'seed-examples', 'shaders', 'demo');
     await mkdir(examples, { recursive: true });
     await writeFile(
@@ -615,9 +615,17 @@ describe('seeding', () => {
     await writeFile(path.join(examples, 'fragment.glsl'), FRAGMENT);
     await writeFile(path.join(examples, 'vertex.glsl'), DEFAULT_VERTEX);
 
+    const empty = new ShaderStorage({
+      dataDir: path.join(root, 'empty-data'),
+      examplesDir: path.join(root, 'seed-examples'),
+    });
+    await empty.init();
+    expect(await empty.listIds()).toEqual([]);
+
     const seeded = new ShaderStorage({
       dataDir: path.join(root, 'seed-data'),
       examplesDir: path.join(root, 'seed-examples'),
+      seed: true,
     });
     await seeded.init();
 
@@ -637,6 +645,7 @@ describe('seeding', () => {
     const options = {
       dataDir: path.join(root, 'seed-data'),
       examplesDir: path.join(root, 'seed-examples'),
+      seed: true,
     };
 
     const first = new ShaderStorage(options);

@@ -16,10 +16,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect affected applications
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      studio: ${{ steps.scope.outputs.studio }}
+      website: ${{ steps.scope.outputs.website }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '26.5.0'
+      - uses: nrwl/nx-set-shas@v5
+        id: shas
+        with:
+          main-branch-name: ${{ github.base_ref || github.ref_name }}
+      - name: Test application routing
+        run: node --test .github/scripts/ci-scope.test.mjs
+      - name: Test restricted deployment routing
+        run: bash .github/scripts/deploy-on-vps.test.sh
+      - name: Select applications
+        id: scope
+        env:
+          FULL_CI: ${{ github.event_name == 'workflow_dispatch' || steps.shas.outputs.noPreviousBuild == 'true' }}
+        run: node .github/scripts/ci-scope.mjs
+
   check:
-    name: lint · check · typecheck · test · build
+    name: lint · format
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
     steps:
       - uses: actions/checkout@v6
@@ -38,32 +68,72 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - uses: nrwl/nx-set-shas@v5
-
       - name: Lint
         run: pnpm lint
 
       - name: Format
         run: pnpm format:check
 
+  studio-check:
+    name: Studio · check · typecheck · test · build
+    needs: changes
+    if: needs.changes.outputs.studio == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '26.5.0'
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
       - name: Check i18n · fonts · ipc
         run: pnpm check
 
       - name: Typecheck
-        run: pnpm gen:ipc && pnpm typecheck:scripts && pnpm nx affected -t typecheck --exclude shadergrove
+        run: pnpm gen:ipc && pnpm nx run-many -t typecheck --exclude 'shadergrove,@shadergrove/website,@shadergrove/brand'
 
       - name: Test
-        run: pnpm nx affected -t test --exclude shadergrove
+        run: pnpm nx run-many -t test --exclude 'shadergrove,@shadergrove/website,@shadergrove/brand'
 
       - name: Build
         # Desktop packaging has its own Windows job below.
-        run: pnpm nx affected -t build --exclude shadergrove
+        run: pnpm nx run-many -t build --exclude 'shadergrove,@shadergrove/website,@shadergrove/brand' && pnpm nx run @shadergrove/maintenance:build:cli
 
       - name: Production SSR smoke
-        run: pnpm build && pnpm smoke:ssr
+        run: pnpm smoke:ssr
+
+  website-check:
+    name: Website · typecheck · test · build
+    needs: changes
+    if: needs.changes.outputs.website == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '26.5.0'
+          cache: pnpm
+      - name: Install website dependencies
+        run: pnpm install --filter @shadergrove/website... --frozen-lockfile
+      - name: Typecheck website and brand
+        run: pnpm --filter @shadergrove/brand typecheck && pnpm --filter @shadergrove/website typecheck
+      - name: Test brand
+        run: pnpm --filter @shadergrove/brand test
+      - name: Build static website
+        run: pnpm --filter @shadergrove/website build
 
   smoke:
     name: UI smoke
+    needs: changes
+    if: needs.changes.outputs.studio == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -89,6 +159,8 @@ jobs:
 
   e2e:
     name: E2E
+    needs: changes
+    if: needs.changes.outputs.studio == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -120,7 +192,9 @@ jobs:
           retention-days: 14
 
   docker:
-    name: Docker images
+    name: Studio Docker image
+    needs: changes
+    if: needs.changes.outputs.studio == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -128,12 +202,21 @@ jobs:
       - uses: actions/checkout@v6
       - name: Build production image
         run: docker build --tag shadergrove:ci .
+
+  docker-website:
+    name: Website Docker image
+    needs: changes
+    if: needs.changes.outputs.website == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
       - name: Build website image
         run: docker build --file Dockerfile.website --tag shadergrove-website:ci .
 
   deploy-staging:
-    name: Deploy VPS applications
-    needs: [check, smoke, e2e, docker]
+    name: Deploy studio staging
+    needs: [check, studio-check, smoke, e2e, docker]
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment:
@@ -142,24 +225,34 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Queue studio and website deployments in Dokploy
+      - uses: actions/checkout@v6
+      - name: Queue studio deployment in Dokploy
         env:
           STAGING_DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
-        run: |
-          set -eu
-          test -n "$STAGING_DEPLOY_SSH_KEY"
-          key=$(mktemp)
-          trap 'rm -f "$key"' EXIT
-          printf '%s\n' "$STAGING_DEPLOY_SSH_KEY" > "$key"
-          chmod 600 "$key"
-          mkdir -p ~/.ssh
-          printf '%s\n' '45.155.170.120 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINlDcFcMXfjYBWoMisJPzl+Bg2AOUgx/yX2nQPA+YJal' > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -i "$key" root@45.155.170.120 "$GITHUB_SHA"
+          DEPLOY_TARGET: studio
+        run: bash .github/scripts/queue-deploy.sh
+
+  deploy-website:
+    name: Deploy website
+    needs: [check, website-check, docker-website]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://shadergrove.45-155-170-120.sslip.io/
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Queue website deployment in Dokploy
+        env:
+          STAGING_DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
+          DEPLOY_TARGET: website
+        run: bash .github/scripts/queue-deploy.sh
 
   desktop:
     name: Windows desktop package
+    needs: changes
+    if: needs.changes.outputs.studio == 'true' || github.ref == 'refs/heads/preview'
     runs-on: windows-latest
     timeout-minutes: 20
 

@@ -7,9 +7,8 @@
  */
 
 import { Logger } from '@nestjs/common';
-import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
 import {
   LOCAL_SCOPE,
@@ -17,7 +16,6 @@ import {
   SYSTEM_SCOPE,
   type UserScope,
 } from '@shadergrove/backend/library';
-import { createLegacyReader } from '@shadergrove/backend/persistence/legacy';
 import type { AuthDatabase, ShaderRepository } from '@shadergrove/backend/persistence';
 import { PublicationLibrary, type PublicationRepository } from '@shadergrove/backend/publication';
 
@@ -41,16 +39,7 @@ export async function createLibrary(): Promise<ServerStore> {
   const library = new ShaderLibrary(repo, bootstrapScope);
   await library.init();
 
-  const seed = process.env['SHADER_SEED'] !== '0';
-  logger.log(`storage ready (example seeding ${seed ? 'on' : 'off'})`);
-  // Examples go in as system-owned templates on *either* engine. The engine
-  // says where pre-authentication rows came from; it says nothing about whether
-  // this process serves accounts, and this one always does. Seeding them to the
-  // bootstrap owner instead would leave every signed-up user staring at an empty
-  // app on the SQLite development server.
-  await library
-    .as(SYSTEM_SCOPE)
-    .installExamples(createLegacyReader(examplesDir()), seed, 'template');
+  logger.log('storage ready');
   return {
     library,
     authDatabase: repo.authDatabase(),
@@ -90,18 +79,4 @@ async function createRepository(): Promise<{
     repo: new SqliteRepository({ location: join(dir, 'shader-studio.sqlite') }),
     bootstrapScope: LOCAL_SCOPE,
   };
-}
-
-/** The examples folder used for seeding: the env override, else the nearest `examples/` up the tree. */
-function examplesDir(): string {
-  const override = process.env['SHADER_EXAMPLES_DIR'];
-  if (override) return override;
-
-  let current = process.cwd();
-  while (true) {
-    if (existsSync(join(current, 'examples', 'shaders'))) return join(current, 'examples');
-    const parent = dirname(current);
-    if (parent === current) return join(process.cwd(), 'examples');
-    current = parent;
-  }
 }
