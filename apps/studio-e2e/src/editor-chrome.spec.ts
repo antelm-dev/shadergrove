@@ -32,6 +32,9 @@ for (const side of ['left', 'right', 'bottom'] as const) {
       localStorage.setItem(
         'shader-studio.preferences',
         JSON.stringify({
+          // These tests exercise editor geometry. Continuous example rendering
+          // can starve screenshot compositing on software-rendered CI runners.
+          paused: true,
           browserOpen: false,
           guiVisible: false,
           editorOpen: true,
