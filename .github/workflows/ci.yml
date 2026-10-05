@@ -122,13 +122,17 @@ jobs:
           node-version: '26.5.0'
           cache: pnpm
       - name: Install website dependencies
-        run: pnpm install --filter @shadergrove/website... --frozen-lockfile
+        run: pnpm install --filter @shadergrove/website... --filter @shadergrove/workspace-tools --frozen-lockfile
       - name: Typecheck website and brand
         run: pnpm --filter @shadergrove/brand typecheck && pnpm --filter @shadergrove/website typecheck
       - name: Test brand
         run: pnpm --filter @shadergrove/brand test
       - name: Build static website
         run: pnpm --filter @shadergrove/website build
+      - name: Install Chromium
+        run: pnpm --filter @shadergrove/workspace-tools exec playwright install chromium --with-deps
+      - name: Website release pages smoke
+        run: pnpm --filter @shadergrove/workspace-tools smoke:website
 
   smoke:
     name: UI smoke
@@ -154,8 +158,6 @@ jobs:
         run: pnpm --filter @shadergrove/workspace-tools exec playwright install chromium --with-deps
       - name: Smoke
         run: pnpm smoke
-      - name: Website release pages smoke
-        run: pnpm build:website && pnpm smoke:website
 
   e2e:
     name: E2E
