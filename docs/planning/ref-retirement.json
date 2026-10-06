@@ -1,0 +1,152 @@
+{
+  "remote_archive_tags": [
+    {
+      "source_ref": "plans/community",
+      "commit": "a52085617621f736a39f28a61cce9a2940126bf5",
+      "tag": "archive/plan-community-2026-10-06"
+    },
+    {
+      "source_ref": "plans/controls-builder",
+      "commit": "dcf355b746058332693e7acb9e419ea88dbab79c",
+      "tag": "archive/plan-controls-builder-2026-10-06"
+    },
+    {
+      "source_ref": "plans/default-theme-language-plugins",
+      "commit": "3ba9c059389ee1533a474e1e5a04a3acf38bd1d2",
+      "tag": "archive/plan-default-theme-language-plugins-2026-10-06"
+    },
+    {
+      "source_ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "tag": "archive/plan-explore-plugins-2026-10-06"
+    },
+    {
+      "source_ref": "plans/minio-hybrid-storage",
+      "commit": "9dd8e36baad24a53311747c9b09aacf617126813",
+      "tag": "archive/plan-minio-hybrid-storage-2026-10-06"
+    },
+    {
+      "source_ref": "plans/multi-editor-windows",
+      "commit": "e2788cd7b7693e82f2ef6ea27f3189d4927335d3",
+      "tag": "archive/plan-multi-editor-windows-2026-10-06"
+    },
+    {
+      "source_ref": "plans/native-bottom-panel",
+      "commit": "465d79b11e06d0e37b8e32cb3f598aff8b9d06a5",
+      "tag": "archive/plan-native-bottom-panel-2026-10-06"
+    },
+    {
+      "source_ref": "plans/plugin-tools",
+      "commit": "f6beea9fca1ed091d7d03da58cc18ed480238ba8",
+      "tag": "archive/plan-plugin-tools-2026-10-06"
+    },
+    {
+      "source_ref": "plans/shader-history",
+      "commit": "05a4c533e0885b5692a022e86f796d26fa33b341",
+      "tag": "archive/plan-shader-history-2026-10-06"
+    },
+    {
+      "source_ref": "plans/shader-tooling-foundation",
+      "commit": "caf55165f06fe293d7221a0138ecde2f3150eea3",
+      "tag": "archive/plan-shader-tooling-foundation-2026-10-06"
+    },
+    {
+      "source_ref": "plans/vscode-preview",
+      "commit": "f5b15992337a09984a62d4f4405b7346f1fd05f0",
+      "tag": "archive/plan-vscode-preview-2026-10-06"
+    },
+    {
+      "source_ref": "retired/custom-postprocess-effects",
+      "commit": "1ff7ea60a855eb651586a0db671cb16777a83c54",
+      "tag": "archive/plan-custom-postprocess-effects-2026-10-06"
+    },
+    {
+      "source_ref": "retired/desktop-sync",
+      "commit": "36495dd1838958fbfb124e3db34943eeaee456d5",
+      "tag": "archive/plan-desktop-sync-2026-10-06"
+    },
+    {
+      "source_ref": "retired/inspector-surface",
+      "commit": "b1b181fde47da3d645c3a3de204f591c1037d10f",
+      "tag": "archive/plan-inspector-surface-2026-10-06"
+    },
+    {
+      "source_ref": "retired/local-isf-plugins",
+      "commit": "5a6b7e6ca1004b7dbfb4b47089096b41bed5e13a",
+      "tag": "archive/plan-local-isf-plugins-2026-10-06"
+    },
+    {
+      "source_ref": "retired/plugin-themes",
+      "commit": "287aeaf501785286c43cc51c68b0c3fd438a9daf",
+      "tag": "archive/plan-plugin-themes-2026-10-06"
+    },
+    {
+      "source_ref": "retired/public-explore-admin",
+      "commit": "95f05937994b4e12def00387f389e5cc7e8e5b44",
+      "tag": "archive/plan-public-explore-admin-2026-10-06"
+    },
+    {
+      "source_ref": "retired/studio-visual-refresh",
+      "commit": "a514a268911477cadc662c099a6fc92110729987",
+      "tag": "archive/plan-studio-visual-refresh-2026-10-06"
+    }
+  ],
+  "retired_docs_only_branches": [
+    {
+      "ref": "plans/community",
+      "commit": "a52085617621f736a39f28a61cce9a2940126bf5"
+    },
+    {
+      "ref": "plans/controls-builder",
+      "commit": "dcf355b746058332693e7acb9e419ea88dbab79c"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f"
+    },
+    {
+      "ref": "plans/minio-hybrid-storage",
+      "commit": "9dd8e36baad24a53311747c9b09aacf617126813"
+    },
+    {
+      "ref": "plans/multi-editor-windows",
+      "commit": "e2788cd7b7693e82f2ef6ea27f3189d4927335d3"
+    },
+    {
+      "ref": "plans/plugin-tools",
+      "commit": "f6beea9fca1ed091d7d03da58cc18ed480238ba8"
+    },
+    {
+      "ref": "plans/shader-history",
+      "commit": "05a4c533e0885b5692a022e86f796d26fa33b341"
+    },
+    {
+      "ref": "plans/vscode-preview",
+      "commit": "f5b15992337a09984a62d4f4405b7346f1fd05f0"
+    }
+  ],
+  "renamed_source_experiments": [
+    {
+      "old_ref": "plans/native-bottom-panel",
+      "new_ref": "codex/archive-native-bottom-panel-experiment",
+      "commit": "465d79b11e06d0e37b8e32cb3f598aff8b9d06a5",
+      "preserved_source_paths": [
+        ".cursor/BUGBOT.md",
+        "apps/web/src/app/app.html",
+        "apps/web/src/app/app.ts",
+        "apps/web/src/app/ui/bottom-panel/bottom-panel.ts",
+        "apps/web/src/app/ui/bottom-panel/output-panel.ts",
+        "apps/web/src/app/ui/bottom-panel/problems-panel.ts",
+        "apps/web/src/app/ui/preview/preview-shell.ts"
+      ]
+    }
+  ],
+  "retained_active_plans": [
+    {
+      "ref": "plans/shader-tooling-foundation",
+      "commit": "caf55165f06fe293d7221a0138ecde2f3150eea3",
+      "reason": "Active execution/control or worktree references"
+    }
+  ],
+  "remote_branches_deleted": []
+}

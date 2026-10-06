@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Execute Feature Agents'
+  short_description: 'Run planned feature workers in isolated waves'
+  default_prompt: 'Use $execute-feature-agents to freeze the selected GitHub issue plan, execute dependency-ready workers and prepare exact candidate branches for review; preserve existing active runs.'

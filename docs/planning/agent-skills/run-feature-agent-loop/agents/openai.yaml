@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Run Feature Agent Loop'
+  short_description: 'Autonomously coordinate plan, execute, and review'
+  default_prompt: 'Use $run-feature-agent-loop to run one selected GitHub milestone through a frozen plan, isolated execution, independent review, fixes and authorized delivery, preserving restartable state and Project progress.'

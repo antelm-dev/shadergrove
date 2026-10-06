@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Plan Feature Agents'
+  short_description: 'Plan bounded milestones in GitHub Issues and Projects'
+  default_prompt: 'Use $plan-feature-agents to create or update a bounded GitHub milestone with task issues, dependencies, acceptance criteria and an agent_plan contract.'

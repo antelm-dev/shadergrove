@@ -1,0 +1,3542 @@
+{
+  "project": {
+    "closed": false,
+    "fields": {
+      "totalCount": 13
+    },
+    "id": "PVT_kwHOBDiXns4Bl-sg",
+    "items": {
+      "totalCount": 0
+    },
+    "number": 6,
+    "owner": {
+      "login": "antelm-dev",
+      "type": "User"
+    },
+    "public": false,
+    "readme": "",
+    "shortDescription": "",
+    "title": "Shadergrove \u2014 Roadmap & agent plans",
+    "url": "https://github.com/users/antelm-dev/projects/6"
+  },
+  "issues": {
+    "community/parent": {
+      "number": 100,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/100",
+      "id": 5735086554,
+      "node_id": "I_kwDOTW0ss88AAAABVdZ52g",
+      "title": "Shadergrove community \u2014 Phase 1: public creators and remixes"
+    },
+    "community/01": {
+      "number": 101,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/101",
+      "id": 5735087264,
+      "node_id": "I_kwDOTW0ss88AAAABVdZ8oA",
+      "title": "Shadergrove community \u2014 Phase 1: public creators and remixes \u2014 opt-in public creator galleries"
+    },
+    "community/02": {
+      "number": 102,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/102",
+      "id": 5735088173,
+      "node_id": "I_kwDOTW0ss88AAAABVdaALQ",
+      "title": "Shadergrove community \u2014 Phase 1: public creators and remixes \u2014 discoverable public direct remixes"
+    },
+    "controls-builder/parent": {
+      "number": 103,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/103",
+      "id": 5735089185,
+      "node_id": "I_kwDOTW0ss88AAAABVdaEIQ",
+      "title": "Controls Builder \u2014 Phase 1"
+    },
+    "controls-builder/01": {
+      "number": 104,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/104",
+      "id": 5735089962,
+      "node_id": "I_kwDOTW0ss88AAAABVdaHKg",
+      "title": "Controls Builder \u2014 Phase 1 \u2014 Complete the Config Builder"
+    },
+    "explore-plugins-phase1/parent": {
+      "number": 105,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/105",
+      "id": 5735091006,
+      "node_id": "I_kwDOTW0ss88AAAABVdaLPg",
+      "title": "Explore and Plugins usability, Phase 1"
+    },
+    "explore-plugins-phase1/01": {
+      "number": 106,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/106",
+      "id": 5735091836,
+      "node_id": "I_kwDOTW0ss88AAAABVdaOfA",
+      "title": "Explore and Plugins usability, Phase 1 \u2014 Generic project-importer dialog"
+    },
+    "explore-plugins-phase1/02": {
+      "number": 107,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/107",
+      "id": 5735092849,
+      "node_id": "I_kwDOTW0ss88AAAABVdaScQ",
+      "title": "Explore and Plugins usability, Phase 1 \u2014 Explore URL and browsing restoration"
+    },
+    "explore-plugins-phase2/parent": {
+      "number": 108,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/108",
+      "id": 5735093836,
+      "node_id": "I_kwDOTW0ss88AAAABVdaWTA",
+      "title": "Phase 2: Public Explore search and sorting"
+    },
+    "explore-plugins-phase2/01": {
+      "number": 109,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/109",
+      "id": 5735094493,
+      "node_id": "I_kwDOTW0ss88AAAABVdaY3Q",
+      "title": "Phase 2: Public Explore search and sorting \u2014 Compatible public search and sort API"
+    },
+    "explore-plugins-phase2/02": {
+      "number": 110,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/110",
+      "id": 5735095483,
+      "node_id": "I_kwDOTW0ss88AAAABVdacuw",
+      "title": "Phase 2: Public Explore search and sorting \u2014 Explore sort UI and complete browsing state"
+    },
+    "explore-plugins-phase3/parent": {
+      "number": 111,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/111",
+      "id": 5735096431,
+      "node_id": "I_kwDOTW0ss88AAAABVdagbw",
+      "title": "Phase 3: Plugins Browse and Installed tabs"
+    },
+    "explore-plugins-phase3/01": {
+      "number": 112,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/112",
+      "id": 5735097106,
+      "node_id": "I_kwDOTW0ss88AAAABVdajEg",
+      "title": "Phase 3: Plugins Browse and Installed tabs \u2014 Plugins management tabs"
+    },
+    "explore-plugins-phase4/parent": {
+      "number": 113,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/113",
+      "id": 5735098056,
+      "node_id": "I_kwDOTW0ss88AAAABVdamyA",
+      "title": "Phase 4: Persistent application navigation"
+    },
+    "explore-plugins-phase4/01": {
+      "number": 114,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/114",
+      "id": 5735098786,
+      "node_id": "I_kwDOTW0ss88AAAABVdapog",
+      "title": "Phase 4: Persistent application navigation \u2014 Persistent top-bar navigation"
+    },
+    "explore-plugins/parent": {
+      "number": 115,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/115",
+      "id": 5735099698,
+      "node_id": "I_kwDOTW0ss88AAAABVdatMg",
+      "title": "Explore and Plugins: phased delivery plan"
+    },
+    "minio-hybrid-storage/parent": {
+      "number": 116,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/116",
+      "id": 5735100369,
+      "node_id": "I_kwDOTW0ss88AAAABVdav0Q",
+      "title": "MinIO hybrid asset storage \u2014 phase 1"
+    },
+    "minio-hybrid-storage/01": {
+      "number": 117,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/117",
+      "id": 5735101185,
+      "node_id": "I_kwDOTW0ss88AAAABVdazAQ",
+      "title": "MinIO hybrid asset storage \u2014 phase 1 \u2014 Asset references and lifecycle contract"
+    },
+    "minio-hybrid-storage/02": {
+      "number": 118,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/118",
+      "id": 5735102206,
+      "node_id": "I_kwDOTW0ss88AAAABVda2_g",
+      "title": "MinIO hybrid asset storage \u2014 phase 1 \u2014 Opt-in MinIO server path"
+    },
+    "minio-hybrid-storage/03": {
+      "number": 119,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/119",
+      "id": 5735103129,
+      "node_id": "I_kwDOTW0ss88AAAABVda6mQ",
+      "title": "MinIO hybrid asset storage \u2014 phase 1 \u2014 GCP readiness and first deployment gate"
+    },
+    "multi-editor-windows/parent": {
+      "number": 120,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/120",
+      "id": 5735104146,
+      "node_id": "I_kwDOTW0ss88AAAABVda-kg",
+      "title": "Multi-editor windows: contained splits milestone"
+    },
+    "multi-editor-windows/01": {
+      "number": 121,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/121",
+      "id": 5735104821,
+      "node_id": "I_kwDOTW0ss88AAAABVdbBNQ",
+      "title": "Multi-editor windows: contained splits milestone \u2014 persisted split-layout contract"
+    },
+    "multi-editor-windows/02": {
+      "number": 122,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/122",
+      "id": 5735105776,
+      "node_id": "I_kwDOTW0ss88AAAABVdbE8A",
+      "title": "Multi-editor windows: contained splits milestone \u2014 group-aware editor instances"
+    },
+    "multi-editor-windows/03": {
+      "number": 123,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/123",
+      "id": 5735106770,
+      "node_id": "I_kwDOTW0ss88AAAABVdbI0g",
+      "title": "Multi-editor windows: contained splits milestone \u2014 contained split host and end-to-end behavior"
+    },
+    "native-bottom-panel/parent": {
+      "number": 124,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/124",
+      "id": 5735108105,
+      "node_id": "I_kwDOTW0ss88AAAABVdbOCQ",
+      "title": "Native Problems and Output Window \u2014 Phase 1"
+    },
+    "native-bottom-panel/01": {
+      "number": 125,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/125",
+      "id": 5735108674,
+      "node_id": "I_kwDOTW0ss88AAAABVdbQQg",
+      "title": "Native Problems and Output Window \u2014 Phase 1 \u2014 Native bottom-panel lifecycle"
+    },
+    "native-bottom-panel/02": {
+      "number": 126,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/126",
+      "id": 5735109762,
+      "node_id": "I_kwDOTW0ss88AAAABVdbUgg",
+      "title": "Native Problems and Output Window \u2014 Phase 1 \u2014 Satellite shell and session sync"
+    },
+    "plugin-tools/parent": {
+      "number": 127,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/127",
+      "id": 5735110809,
+      "node_id": "I_kwDOTW0ss88AAAABVdbYmQ",
+      "title": "Plugin tools: executable first versions"
+    },
+    "plugin-tools/01": {
+      "number": 128,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/128",
+      "id": 5735111403,
+      "node_id": "I_kwDOTW0ss88AAAABVdba6w",
+      "title": "Plugin tools: executable first versions \u2014 Plugin tool contracts and host seam"
+    },
+    "plugin-tools/02": {
+      "number": 86,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/86",
+      "id": 5732857492,
+      "node_id": "I_kwDOTW0ss88AAAABVbR2lA",
+      "title": "Plugin: Project Recipes starter-project pack"
+    },
+    "plugin-tools/03": {
+      "number": 83,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/83",
+      "id": 5732856106,
+      "node_id": "I_kwDOTW0ss88AAAABVbRxKg",
+      "title": "Plugin: Shader Doctor portability analyzer"
+    },
+    "plugin-tools/04": {
+      "number": 85,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/85",
+      "id": 5732856879,
+      "node_id": "I_kwDOTW0ss88AAAABVbR0Lw",
+      "title": "Plugin: Texture Utilities processing pack"
+    },
+    "plugin-tools/05": {
+      "number": 84,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/84",
+      "id": 5732856484,
+      "node_id": "I_kwDOTW0ss88AAAABVbRypA",
+      "title": "Plugin: Palette Studio authoring tools"
+    },
+    "shader-history-phase-1/parent": {
+      "number": 129,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/129",
+      "id": 5735115437,
+      "node_id": "I_kwDOTW0ss88AAAABVdbqrQ",
+      "title": "Shader History \u2014 Phase 1"
+    },
+    "shader-history-phase-1/01": {
+      "number": 130,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/130",
+      "id": 5735116084,
+      "node_id": "I_kwDOTW0ss88AAAABVdbtNA",
+      "title": "Shader History \u2014 Phase 1 \u2014 Transactional history domain and transports"
+    },
+    "shader-history-phase-1/02": {
+      "number": 131,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/131",
+      "id": 5735117115,
+      "node_id": "I_kwDOTW0ss88AAAABVdbxOw",
+      "title": "Shader History \u2014 Phase 1 \u2014 History timeline and guarded restore"
+    },
+    "shader-tooling-foundation/parent": {
+      "number": 132,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/132",
+      "id": 5735118121,
+      "node_id": "I_kwDOTW0ss88AAAABVdb1KQ",
+      "title": "Shader tooling foundation"
+    },
+    "shader-tooling-foundation/01": {
+      "number": 52,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/52",
+      "id": 5707491400,
+      "node_id": "I_kwDOTW0ss88AAAABVDFoSA",
+      "title": "Build a shared GLSL analysis worker for editor tooling and debugging"
+    },
+    "shader-tooling-foundation/02": {
+      "number": 54,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/54",
+      "id": 5707492023,
+      "node_id": "I_kwDOTW0ss88AAAABVDFqtw",
+      "title": "Add semantic GLSL IntelliSense to Monaco"
+    },
+    "vscode-preview/parent": {
+      "number": 133,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/133",
+      "id": 5735120453,
+      "node_id": "I_kwDOTW0ss88AAAABVdb-RQ",
+      "title": "Shadergrove dans VS Code \u2014 phase 1"
+    },
+    "vscode-preview/01": {
+      "number": 134,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/134",
+      "id": 5735121282,
+      "node_id": "I_kwDOTW0ss88AAAABVdcBgg",
+      "title": "Shadergrove dans VS Code \u2014 phase 1 \u2014 runtime partag\u00e9 sans Angular"
+    },
+    "vscode-preview/02": {
+      "number": 135,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/135",
+      "id": 5735122319,
+      "node_id": "I_kwDOTW0ss88AAAABVdcFjw",
+      "title": "Shadergrove dans VS Code \u2014 phase 1 \u2014 extension exp\u00e9rimentale utilisable"
+    },
+    "default-theme-language-plugins/parent": {
+      "number": 136,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/136",
+      "id": 5735123270,
+      "node_id": "I_kwDOTW0ss88AAAABVdcJRg",
+      "title": "Default theme and language plugins \u2014 Phase 1"
+    },
+    "default-theme-language-plugins/01": {
+      "number": 137,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/137",
+      "id": 5735123977,
+      "node_id": "I_kwDOTW0ss88AAAABVdcMCQ",
+      "title": "Default theme and language plugins \u2014 Phase 1 \u2014 Validated packs and one-time bootstrap"
+    },
+    "default-theme-language-plugins/02": {
+      "number": 138,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/138",
+      "id": 5735124863,
+      "node_id": "I_kwDOTW0ss88AAAABVdcPfw",
+      "title": "Default theme and language plugins \u2014 Phase 1 \u2014 Themes through plugin selections"
+    },
+    "default-theme-language-plugins/03": {
+      "number": 139,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/139",
+      "id": 5735125804,
+      "node_id": "I_kwDOTW0ss88AAAABVdcTLA",
+      "title": "Default theme and language plugins \u2014 Phase 1 \u2014 Language packs and live resolution"
+    },
+    "future/F1": {
+      "number": 140,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/140",
+      "id": 5735135783,
+      "node_id": "I_kwDOTW0ss88AAAABVdc6Jw",
+      "title": "Reusable effect library"
+    },
+    "future/F2": {
+      "number": 141,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/141",
+      "id": 5735136450,
+      "node_id": "I_kwDOTW0ss88AAAABVdc8wg",
+      "title": "Explore tags and capability filters after search/sort"
+    },
+    "future/F3": {
+      "number": 142,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/142",
+      "id": 5735137076,
+      "node_id": "I_kwDOTW0ss88AAAABVdc_NA",
+      "title": "Favorites and collections"
+    },
+    "future/F4": {
+      "number": 143,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/143",
+      "id": 5735137728,
+      "node_id": "I_kwDOTW0ss88AAAABVddBwA",
+      "title": "Export fidelity and embeddable playback"
+    },
+    "future/F5": {
+      "number": 144,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/144",
+      "id": 5735138378,
+      "node_id": "I_kwDOTW0ss88AAAABVddESg",
+      "title": "Parameter animation, then live inputs"
+    },
+    "future/F6": {
+      "number": 145,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/145",
+      "id": 5735139120,
+      "node_id": "I_kwDOTW0ss88AAAABVddHMA",
+      "title": "First-use journey and production onboarding"
+    },
+    "archive/completed": {
+      "number": 146,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/146",
+      "id": 5735140034,
+      "node_id": "I_kwDOTW0ss88AAAABVddKwg",
+      "title": "Delivered milestones \u2014 historical plan archive"
+    },
+    "legacy/plugin-adapters": {
+      "number": 147,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/147",
+      "id": 5735140731,
+      "node_id": "I_kwDOTW0ss88AAAABVddNew",
+      "title": "Plugin architecture roadmap \u2014 remaining capabilities and sharing"
+    },
+    "legacy/official-plugins": {
+      "number": 148,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/148",
+      "id": 5735141516,
+      "node_id": "I_kwDOTW0ss88AAAABVddQjA",
+      "title": "Official Shadertoy Import and Wallpaper Engine Export \u2014 delivered migration"
+    },
+    "legacy/auth": {
+      "number": 149,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/149",
+      "id": 5735142272,
+      "node_id": "I_kwDOTW0ss88AAAABVddTgA",
+      "title": "Authentication and library ownership \u2014 historical implementation plan"
+    },
+    "future/release-validation": {
+      "number": 150,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/150",
+      "id": 5735142981,
+      "node_id": "I_kwDOTW0ss88AAAABVddWRQ",
+      "title": "Release validation and first-use journey consolidation"
+    }
+  },
+  "items": {
+    "100": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--0G8",
+      "status": "Backlog",
+      "kind": "Feature"
+    },
+    "101": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--0Hs",
+      "status": "Backlog",
+      "kind": "Task"
+    },
+    "102": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--0H4",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "103": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--0Pg",
+      "status": "Ready",
+      "kind": "Feature"
+    },
+    "104": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--0Ro",
+      "status": "Ready",
+      "kind": "Task"
+    },
+    "105": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--0Xs",
+      "status": "Ready",
+      "kind": "Feature"
+    },
+    "106": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--0Y0",
+      "status": "Ready",
+      "kind": "Task"
+    },
+    "107": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--0Y4",
+      "status": "Ready",
+      "kind": "Task"
+    },
+    "108": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--0kM",
+      "status": "Blocked",
+      "kind": "Feature"
+    },
+    "109": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--0ms",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "110": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--0mw",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "111": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--0yI",
+      "status": "Blocked",
+      "kind": "Feature"
+    },
+    "112": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--00E",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "113": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--07Y",
+      "status": "Blocked",
+      "kind": "Feature"
+    },
+    "114": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--09E",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "115": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1GQ",
+      "status": "Backlog",
+      "kind": "Feature"
+    },
+    "116": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1MU",
+      "status": "Backlog",
+      "kind": "Feature"
+    },
+    "117": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1O0",
+      "status": "Backlog",
+      "kind": "Task"
+    },
+    "118": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1O8",
+      "status": "Backlog",
+      "kind": "Task"
+    },
+    "119": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1PM",
+      "status": "Backlog",
+      "kind": "Task"
+    },
+    "120": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1gg",
+      "status": "Ready",
+      "kind": "Feature"
+    },
+    "121": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1hk",
+      "status": "Ready",
+      "kind": "Task"
+    },
+    "122": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1ho",
+      "status": "Ready",
+      "kind": "Task"
+    },
+    "123": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1h4",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "124": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1wo",
+      "status": "Ready",
+      "kind": "Feature"
+    },
+    "125": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1yA",
+      "status": "Ready",
+      "kind": "Task"
+    },
+    "126": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1yI",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "127": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--17o",
+      "status": "Ready",
+      "kind": "Feature"
+    },
+    "128": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--194",
+      "status": "Ready",
+      "kind": "Task"
+    },
+    "86": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1-E",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "83": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1-I",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "85": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1-Q",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "84": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--1-c",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "129": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--2aE",
+      "status": "Ready",
+      "kind": "Feature"
+    },
+    "130": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--2ck",
+      "status": "Ready",
+      "kind": "Task"
+    },
+    "131": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--2c4",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "132": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--2fQ",
+      "status": "In Progress",
+      "kind": "Feature"
+    },
+    "52": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--2g0",
+      "status": "In Progress",
+      "kind": "Task"
+    },
+    "54": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--2hA",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "133": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3UI",
+      "status": "Ready",
+      "kind": "Feature"
+    },
+    "134": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3VM",
+      "status": "Ready",
+      "kind": "Task"
+    },
+    "135": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3VQ",
+      "status": "Blocked",
+      "kind": "Task"
+    },
+    "136": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3ZY",
+      "status": "Done",
+      "kind": "Feature"
+    },
+    "137": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3ak",
+      "status": "Done",
+      "kind": "Task"
+    },
+    "138": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3ao",
+      "status": "Done",
+      "kind": "Task"
+    },
+    "139": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3as",
+      "status": "Done",
+      "kind": "Task"
+    },
+    "140": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3ec",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "141": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3gA",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "142": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3ho",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "143": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3jc",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "144": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3lQ",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "145": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3nA",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "146": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3oU",
+      "status": "Done",
+      "kind": "Archive"
+    },
+    "147": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3qI",
+      "status": "Backlog",
+      "kind": "Feature"
+    },
+    "148": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3r4",
+      "status": "Done",
+      "kind": "Archive"
+    },
+    "149": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3tQ",
+      "status": "Backlog",
+      "kind": "Archive"
+    },
+    "150": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3uk",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "82": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3vc",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "81": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3xI",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "80": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3yw",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "79": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--3z8",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "78": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--32Q",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "77": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--33k",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "76": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--36Q",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "75": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--38E",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "74": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--39w",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "73": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4AE",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "72": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4B4",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "71": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4EM",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "70": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4HI",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "69": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4Jo",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "68": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4Mo",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "67": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4O8",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "66": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4RE",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "65": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4TI",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "64": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4Ws",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "63": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4ZA",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "62": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4a0",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "61": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4cg",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "60": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4eE",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "59": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4fs",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "58": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4hg",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "57": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4jY",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "56": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4lY",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "55": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4nA",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "53": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4og",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "15": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4r0",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "14": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4t8",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "13": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4vQ",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "12": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4xU",
+      "status": "Backlog",
+      "kind": "Idea"
+    },
+    "11": {
+      "item_id": "PVTI_lAHOBDiXns4Bl-sgzg--4yc",
+      "status": "Backlog",
+      "kind": "Idea"
+    }
+  },
+  "archive": [
+    {
+      "ref": "plans/community",
+      "commit": "a52085617621f736a39f28a61cce9a2940126bf5",
+      "path": "docs/feature-plans/community/01-public-creators.md",
+      "archive_path": "docs/planning/archive/a52085617621f736a39f28a61cce9a2940126bf5/docs/feature-plans/community/01-public-creators.md",
+      "sha256": "4bfa1864a9e647be95fb313c086de3f3a2d2c34c07b24aec85746192961a2dbb"
+    },
+    {
+      "ref": "plans/community",
+      "commit": "a52085617621f736a39f28a61cce9a2940126bf5",
+      "path": "docs/feature-plans/community/02-public-remixes.md",
+      "archive_path": "docs/planning/archive/a52085617621f736a39f28a61cce9a2940126bf5/docs/feature-plans/community/02-public-remixes.md",
+      "sha256": "ac264c33923741155dc109575b2cb7e6f6e783d8333d9bf5391034d37b1d2572"
+    },
+    {
+      "ref": "plans/community",
+      "commit": "a52085617621f736a39f28a61cce9a2940126bf5",
+      "path": "docs/feature-plans/community/README.md",
+      "archive_path": "docs/planning/archive/a52085617621f736a39f28a61cce9a2940126bf5/docs/feature-plans/community/README.md",
+      "sha256": "96c5a0fa29de08b10335251a9d3094e9b10ae0294f0c86200ea6dd40e5672369"
+    },
+    {
+      "ref": "plans/controls-builder",
+      "commit": "dcf355b746058332693e7acb9e419ea88dbab79c",
+      "path": "docs/feature-plans/controls-builder/01-controls-builder.md",
+      "archive_path": "docs/planning/archive/dcf355b746058332693e7acb9e419ea88dbab79c/docs/feature-plans/controls-builder/01-controls-builder.md",
+      "sha256": "540af9844600c58a1ad672e8cb7e74f0bd2653a1477be0f43b4660feb862258d"
+    },
+    {
+      "ref": "plans/controls-builder",
+      "commit": "dcf355b746058332693e7acb9e419ea88dbab79c",
+      "path": "docs/feature-plans/controls-builder/README.md",
+      "archive_path": "docs/planning/archive/dcf355b746058332693e7acb9e419ea88dbab79c/docs/feature-plans/controls-builder/README.md",
+      "sha256": "c64f5b0ced9d000d581d3326cbebaf913692c7c740d0da6438f7c74ed69945b7"
+    },
+    {
+      "ref": "plans/controls-builder",
+      "commit": "dcf355b746058332693e7acb9e419ea88dbab79c",
+      "path": "docs/feature-plans/shadertoy-wallpaper-plugins/execution-record.md",
+      "archive_path": "docs/planning/archive/dcf355b746058332693e7acb9e419ea88dbab79c/docs/feature-plans/shadertoy-wallpaper-plugins/execution-record.md",
+      "sha256": "1ff40872aba9e8dad6d12f586f3f8a7661dea36dddc498af0dcbe2a757d0cbd8"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "path": "docs/feature-plans/explore-plugins-phase1/01-importer-dialog.md",
+      "archive_path": "docs/planning/archive/c5caefecffe1cfb37b5a28499ec250f16baf1a8f/docs/feature-plans/explore-plugins-phase1/01-importer-dialog.md",
+      "sha256": "aae6ea9d1a8a5958eb2eca07a401b7da393004344112d962914aa1cd6b9f7dfc"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "path": "docs/feature-plans/explore-plugins-phase1/02-explore-browsing-state.md",
+      "archive_path": "docs/planning/archive/c5caefecffe1cfb37b5a28499ec250f16baf1a8f/docs/feature-plans/explore-plugins-phase1/02-explore-browsing-state.md",
+      "sha256": "a9b3c7c1a693bd9974c125b76a23c47806422b2f4923fc1f1798d1aef944c2ba"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "path": "docs/feature-plans/explore-plugins-phase1/README.md",
+      "archive_path": "docs/planning/archive/c5caefecffe1cfb37b5a28499ec250f16baf1a8f/docs/feature-plans/explore-plugins-phase1/README.md",
+      "sha256": "4995a864a4b20dd5788b0ab41bf50259cf42cb7ea409057fcc52b8f990c3e022"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "path": "docs/feature-plans/explore-plugins-phase2/01-public-search-sort-api.md",
+      "archive_path": "docs/planning/archive/c5caefecffe1cfb37b5a28499ec250f16baf1a8f/docs/feature-plans/explore-plugins-phase2/01-public-search-sort-api.md",
+      "sha256": "8942c482f7b6c1a1e69a192320cbd9672f8c7ac527d4f57a03535d0c997351ab"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "path": "docs/feature-plans/explore-plugins-phase2/02-explore-sort-ui.md",
+      "archive_path": "docs/planning/archive/c5caefecffe1cfb37b5a28499ec250f16baf1a8f/docs/feature-plans/explore-plugins-phase2/02-explore-sort-ui.md",
+      "sha256": "4806d973a76ea768ec526901fb538b66217e72349f0910f8f76a2d7f3801d0fa"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "path": "docs/feature-plans/explore-plugins-phase2/README.md",
+      "archive_path": "docs/planning/archive/c5caefecffe1cfb37b5a28499ec250f16baf1a8f/docs/feature-plans/explore-plugins-phase2/README.md",
+      "sha256": "de8b5afb7f7ee4082d5b9dddd8244b0cb5e0fec612f50551cb38d4310000a905"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "path": "docs/feature-plans/explore-plugins-phase3/01-plugin-management-tabs.md",
+      "archive_path": "docs/planning/archive/c5caefecffe1cfb37b5a28499ec250f16baf1a8f/docs/feature-plans/explore-plugins-phase3/01-plugin-management-tabs.md",
+      "sha256": "6b8f709959f9004c9b468289960626db54b844d697af24a2b1d1a36a0fd6e98a"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "path": "docs/feature-plans/explore-plugins-phase3/README.md",
+      "archive_path": "docs/planning/archive/c5caefecffe1cfb37b5a28499ec250f16baf1a8f/docs/feature-plans/explore-plugins-phase3/README.md",
+      "sha256": "faf62b3ec0cf1096d5559618a43300bb6299678549bf28de54c5130039db14d9"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "path": "docs/feature-plans/explore-plugins-phase4/01-persistent-topbar-navigation.md",
+      "archive_path": "docs/planning/archive/c5caefecffe1cfb37b5a28499ec250f16baf1a8f/docs/feature-plans/explore-plugins-phase4/01-persistent-topbar-navigation.md",
+      "sha256": "8dbf33e639992f66916855fb5c976e84f66f9eaf5a26ed1bc989d6530bcd87c5"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "path": "docs/feature-plans/explore-plugins-phase4/README.md",
+      "archive_path": "docs/planning/archive/c5caefecffe1cfb37b5a28499ec250f16baf1a8f/docs/feature-plans/explore-plugins-phase4/README.md",
+      "sha256": "c4a1ce48e633d73c7f19b29678d5d3917756225f5d077c9b307cf29a8fd22a0b"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "path": "docs/feature-plans/explore-plugins/README.md",
+      "archive_path": "docs/planning/archive/c5caefecffe1cfb37b5a28499ec250f16baf1a8f/docs/feature-plans/explore-plugins/README.md",
+      "sha256": "5956cacce3b53b4320c3d586a36853d3ca226b4b112519ffae37b2e4ed1732cb"
+    },
+    {
+      "ref": "plans/explore-plugins",
+      "commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "path": "docs/feature-plans/shadertoy-wallpaper-plugins/execution-record.md",
+      "archive_path": "docs/planning/archive/c5caefecffe1cfb37b5a28499ec250f16baf1a8f/docs/feature-plans/shadertoy-wallpaper-plugins/execution-record.md",
+      "sha256": "1ff40872aba9e8dad6d12f586f3f8a7661dea36dddc498af0dcbe2a757d0cbd8"
+    },
+    {
+      "ref": "plans/minio-hybrid-storage",
+      "commit": "9dd8e36baad24a53311747c9b09aacf617126813",
+      "path": "docs/feature-plans/minio-hybrid-storage/01-asset-reference-contract.md",
+      "archive_path": "docs/planning/archive/9dd8e36baad24a53311747c9b09aacf617126813/docs/feature-plans/minio-hybrid-storage/01-asset-reference-contract.md",
+      "sha256": "24f84ef85054cfe3fdb5c7598f38af056a9bb7d1f4ab80d5dbc6ca4d91891dfe"
+    },
+    {
+      "ref": "plans/minio-hybrid-storage",
+      "commit": "9dd8e36baad24a53311747c9b09aacf617126813",
+      "path": "docs/feature-plans/minio-hybrid-storage/02-minio-server-path.md",
+      "archive_path": "docs/planning/archive/9dd8e36baad24a53311747c9b09aacf617126813/docs/feature-plans/minio-hybrid-storage/02-minio-server-path.md",
+      "sha256": "12c76f44b910704a1b9f9b09c00bf7e965e4fc2ef0567c5c23ce2c2dc05f6406"
+    },
+    {
+      "ref": "plans/minio-hybrid-storage",
+      "commit": "9dd8e36baad24a53311747c9b09aacf617126813",
+      "path": "docs/feature-plans/minio-hybrid-storage/03-gcp-first-deployment.md",
+      "archive_path": "docs/planning/archive/9dd8e36baad24a53311747c9b09aacf617126813/docs/feature-plans/minio-hybrid-storage/03-gcp-first-deployment.md",
+      "sha256": "a3f762356b6c70fb6dae7db62448012c8c0fd9fc7884925ff8267abdc4af2547"
+    },
+    {
+      "ref": "plans/minio-hybrid-storage",
+      "commit": "9dd8e36baad24a53311747c9b09aacf617126813",
+      "path": "docs/feature-plans/minio-hybrid-storage/README.md",
+      "archive_path": "docs/planning/archive/9dd8e36baad24a53311747c9b09aacf617126813/docs/feature-plans/minio-hybrid-storage/README.md",
+      "sha256": "6c666e67c9f2029d5cefdd875e7cd4fd4889f07491d0716ac9bdc0ccf6c148e3"
+    },
+    {
+      "ref": "plans/multi-editor-windows",
+      "commit": "e2788cd7b7693e82f2ef6ea27f3189d4927335d3",
+      "path": "docs/feature-plans/multi-editor-windows/01-split-layout-contract.md",
+      "archive_path": "docs/planning/archive/e2788cd7b7693e82f2ef6ea27f3189d4927335d3/docs/feature-plans/multi-editor-windows/01-split-layout-contract.md",
+      "sha256": "3e61ff89a25d33039acaa321f0f6f5e2231cc9596101bd7f04a28a2e3d549151"
+    },
+    {
+      "ref": "plans/multi-editor-windows",
+      "commit": "e2788cd7b7693e82f2ef6ea27f3189d4927335d3",
+      "path": "docs/feature-plans/multi-editor-windows/02-group-aware-editor-instance.md",
+      "archive_path": "docs/planning/archive/e2788cd7b7693e82f2ef6ea27f3189d4927335d3/docs/feature-plans/multi-editor-windows/02-group-aware-editor-instance.md",
+      "sha256": "7a9a2b5749d9d29197af224a43491fc9c4bbec75ba41cbfd160d4d7262afb535"
+    },
+    {
+      "ref": "plans/multi-editor-windows",
+      "commit": "e2788cd7b7693e82f2ef6ea27f3189d4927335d3",
+      "path": "docs/feature-plans/multi-editor-windows/03-contained-split-host.md",
+      "archive_path": "docs/planning/archive/e2788cd7b7693e82f2ef6ea27f3189d4927335d3/docs/feature-plans/multi-editor-windows/03-contained-split-host.md",
+      "sha256": "a429c2f2082a7b7c18b55c6be3ce73c5518b53f4476ff8346b62c25c64163ac6"
+    },
+    {
+      "ref": "plans/multi-editor-windows",
+      "commit": "e2788cd7b7693e82f2ef6ea27f3189d4927335d3",
+      "path": "docs/feature-plans/multi-editor-windows/README.md",
+      "archive_path": "docs/planning/archive/e2788cd7b7693e82f2ef6ea27f3189d4927335d3/docs/feature-plans/multi-editor-windows/README.md",
+      "sha256": "a963dd536e408e73b2dc11a8f3e292ab8c496c02b07a129a711be5a2652e6364"
+    },
+    {
+      "ref": "plans/native-bottom-panel",
+      "commit": "465d79b11e06d0e37b8e32cb3f598aff8b9d06a5",
+      "path": "docs/feature-plans/native-bottom-panel/01-native-lifecycle.md",
+      "archive_path": "docs/planning/archive/465d79b11e06d0e37b8e32cb3f598aff8b9d06a5/docs/feature-plans/native-bottom-panel/01-native-lifecycle.md",
+      "sha256": "576f36fd4f6b0046f6ac31f49e24c97c6b74c1a89fe139ea46c5fe7973940754"
+    },
+    {
+      "ref": "plans/native-bottom-panel",
+      "commit": "465d79b11e06d0e37b8e32cb3f598aff8b9d06a5",
+      "path": "docs/feature-plans/native-bottom-panel/02-satellite-shell-sync.md",
+      "archive_path": "docs/planning/archive/465d79b11e06d0e37b8e32cb3f598aff8b9d06a5/docs/feature-plans/native-bottom-panel/02-satellite-shell-sync.md",
+      "sha256": "e69a6fe88957071ff8530b36fb163ae9e2d6340ddbb774feda929751c836efa1"
+    },
+    {
+      "ref": "plans/native-bottom-panel",
+      "commit": "465d79b11e06d0e37b8e32cb3f598aff8b9d06a5",
+      "path": "docs/feature-plans/native-bottom-panel/README.md",
+      "archive_path": "docs/planning/archive/465d79b11e06d0e37b8e32cb3f598aff8b9d06a5/docs/feature-plans/native-bottom-panel/README.md",
+      "sha256": "affb2a46ae0324f01068519fe4e5e5c5e38534279bd473e700765fbb6ca502c1"
+    },
+    {
+      "ref": "plans/plugin-tools",
+      "commit": "f6beea9fca1ed091d7d03da58cc18ed480238ba8",
+      "path": "docs/feature-plans/plugin-tools/01-host-contracts.md",
+      "archive_path": "docs/planning/archive/f6beea9fca1ed091d7d03da58cc18ed480238ba8/docs/feature-plans/plugin-tools/01-host-contracts.md",
+      "sha256": "2bdadf237588a92676dd5443003e4f2322f3d2fede974a11ad8dc41d79320351"
+    },
+    {
+      "ref": "plans/plugin-tools",
+      "commit": "f6beea9fca1ed091d7d03da58cc18ed480238ba8",
+      "path": "docs/feature-plans/plugin-tools/02-project-recipes.md",
+      "archive_path": "docs/planning/archive/f6beea9fca1ed091d7d03da58cc18ed480238ba8/docs/feature-plans/plugin-tools/02-project-recipes.md",
+      "sha256": "4d09d32b2754cbf5d00c20e59e2b49ac4c5de0ddf6430de543717aacbca86f72"
+    },
+    {
+      "ref": "plans/plugin-tools",
+      "commit": "f6beea9fca1ed091d7d03da58cc18ed480238ba8",
+      "path": "docs/feature-plans/plugin-tools/03-shader-doctor.md",
+      "archive_path": "docs/planning/archive/f6beea9fca1ed091d7d03da58cc18ed480238ba8/docs/feature-plans/plugin-tools/03-shader-doctor.md",
+      "sha256": "95f2b1f0ac57bb01bd0d4c78e6a945b9d6595d6058c37030c44ed083bac2fdca"
+    },
+    {
+      "ref": "plans/plugin-tools",
+      "commit": "f6beea9fca1ed091d7d03da58cc18ed480238ba8",
+      "path": "docs/feature-plans/plugin-tools/04-texture-utilities.md",
+      "archive_path": "docs/planning/archive/f6beea9fca1ed091d7d03da58cc18ed480238ba8/docs/feature-plans/plugin-tools/04-texture-utilities.md",
+      "sha256": "884a27721e2ae9f787a7d887f99b7e8b7b068cd54e485132d4d53814d1ec3404"
+    },
+    {
+      "ref": "plans/plugin-tools",
+      "commit": "f6beea9fca1ed091d7d03da58cc18ed480238ba8",
+      "path": "docs/feature-plans/plugin-tools/05-palette-studio.md",
+      "archive_path": "docs/planning/archive/f6beea9fca1ed091d7d03da58cc18ed480238ba8/docs/feature-plans/plugin-tools/05-palette-studio.md",
+      "sha256": "afbb6d62cb2ae8e69c86873b90a827e89e6f7aad684421f478f8cab093cb58ef"
+    },
+    {
+      "ref": "plans/plugin-tools",
+      "commit": "f6beea9fca1ed091d7d03da58cc18ed480238ba8",
+      "path": "docs/feature-plans/plugin-tools/README.md",
+      "archive_path": "docs/planning/archive/f6beea9fca1ed091d7d03da58cc18ed480238ba8/docs/feature-plans/plugin-tools/README.md",
+      "sha256": "11286aa11cc84e6c1cb03a7605b6de0a4ed70ada74a5a78e24f24e6381e45a9d"
+    },
+    {
+      "ref": "plans/plugin-tools",
+      "commit": "f6beea9fca1ed091d7d03da58cc18ed480238ba8",
+      "path": "docs/feature-plans/shadertoy-wallpaper-plugins/execution-record.md",
+      "archive_path": "docs/planning/archive/f6beea9fca1ed091d7d03da58cc18ed480238ba8/docs/feature-plans/shadertoy-wallpaper-plugins/execution-record.md",
+      "sha256": "1ff40872aba9e8dad6d12f586f3f8a7661dea36dddc498af0dcbe2a757d0cbd8"
+    },
+    {
+      "ref": "plans/shader-history",
+      "commit": "05a4c533e0885b5692a022e86f796d26fa33b341",
+      "path": "docs/feature-plans/shader-history-phase-1/01-history-domain-transports.md",
+      "archive_path": "docs/planning/archive/05a4c533e0885b5692a022e86f796d26fa33b341/docs/feature-plans/shader-history-phase-1/01-history-domain-transports.md",
+      "sha256": "72329510e794a87064277a0b4fbbc95d8fe64da53231aad1a7f2869c45ef890d"
+    },
+    {
+      "ref": "plans/shader-history",
+      "commit": "05a4c533e0885b5692a022e86f796d26fa33b341",
+      "path": "docs/feature-plans/shader-history-phase-1/02-history-ui-restore.md",
+      "archive_path": "docs/planning/archive/05a4c533e0885b5692a022e86f796d26fa33b341/docs/feature-plans/shader-history-phase-1/02-history-ui-restore.md",
+      "sha256": "14c1ede2887822d4dac68c02541c8337a68f164edaf6bcb6fff98abdf55ba460"
+    },
+    {
+      "ref": "plans/shader-history",
+      "commit": "05a4c533e0885b5692a022e86f796d26fa33b341",
+      "path": "docs/feature-plans/shader-history-phase-1/README.md",
+      "archive_path": "docs/planning/archive/05a4c533e0885b5692a022e86f796d26fa33b341/docs/feature-plans/shader-history-phase-1/README.md",
+      "sha256": "8c28ae203775a324c4e2a80940e1b404c5d7e550f418ff9657a0e121577f8d89"
+    },
+    {
+      "ref": "plans/shader-tooling-foundation",
+      "commit": "caf55165f06fe293d7221a0138ecde2f3150eea3",
+      "path": "docs/feature-plans/shader-tooling-foundation/01-essl-analysis-worker.md",
+      "archive_path": "docs/planning/archive/caf55165f06fe293d7221a0138ecde2f3150eea3/docs/feature-plans/shader-tooling-foundation/01-essl-analysis-worker.md",
+      "sha256": "088881d6723ab912e3f3833eb3b0944186b563eea72129c56adaf888ec1acf09"
+    },
+    {
+      "ref": "plans/shader-tooling-foundation",
+      "commit": "caf55165f06fe293d7221a0138ecde2f3150eea3",
+      "path": "docs/feature-plans/shader-tooling-foundation/02-monaco-project-analysis.md",
+      "archive_path": "docs/planning/archive/caf55165f06fe293d7221a0138ecde2f3150eea3/docs/feature-plans/shader-tooling-foundation/02-monaco-project-analysis.md",
+      "sha256": "2843ed7b36b026dbfda189dab0394dc6affe95ff76801208ae8f0cc3f7e412ff"
+    },
+    {
+      "ref": "plans/shader-tooling-foundation",
+      "commit": "caf55165f06fe293d7221a0138ecde2f3150eea3",
+      "path": "docs/feature-plans/shader-tooling-foundation/README.md",
+      "archive_path": "docs/planning/archive/caf55165f06fe293d7221a0138ecde2f3150eea3/docs/feature-plans/shader-tooling-foundation/README.md",
+      "sha256": "52ee9f7debf437cc73025f4551af6b97fe4bf6bfd13c158df42b7179321a5cee"
+    },
+    {
+      "ref": "plans/shader-tooling-foundation",
+      "commit": "caf55165f06fe293d7221a0138ecde2f3150eea3",
+      "path": "docs/feature-plans/shadertoy-wallpaper-plugins/execution-record.md",
+      "archive_path": "docs/planning/archive/caf55165f06fe293d7221a0138ecde2f3150eea3/docs/feature-plans/shadertoy-wallpaper-plugins/execution-record.md",
+      "sha256": "1ff40872aba9e8dad6d12f586f3f8a7661dea36dddc498af0dcbe2a757d0cbd8"
+    },
+    {
+      "ref": "plans/vscode-preview",
+      "commit": "f5b15992337a09984a62d4f4405b7346f1fd05f0",
+      "path": "docs/feature-plans/vscode-preview/01-shared-renderer.md",
+      "archive_path": "docs/planning/archive/f5b15992337a09984a62d4f4405b7346f1fd05f0/docs/feature-plans/vscode-preview/01-shared-renderer.md",
+      "sha256": "67f39f0e9b834ce450e7116935414487ecf294e505b944fdf86ac9a7b89ec371"
+    },
+    {
+      "ref": "plans/vscode-preview",
+      "commit": "f5b15992337a09984a62d4f4405b7346f1fd05f0",
+      "path": "docs/feature-plans/vscode-preview/02-vscode-preview.md",
+      "archive_path": "docs/planning/archive/f5b15992337a09984a62d4f4405b7346f1fd05f0/docs/feature-plans/vscode-preview/02-vscode-preview.md",
+      "sha256": "c473dd699460159c785dfce7e0ff6ad537f94a41cffde8f846bab436add6c34d"
+    },
+    {
+      "ref": "plans/vscode-preview",
+      "commit": "f5b15992337a09984a62d4f4405b7346f1fd05f0",
+      "path": "docs/feature-plans/vscode-preview/README.md",
+      "archive_path": "docs/planning/archive/f5b15992337a09984a62d4f4405b7346f1fd05f0/docs/feature-plans/vscode-preview/README.md",
+      "sha256": "6772b3c5030f477e8e07073285e7a5132a941879573203044d496d466e5ae230"
+    },
+    {
+      "ref": "checkout",
+      "commit": null,
+      "path": "docs/future-plans.md",
+      "archive_path": "docs/planning/archive/checkout-2026-10-06/docs/future-plans.md",
+      "sha256": "7d3be5113262bc9681f302ab6344bba8f6afa7fc95de92ef2d2d4cbba4c9c770"
+    },
+    {
+      "ref": "checkout",
+      "commit": null,
+      "path": "docs/plugin-adapters-plan.md",
+      "archive_path": "docs/planning/archive/checkout-2026-10-06/docs/plugin-adapters-plan.md",
+      "sha256": "30d09a0d7f2adf320540f20be0d4b22676d064382f00894341d6c51aae231067"
+    },
+    {
+      "ref": "checkout",
+      "commit": null,
+      "path": "docs/shadertoy-wallpaper-plugins-sketch.md",
+      "archive_path": "docs/planning/archive/checkout-2026-10-06/docs/shadertoy-wallpaper-plugins-sketch.md",
+      "sha256": "f8220394e5e3c234ab4a7d8ff984680132dc61e2889bbd7b6181bb7c13e6abe8"
+    },
+    {
+      "ref": "checkout",
+      "commit": null,
+      "path": "docs/authentication-authorization-plan.md",
+      "archive_path": "docs/planning/archive/checkout-2026-10-06/docs/authentication-authorization-plan.md",
+      "sha256": "b429b9ac91c319fde17e871000f1a86139cb25234beb2c08232780ee6c8e02c1"
+    },
+    {
+      "ref": "plans/default-theme-language-plugins",
+      "commit": "3ba9c059389ee1533a474e1e5a04a3acf38bd1d2",
+      "path": "docs/feature-plans/default-theme-language-plugins/01-default-packs.md",
+      "archive_path": "docs/planning/archive/3ba9c059389ee1533a474e1e5a04a3acf38bd1d2/docs/feature-plans/default-theme-language-plugins/01-default-packs.md",
+      "sha256": "e0490bfaf504cdb242d6a0698913cf198fa4582f0c8f67a24743979e081ab5f0"
+    },
+    {
+      "ref": "plans/default-theme-language-plugins",
+      "commit": "3ba9c059389ee1533a474e1e5a04a3acf38bd1d2",
+      "path": "docs/feature-plans/default-theme-language-plugins/02-default-themes.md",
+      "archive_path": "docs/planning/archive/3ba9c059389ee1533a474e1e5a04a3acf38bd1d2/docs/feature-plans/default-theme-language-plugins/02-default-themes.md",
+      "sha256": "4ebe128aed329a4f96b6977c8263abd85db2b7fe14981acc8e0de65c63822ef2"
+    },
+    {
+      "ref": "plans/default-theme-language-plugins",
+      "commit": "3ba9c059389ee1533a474e1e5a04a3acf38bd1d2",
+      "path": "docs/feature-plans/default-theme-language-plugins/03-default-languages.md",
+      "archive_path": "docs/planning/archive/3ba9c059389ee1533a474e1e5a04a3acf38bd1d2/docs/feature-plans/default-theme-language-plugins/03-default-languages.md",
+      "sha256": "395caae20636fb532bc32d11b2d96433953ef6ab15fac4af3b0e13e5698f0834"
+    },
+    {
+      "ref": "plans/default-theme-language-plugins",
+      "commit": "3ba9c059389ee1533a474e1e5a04a3acf38bd1d2",
+      "path": "docs/feature-plans/default-theme-language-plugins/README.md",
+      "archive_path": "docs/planning/archive/3ba9c059389ee1533a474e1e5a04a3acf38bd1d2/docs/feature-plans/default-theme-language-plugins/README.md",
+      "sha256": "68eaf4bccc7c45c08797228b30eca526140f8a4d9b32c25adb265f9827263b97"
+    },
+    {
+      "ref": "plans/default-theme-language-plugins",
+      "commit": "3ba9c059389ee1533a474e1e5a04a3acf38bd1d2",
+      "path": "docs/feature-plans/shadertoy-wallpaper-plugins/execution-record.md",
+      "archive_path": "docs/planning/archive/3ba9c059389ee1533a474e1e5a04a3acf38bd1d2/docs/feature-plans/shadertoy-wallpaper-plugins/execution-record.md",
+      "sha256": "1ff40872aba9e8dad6d12f586f3f8a7661dea36dddc498af0dcbe2a757d0cbd8"
+    },
+    {
+      "ref": "retired/inspector-surface",
+      "commit": "b1b181fde47da3d645c3a3de204f591c1037d10f",
+      "path": "docs/feature-plans/inspector-surface-phase-1/01-contained-inspector-surface.md",
+      "archive_path": "docs/planning/archive/b1b181fde47da3d645c3a3de204f591c1037d10f/docs/feature-plans/inspector-surface-phase-1/01-contained-inspector-surface.md",
+      "sha256": "3d23ed55be64e837952b6df9f2025967bc57ae5cbaf556246c59ef8fab80156f"
+    },
+    {
+      "ref": "retired/inspector-surface",
+      "commit": "b1b181fde47da3d645c3a3de204f591c1037d10f",
+      "path": "docs/feature-plans/inspector-surface-phase-1/README.md",
+      "archive_path": "docs/planning/archive/b1b181fde47da3d645c3a3de204f591c1037d10f/docs/feature-plans/inspector-surface-phase-1/README.md",
+      "sha256": "2288ceb1769927adce7dd4f53fd9106adb4423a562e470c2eab78a49b1afa42e"
+    },
+    {
+      "ref": "retired/desktop-sync",
+      "commit": "36495dd1838958fbfb124e3db34943eeaee456d5",
+      "path": "docs/feature-plans/desktop-sync-m1/01-summary-revision-and-replace.md",
+      "archive_path": "docs/planning/archive/36495dd1838958fbfb124e3db34943eeaee456d5/docs/feature-plans/desktop-sync-m1/01-summary-revision-and-replace.md",
+      "sha256": "d5f36565bb605005903f2fc1942dc75d6dd5e2f1f31de57a58d2001141e3d30b"
+    },
+    {
+      "ref": "retired/desktop-sync",
+      "commit": "36495dd1838958fbfb124e3db34943eeaee456d5",
+      "path": "docs/feature-plans/desktop-sync-m1/02-desktop-handoff-server.md",
+      "archive_path": "docs/planning/archive/36495dd1838958fbfb124e3db34943eeaee456d5/docs/feature-plans/desktop-sync-m1/02-desktop-handoff-server.md",
+      "sha256": "84d69f0390e053dfbbe03257b9f99545e58e2927d5804b9cd697478231326202"
+    },
+    {
+      "ref": "retired/desktop-sync",
+      "commit": "36495dd1838958fbfb124e3db34943eeaee456d5",
+      "path": "docs/feature-plans/desktop-sync-m1/03-desktop-sign-in.md",
+      "archive_path": "docs/planning/archive/36495dd1838958fbfb124e3db34943eeaee456d5/docs/feature-plans/desktop-sync-m1/03-desktop-sign-in.md",
+      "sha256": "965269fdafe06f28f9624e6db315d8e158c8efe283e99b58fad295ab33544e9c"
+    },
+    {
+      "ref": "retired/desktop-sync",
+      "commit": "36495dd1838958fbfb124e3db34943eeaee456d5",
+      "path": "docs/feature-plans/desktop-sync-m1/04-push-sync-engine.md",
+      "archive_path": "docs/planning/archive/36495dd1838958fbfb124e3db34943eeaee456d5/docs/feature-plans/desktop-sync-m1/04-push-sync-engine.md",
+      "sha256": "4ecbf7d565498ff2e8c815f3b84f919ab10f45a783f0cbf24d3cea6976426dcd"
+    },
+    {
+      "ref": "retired/desktop-sync",
+      "commit": "36495dd1838958fbfb124e3db34943eeaee456d5",
+      "path": "docs/feature-plans/desktop-sync-m1/README.md",
+      "archive_path": "docs/planning/archive/36495dd1838958fbfb124e3db34943eeaee456d5/docs/feature-plans/desktop-sync-m1/README.md",
+      "sha256": "d9c27b84d58f0c70d14df59ed33e3b202c1997eb8497039259da3db53fd4e9eb"
+    },
+    {
+      "ref": "retired/desktop-sync",
+      "commit": "36495dd1838958fbfb124e3db34943eeaee456d5",
+      "path": "docs/feature-plans/desktop-sync-m2/01-conditional-delete.md",
+      "archive_path": "docs/planning/archive/36495dd1838958fbfb124e3db34943eeaee456d5/docs/feature-plans/desktop-sync-m2/01-conditional-delete.md",
+      "sha256": "cd02174b5e6bca829a33452fc3d2a9f6af469460617ffcf8026fc042835cf0c3"
+    },
+    {
+      "ref": "retired/desktop-sync",
+      "commit": "36495dd1838958fbfb124e3db34943eeaee456d5",
+      "path": "docs/feature-plans/desktop-sync-m2/02-pull-engine.md",
+      "archive_path": "docs/planning/archive/36495dd1838958fbfb124e3db34943eeaee456d5/docs/feature-plans/desktop-sync-m2/02-pull-engine.md",
+      "sha256": "e518b8833b8f15ec715a2357d88441d260f7fac04b99ba6f281833d9aeb26aae"
+    },
+    {
+      "ref": "retired/desktop-sync",
+      "commit": "36495dd1838958fbfb124e3db34943eeaee456d5",
+      "path": "docs/feature-plans/desktop-sync-m2/03-deletion.md",
+      "archive_path": "docs/planning/archive/36495dd1838958fbfb124e3db34943eeaee456d5/docs/feature-plans/desktop-sync-m2/03-deletion.md",
+      "sha256": "712e7cf087ecdeeef99bfcec540d10e42fa7557618a1e78d322031a68776c724"
+    },
+    {
+      "ref": "retired/desktop-sync",
+      "commit": "36495dd1838958fbfb124e3db34943eeaee456d5",
+      "path": "docs/feature-plans/desktop-sync-m2/README.md",
+      "archive_path": "docs/planning/archive/36495dd1838958fbfb124e3db34943eeaee456d5/docs/feature-plans/desktop-sync-m2/README.md",
+      "sha256": "e7f1acbb84a059f0a4dd68305fce76cb60e8920380d1558d5f2d058d89d2deba"
+    },
+    {
+      "ref": "retired/studio-visual-refresh",
+      "commit": "a514a268911477cadc662c099a6fc92110729987",
+      "path": "docs/feature-plans/studio-visual-refresh-m1/01-self-hosted-fonts-and-icons.md",
+      "archive_path": "docs/planning/archive/a514a268911477cadc662c099a6fc92110729987/docs/feature-plans/studio-visual-refresh-m1/01-self-hosted-fonts-and-icons.md",
+      "sha256": "c50848241b7a596fbd3d24a0ca7063dee1847e7f3ff048ab58ec9e6b8f7d0684"
+    },
+    {
+      "ref": "retired/studio-visual-refresh",
+      "commit": "a514a268911477cadc662c099a6fc92110729987",
+      "path": "docs/feature-plans/studio-visual-refresh-m1/02-neutral-theme-and-density.md",
+      "archive_path": "docs/planning/archive/a514a268911477cadc662c099a6fc92110729987/docs/feature-plans/studio-visual-refresh-m1/02-neutral-theme-and-density.md",
+      "sha256": "33356d5f1b06eeecb33dc0b8d3e201302fc22021dfd759c3f8247bc18926102d"
+    },
+    {
+      "ref": "retired/studio-visual-refresh",
+      "commit": "a514a268911477cadc662c099a6fc92110729987",
+      "path": "docs/feature-plans/studio-visual-refresh-m1/README.md",
+      "archive_path": "docs/planning/archive/a514a268911477cadc662c099a6fc92110729987/docs/feature-plans/studio-visual-refresh-m1/README.md",
+      "sha256": "05bf15029ef0f931c5686571847286a5ce21b7baa048d26675608a6588fa622a"
+    },
+    {
+      "ref": "retired/public-explore-admin",
+      "commit": "95f05937994b4e12def00387f389e5cc7e8e5b44",
+      "path": "docs/feature-plans/public-explore-admin/01-publication-api.md",
+      "archive_path": "docs/planning/archive/95f05937994b4e12def00387f389e5cc7e8e5b44/docs/feature-plans/public-explore-admin/01-publication-api.md",
+      "sha256": "fd46e5a4770a702c85d250d0053698914f15c707e98173aff5125d5b781042b9"
+    },
+    {
+      "ref": "retired/public-explore-admin",
+      "commit": "95f05937994b4e12def00387f389e5cc7e8e5b44",
+      "path": "docs/feature-plans/public-explore-admin/02-explore-publishing-ui.md",
+      "archive_path": "docs/planning/archive/95f05937994b4e12def00387f389e5cc7e8e5b44/docs/feature-plans/public-explore-admin/02-explore-publishing-ui.md",
+      "sha256": "3ca9bc5f8d2d9385e8ccbf686b7f3a42d5764845cf4eb7dbbcc434c2d9d09db3"
+    },
+    {
+      "ref": "retired/public-explore-admin",
+      "commit": "95f05937994b4e12def00387f389e5cc7e8e5b44",
+      "path": "docs/feature-plans/public-explore-admin/03-admin-ui.md",
+      "archive_path": "docs/planning/archive/95f05937994b4e12def00387f389e5cc7e8e5b44/docs/feature-plans/public-explore-admin/03-admin-ui.md",
+      "sha256": "c5f27930b09501592bec12d3de3728de66846adb879d4fe24664b9a93d8d7028"
+    },
+    {
+      "ref": "retired/public-explore-admin",
+      "commit": "95f05937994b4e12def00387f389e5cc7e8e5b44",
+      "path": "docs/feature-plans/public-explore-admin/README.md",
+      "archive_path": "docs/planning/archive/95f05937994b4e12def00387f389e5cc7e8e5b44/docs/feature-plans/public-explore-admin/README.md",
+      "sha256": "5031cf9c32b66405308497d8df1ea4648b6ad6eda1bb1252cb54cf2c3e253c39"
+    },
+    {
+      "ref": "retired/custom-postprocess-effects",
+      "commit": "1ff7ea60a855eb651586a0db671cb16777a83c54",
+      "path": "docs/feature-plans/custom-postprocess-effects/01-contract-migration.md",
+      "archive_path": "docs/planning/archive/1ff7ea60a855eb651586a0db671cb16777a83c54/docs/feature-plans/custom-postprocess-effects/01-contract-migration.md",
+      "sha256": "68d4b56cda05c42f10d6155269bf912a312ef7fd2fb05dfdd2ae55fe62d3f3d2"
+    },
+    {
+      "ref": "retired/custom-postprocess-effects",
+      "commit": "1ff7ea60a855eb651586a0db671cb16777a83c54",
+      "path": "docs/feature-plans/custom-postprocess-effects/02-renderer.md",
+      "archive_path": "docs/planning/archive/1ff7ea60a855eb651586a0db671cb16777a83c54/docs/feature-plans/custom-postprocess-effects/02-renderer.md",
+      "sha256": "d668f77edffb01ed4b9963a25b27659e5d26667f9650d73a19d0211928916f59"
+    },
+    {
+      "ref": "retired/custom-postprocess-effects",
+      "commit": "1ff7ea60a855eb651586a0db671cb16777a83c54",
+      "path": "docs/feature-plans/custom-postprocess-effects/03-editor-ui.md",
+      "archive_path": "docs/planning/archive/1ff7ea60a855eb651586a0db671cb16777a83c54/docs/feature-plans/custom-postprocess-effects/03-editor-ui.md",
+      "sha256": "c8c9a0e2684aa9d2f1e4f12322c92832d240447bcea84a2377b8bf049b4255d2"
+    },
+    {
+      "ref": "retired/custom-postprocess-effects",
+      "commit": "1ff7ea60a855eb651586a0db671cb16777a83c54",
+      "path": "docs/feature-plans/custom-postprocess-effects/README.md",
+      "archive_path": "docs/planning/archive/1ff7ea60a855eb651586a0db671cb16777a83c54/docs/feature-plans/custom-postprocess-effects/README.md",
+      "sha256": "697e34ffd8caf67bf3cde7edd5b135830d128f98d6b2e5910cb042b7a74289df"
+    },
+    {
+      "ref": "retired/local-isf-plugins",
+      "commit": "5a6b7e6ca1004b7dbfb4b47089096b41bed5e13a",
+      "path": "docs/feature-plans/local-isf-plugins/01-package-runner.md",
+      "archive_path": "docs/planning/archive/5a6b7e6ca1004b7dbfb4b47089096b41bed5e13a/docs/feature-plans/local-isf-plugins/01-package-runner.md",
+      "sha256": "5655be5bbe801d7406c828cc2b21389c5bd5fbf6254b830a8203e13c1d9e4819"
+    },
+    {
+      "ref": "retired/local-isf-plugins",
+      "commit": "5a6b7e6ca1004b7dbfb4b47089096b41bed5e13a",
+      "path": "docs/feature-plans/local-isf-plugins/02-installed-ui.md",
+      "archive_path": "docs/planning/archive/5a6b7e6ca1004b7dbfb4b47089096b41bed5e13a/docs/feature-plans/local-isf-plugins/02-installed-ui.md",
+      "sha256": "422fa7bede6870e4301ff3fb7f2067c96fc9ba63128b31666f478866785e3b7c"
+    },
+    {
+      "ref": "retired/local-isf-plugins",
+      "commit": "5a6b7e6ca1004b7dbfb4b47089096b41bed5e13a",
+      "path": "docs/feature-plans/local-isf-plugins/03-isf-adapter.md",
+      "archive_path": "docs/planning/archive/5a6b7e6ca1004b7dbfb4b47089096b41bed5e13a/docs/feature-plans/local-isf-plugins/03-isf-adapter.md",
+      "sha256": "88ca61e494164cfdfc11374c413c3b91412121c398565edd15b04d8469258080"
+    },
+    {
+      "ref": "retired/local-isf-plugins",
+      "commit": "5a6b7e6ca1004b7dbfb4b47089096b41bed5e13a",
+      "path": "docs/feature-plans/local-isf-plugins/README.md",
+      "archive_path": "docs/planning/archive/5a6b7e6ca1004b7dbfb4b47089096b41bed5e13a/docs/feature-plans/local-isf-plugins/README.md",
+      "sha256": "d3985371cc78a5b918e19008487075d81fd2de1a98a987c444f3478228bf2638"
+    },
+    {
+      "ref": "retired/plugin-themes",
+      "commit": "287aeaf501785286c43cc51c68b0c3fd438a9daf",
+      "path": "docs/feature-plans/plugin-themes/01-theme-contract.md",
+      "archive_path": "docs/planning/archive/287aeaf501785286c43cc51c68b0c3fd438a9daf/docs/feature-plans/plugin-themes/01-theme-contract.md",
+      "sha256": "06c5b493d44a8901ca2cc3f1cde8a426d5a7af7590028a07c5403a814624443e"
+    },
+    {
+      "ref": "retired/plugin-themes",
+      "commit": "287aeaf501785286c43cc51c68b0c3fd438a9daf",
+      "path": "docs/feature-plans/plugin-themes/02-theme-experience.md",
+      "archive_path": "docs/planning/archive/287aeaf501785286c43cc51c68b0c3fd438a9daf/docs/feature-plans/plugin-themes/02-theme-experience.md",
+      "sha256": "ddf9d351eb30cc83ffa8ba580dfb30daa57058ac02ab81fe5eed5d4bd2f61521"
+    },
+    {
+      "ref": "retired/plugin-themes",
+      "commit": "287aeaf501785286c43cc51c68b0c3fd438a9daf",
+      "path": "docs/feature-plans/plugin-themes/README.md",
+      "archive_path": "docs/planning/archive/287aeaf501785286c43cc51c68b0c3fd438a9daf/docs/feature-plans/plugin-themes/README.md",
+      "sha256": "0c34e7eac25cabe7046380a66a2bc2236d1702b4ae926dab22ef43d52f4aea19"
+    }
+  ],
+  "groups": [
+    {
+      "slug": "community",
+      "source_ref": "plans/community",
+      "source_commit": "a52085617621f736a39f28a61cce9a2940126bf5",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/100",
+      "status": "Backlog",
+      "audit": "Creator profiles and public remix discovery are not implemented; existing publication origin metadata is a foundation, not this milestone.",
+      "agent_plan": {
+        "milestone": "community-phase-1-creators-remixes",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-community",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/community-01-profiles",
+            "depends_on": [],
+            "acceptance": ["AC-GATE", "AC-PROFILE", "AC-GALLERY", "AC-NAV"],
+            "checks": [
+              "pnpm --filter @shadergrove/backend test -- src/community/creator.spec.ts",
+              "pnpm --filter @shadergrove/api test -- src/community/creators.spec.ts",
+              "pnpm --filter @shadergrove/web exec ng test --watch=false --include='src/app/community/**/*.spec.ts' --include='src/app/workspace/routing-coordinator.spec.ts'",
+              "pnpm check:i18n"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "feature_flag": "PUBLIC_COMMUNITY_ENABLED",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/101"
+          },
+          {
+            "id": "02",
+            "branch": "codex/community-02-remixes",
+            "depends_on": ["01"],
+            "acceptance": ["AC-REMIX", "AC-ORIGIN", "AC-NAV"],
+            "checks": [
+              "pnpm --filter @shadergrove/backend test -- src/publication/publication.spec.ts",
+              "pnpm --filter @shadergrove/api test -- src/publications/publications.spec.ts",
+              "pnpm --filter @shadergrove/web exec ng test --watch=false --include='src/app/publications/**/*.spec.ts'",
+              "pnpm check:i18n"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "feature_flag": "PUBLIC_COMMUNITY_ENABLED",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/102"
+          }
+        ],
+        "integration_checks": [
+          "pnpm lint && pnpm format:check && pnpm check && pnpm typecheck && pnpm test && pnpm build",
+          "pnpm --filter @shadergrove/backend test -- src/persistence/postgres/postgres-repository.spec.ts",
+          "pnpm --filter @shadergrove/web build:desktop"
+        ],
+        "e2e_scenarios": ["E2E-1", "E2E-2", "E2E-3", "E2E-4", "E2E-5", "E2E-6"],
+        "deferred": [
+          "favorites-and-private-public-collections",
+          "comments-and-replies",
+          "creator-following-and-subscriptions-feed",
+          "in-app-notifications",
+          "profile-refinements-and-desktop-parity",
+          "challenges-pedagogical-features-curated-selections"
+        ],
+        "version": 2,
+        "feature_slug": "community",
+        "readiness": "deferred",
+        "project_url": "https://github.com/users/antelm-dev/projects/6"
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/101",
+          "source_path": "docs/feature-plans/community/01-public-creators.md",
+          "status": "Backlog"
+        },
+        {
+          "id": "02",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/102",
+          "source_path": "docs/feature-plans/community/02-public-remixes.md",
+          "status": "Blocked"
+        }
+      ]
+    },
+    {
+      "slug": "controls-builder",
+      "source_ref": "plans/controls-builder",
+      "source_commit": "dcf355b746058332693e7acb9e419ea88dbab79c",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/103",
+      "status": "Ready",
+      "audit": "The current editor uses JSON configuration; the visual builder remains planned.",
+      "agent_plan": {
+        "milestone": "controls-builder-phase-1",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-controls-builder",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/controls-builder-01",
+            "depends_on": [],
+            "acceptance": [
+              "AC-CREATE",
+              "AC-MANAGE",
+              "AC-VIEWS",
+              "AC-VALIDATE",
+              "AC-VALUES",
+              "AC-LIFECYCLE",
+              "AC-ENTRY",
+              "AC-ACCESS"
+            ],
+            "checks": [
+              "pnpm gen:ipc",
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include=src/app/ui/editor/controls-builder*.spec.ts --include=src/app/ui/editor/editor-panel.spec.ts --include=src/app/editor/code-editor.spec.ts --include=src/app/workspace/state/workspace-state.spec.ts --include=src/app/ui/inspector/gui-panel.spec.ts",
+              "pnpm --filter @shadergrove/studio typecheck:web",
+              "pnpm gen:plugins",
+              "pnpm check:i18n",
+              "pnpm check:plugins",
+              "pnpm --filter @shadergrove/studio-e2e e2e src/controls-builder.spec.ts --project=chromium"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/104"
+          }
+        ],
+        "integration_checks": [
+          "pnpm lint",
+          "pnpm format:check",
+          "pnpm check",
+          "pnpm typecheck",
+          "pnpm test",
+          "pnpm build",
+          "pnpm --filter @shadergrove/studio build:renderer",
+          "pnpm --filter @shadergrove/studio-e2e e2e src/controls-builder.spec.ts src/editor-chrome.spec.ts src/shader-switch.spec.ts --project=chromium"
+        ],
+        "e2e_scenarios": [
+          "create all four types from empty config; preview values; save and reload",
+          "edit range and default; duplicate, regroup, reorder, and delete",
+          "JSON and Builder synchronization, undo, invalid JSON repair, and source navigation",
+          "pending form plus external config replacement or shader switch cannot write stale data",
+          "closed/minimized/floating editor and narrow keyboard-accessible English/French layout"
+        ],
+        "deferred": [
+          "uniform-to-control-creation",
+          "automatic-source-or-preset-rewriting",
+          "per-control-inspector-context-menus",
+          "drag-and-drop-or-nested-groups",
+          "custom-effect-builder-reuse",
+          "workspace-wide-undo-service"
+        ],
+        "version": 2,
+        "feature_slug": "controls-builder",
+        "readiness": "ready",
+        "project_url": "https://github.com/users/antelm-dev/projects/6"
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/104",
+          "source_path": "docs/feature-plans/controls-builder/01-controls-builder.md",
+          "status": "Ready"
+        }
+      ]
+    },
+    {
+      "slug": "explore-plugins-phase1",
+      "source_ref": "plans/explore-plugins",
+      "source_commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/105",
+      "status": "Ready",
+      "audit": "Current Explore does not implement the planned query/result/scroll restoration; Plugins still uses its existing management surface.",
+      "agent_plan": {
+        "milestone": "explore-plugins-phase1",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "remote": "origin",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-explore-plugins-phase1",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/explore-plugins-01-import-dialog",
+            "depends_on": [],
+            "acceptance": [
+              "AC-IMPORT-ENTRY",
+              "AC-IMPORT-LIFECYCLE",
+              "AC-IMPORT-UI",
+              "AC-WORKSPACE"
+            ],
+            "checks": [
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include='src/app/plugins/**/*.spec.ts'",
+              "pnpm --filter @shadergrove/studio typecheck:web",
+              "pnpm check:i18n",
+              "pnpm gen:ipc",
+              "pnpm --filter @shadergrove/studio-e2e exec playwright test src/plugins.spec.ts"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/106"
+          },
+          {
+            "id": "02",
+            "branch": "codex/explore-plugins-02-explore-state",
+            "depends_on": [],
+            "acceptance": [
+              "AC-EXPLORE-URL",
+              "AC-EXPLORE-RESTORE",
+              "AC-EXPLORE-ROBUST",
+              "AC-WORKSPACE"
+            ],
+            "checks": [
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include='src/app/publications/**/*.spec.ts'",
+              "pnpm --filter @shadergrove/studio typecheck:web",
+              "pnpm gen:ipc",
+              "pnpm --filter @shadergrove/studio-e2e exec playwright test src/explore-navigation.spec.ts"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/107"
+          }
+        ],
+        "integration_checks": [
+          "pnpm lint",
+          "pnpm format:check",
+          "pnpm check",
+          "pnpm typecheck",
+          "pnpm --filter @shadergrove/studio test:web",
+          "pnpm build",
+          "pnpm --filter @shadergrove/studio build:renderer",
+          "pnpm --filter @shadergrove/studio-e2e typecheck",
+          "pnpm gen:ipc",
+          "pnpm --filter @shadergrove/studio-e2e exec playwright test src/plugins.spec.ts src/explore-navigation.spec.ts src/shader-switch.spec.ts"
+        ],
+        "e2e_scenarios": [
+          "Editor and New Shader project-import commands use the same generic dialog",
+          "Paste/API import, warnings, cancellation and unsaved-draft preservation",
+          "Explore search, page-two and host-scroll restoration through both return paths",
+          "Direct query links, reload, back/forward, slow requests and missing publications"
+        ],
+        "deferred": [
+          "broader-search-and-sort-aware-cursors",
+          "plugins-browse-installed-tabs",
+          "persistent-top-bar-navigation",
+          "filters-social-ranking-and-desktop-explore"
+        ],
+        "version": 2,
+        "feature_slug": "explore-plugins-phase1",
+        "readiness": "ready",
+        "project_url": "https://github.com/users/antelm-dev/projects/6"
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/106",
+          "source_path": "docs/feature-plans/explore-plugins-phase1/01-importer-dialog.md",
+          "status": "Ready"
+        },
+        {
+          "id": "02",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/107",
+          "source_path": "docs/feature-plans/explore-plugins-phase1/02-explore-browsing-state.md",
+          "status": "Ready"
+        }
+      ]
+    },
+    {
+      "slug": "explore-plugins-phase2",
+      "source_ref": "plans/explore-plugins",
+      "source_commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/108",
+      "status": "Blocked",
+      "audit": "Requires Phase 1 delivery; preserve published-time semantics, sort-bound cursors, additive indexes and anonymous visibility filtering.",
+      "agent_plan": {
+        "milestone": "explore-plugins-phase2",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "remote": "origin",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-explore-plugins-phase2",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/explore-plugins-p2-01-api",
+            "depends_on": [],
+            "acceptance": [
+              "AC-P2-SEARCH",
+              "AC-P2-SORT",
+              "AC-P2-CURSOR",
+              "AC-P2-MIGRATION",
+              "AC-P2-REGRESSION"
+            ],
+            "checks": [
+              "pnpm --filter @shadergrove/backend exec vitest run src/publication/publication.spec.ts src/persistence/postgres/postgres-repository.spec.ts",
+              "pnpm --filter @shadergrove/backend typecheck",
+              "pnpm --filter @shadergrove/studio exec vitest run --config vitest.server.config.ts src/server/api/publications/publications.spec.ts src/server/api/core/swagger.spec.ts",
+              "pnpm --filter @shadergrove/studio typecheck:server"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/109"
+          },
+          {
+            "id": "02",
+            "branch": "codex/explore-plugins-p2-02-ui",
+            "depends_on": ["01"],
+            "acceptance": ["AC-P2-URL", "AC-P2-CACHE", "AC-P2-REGRESSION"],
+            "checks": [
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include='src/app/publications/**/*.spec.ts'",
+              "pnpm --filter @shadergrove/studio typecheck:web",
+              "pnpm check:i18n",
+              "pnpm gen:ipc",
+              "pnpm --filter @shadergrove/studio-e2e exec playwright test src/explore-navigation.spec.ts"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/110"
+          }
+        ],
+        "integration_checks": [
+          "pnpm lint",
+          "pnpm format:check",
+          "pnpm check",
+          "pnpm typecheck",
+          "pnpm --filter @shadergrove/backend test",
+          "pnpm --filter @shadergrove/studio test:server",
+          "pnpm --filter @shadergrove/studio test:web",
+          "pnpm build",
+          "pnpm --filter @shadergrove/studio-e2e typecheck",
+          "pnpm gen:ipc",
+          "pnpm --filter @shadergrove/studio-e2e exec playwright test src/explore-navigation.spec.ts src/shader-switch.spec.ts"
+        ],
+        "e2e_scenarios": [
+          "Search title, description and public author label; hidden rows remain excluded",
+          "Switch sort after page two; back/forward and detail return preserve query, sort and scroll",
+          "Published order stays stable after snapshot update and legacy updated cursors still work",
+          "Real cross-engine conformance and version-4 upgrades validate API and migrations"
+        ],
+        "deferred": [
+          "ranking",
+          "filters",
+          "full-text-search",
+          "admin-search-expansion",
+          "concurrent-feed-snapshots"
+        ],
+        "version": 2,
+        "feature_slug": "explore-plugins-phase2",
+        "readiness": "ready",
+        "project_url": "https://github.com/users/antelm-dev/projects/6",
+        "prerequisite_issues": ["https://github.com/antelm-dev/shadergrove/issues/105"]
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/109",
+          "source_path": "docs/feature-plans/explore-plugins-phase2/01-public-search-sort-api.md",
+          "status": "Blocked"
+        },
+        {
+          "id": "02",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/110",
+          "source_path": "docs/feature-plans/explore-plugins-phase2/02-explore-sort-ui.md",
+          "status": "Blocked"
+        }
+      ]
+    },
+    {
+      "slug": "explore-plugins-phase3",
+      "source_ref": "plans/explore-plugins",
+      "source_commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/111",
+      "status": "Blocked",
+      "audit": "Requires the Phase 1 importer extraction; Phase 2 is scheduling preference, not a technical dependency.",
+      "agent_plan": {
+        "milestone": "explore-plugins-phase3",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "remote": "origin",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-explore-plugins-phase3",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/explore-plugins-p3-01-plugin-tabs",
+            "depends_on": [],
+            "acceptance": [
+              "AC-P3-TABS",
+              "AC-P3-URL",
+              "AC-P3-FOCUS",
+              "AC-P3-INSTALL",
+              "AC-P3-ACTIONS",
+              "AC-P3-DRAFT"
+            ],
+            "checks": [
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include='src/app/plugins/plugins-page.spec.ts' --include='src/app/plugins/plugin-commands.spec.ts'",
+              "pnpm --filter @shadergrove/studio typecheck:web",
+              "pnpm check:i18n",
+              "pnpm gen:ipc",
+              "pnpm --filter @shadergrove/studio-e2e exec playwright test src/plugins.spec.ts src/plugin-themes.spec.ts"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/112"
+          }
+        ],
+        "integration_checks": [
+          "pnpm lint",
+          "pnpm format:check",
+          "pnpm check",
+          "pnpm typecheck",
+          "pnpm --filter @shadergrove/studio test:web",
+          "pnpm build",
+          "pnpm --filter @shadergrove/studio build:renderer",
+          "pnpm --filter @shadergrove/studio-e2e typecheck"
+        ],
+        "e2e_scenarios": [
+          "Browse/Installed URL, back-forward and use links choose the visible package without loops",
+          "Review/install/update/enable/remove and shared importer dialog remain usable",
+          "Themes, contributions, keyboard navigation and unsaved draft survive tab changes"
+        ],
+        "deferred": [
+          "plugin-detail-panel",
+          "catalogue-filters",
+          "registry-changes",
+          "persistent-navigation"
+        ],
+        "version": 2,
+        "feature_slug": "explore-plugins-phase3",
+        "readiness": "ready",
+        "project_url": "https://github.com/users/antelm-dev/projects/6",
+        "prerequisite_issues": ["https://github.com/antelm-dev/shadergrove/issues/105"]
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/112",
+          "source_path": "docs/feature-plans/explore-plugins-phase3/01-plugin-management-tabs.md",
+          "status": "Blocked"
+        }
+      ]
+    },
+    {
+      "slug": "explore-plugins-phase4",
+      "source_ref": "plans/explore-plugins",
+      "source_commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/113",
+      "status": "Blocked",
+      "audit": "Requires Phases 1\u20133 delivery; persistent navigation must preserve the mounted editor and unsaved work.",
+      "agent_plan": {
+        "milestone": "explore-plugins-phase4",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "remote": "origin",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-explore-plugins-phase4",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/explore-plugins-p4-01-navigation",
+            "depends_on": [],
+            "acceptance": [
+              "AC-P4-NAV",
+              "AC-P4-LAYOUT",
+              "AC-P4-MOUNTED",
+              "AC-P4-ROUTING",
+              "AC-P4-RESPONSIVE",
+              "AC-P4-MODES"
+            ],
+            "checks": [
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include='src/app/workspace/routing-coordinator.spec.ts' --include='src/app/ui/layout/**/*.spec.ts' --include='src/app/publications/**/*.spec.ts' --include='src/app/plugins/plugins-page.spec.ts'",
+              "pnpm --filter @shadergrove/studio typecheck:web",
+              "pnpm check:i18n",
+              "pnpm gen:ipc",
+              "pnpm --filter @shadergrove/studio-e2e exec playwright test src/app-navigation.spec.ts src/explore-navigation.spec.ts src/plugins.spec.ts src/plugin-themes.spec.ts src/shader-switch.spec.ts"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/114"
+          }
+        ],
+        "integration_checks": [
+          "pnpm lint",
+          "pnpm format:check",
+          "pnpm check",
+          "pnpm typecheck",
+          "pnpm --filter @shadergrove/studio test:web",
+          "pnpm build",
+          "pnpm --filter @shadergrove/studio build:renderer",
+          "pnpm --filter @shadergrove/studio-e2e typecheck"
+        ],
+        "e2e_scenarios": [
+          "Unsaved editor survives all routed destinations and both browsing contexts restore",
+          "Direct URLs, reload/back-forward and lazy loading preserve standalone route semantics",
+          "390px/1280px navigation and keyboard focus expose only visible controls",
+          "Desktop title bar/fullscreen, sign-in handoff, zen and output isolation remain functional"
+        ],
+        "deferred": [
+          "desktop-explore",
+          "side-rail",
+          "preview-performance",
+          "wholesale-router-refactor"
+        ],
+        "version": 2,
+        "feature_slug": "explore-plugins-phase4",
+        "readiness": "ready",
+        "project_url": "https://github.com/users/antelm-dev/projects/6",
+        "prerequisite_issues": [
+          "https://github.com/antelm-dev/shadergrove/issues/105",
+          "https://github.com/antelm-dev/shadergrove/issues/108",
+          "https://github.com/antelm-dev/shadergrove/issues/111"
+        ]
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/114",
+          "source_path": "docs/feature-plans/explore-plugins-phase4/01-persistent-topbar-navigation.md",
+          "status": "Blocked"
+        }
+      ]
+    },
+    {
+      "slug": "explore-plugins",
+      "source_ref": "plans/explore-plugins",
+      "source_commit": "c5caefecffe1cfb37b5a28499ec250f16baf1a8f",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/115",
+      "status": "Backlog",
+      "audit": "Keep the approved sequence: importer UX, browsing URL state, search/sort, plugin management tabs, persistent navigation.",
+      "agent_plan": null,
+      "tasks": []
+    },
+    {
+      "slug": "minio-hybrid-storage",
+      "source_ref": "plans/minio-hybrid-storage",
+      "source_commit": "9dd8e36baad24a53311747c9b09aacf617126813",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/116",
+      "status": "Backlog",
+      "audit": "Current storage remains database-backed. GCP is a future hosting option; the existing VPS staging deployment means this is not a prerequisite for current staging. No cloud provisioning is authorized by this issue.",
+      "agent_plan": {
+        "milestone": "minio-hybrid-storage-phase-1",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-minio-hybrid-storage",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/minio-hybrid-storage-01-asset-contract",
+            "depends_on": [],
+            "acceptance": ["AC-01", "AC-03", "AC-04"],
+            "checks": ["pnpm --filter @shadergrove/backend test", "pnpm typecheck"],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "feature_flag": "ASSET_STORAGE=database",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/117"
+          },
+          {
+            "id": "02",
+            "branch": "codex/minio-hybrid-storage-02-server-path",
+            "depends_on": ["01"],
+            "acceptance": ["AC-02", "AC-03", "AC-04", "AC-05"],
+            "checks": [
+              "pnpm --filter @shadergrove/backend test",
+              "pnpm typecheck",
+              "pnpm format:check"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "feature_flag": "ASSET_STORAGE=minio",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/118"
+          },
+          {
+            "id": "03",
+            "branch": "codex/minio-hybrid-storage-03-gcp-readiness",
+            "depends_on": ["02"],
+            "acceptance": ["AC-06", "AC-07"],
+            "checks": [
+              "pnpm lint && pnpm format:check && pnpm check && pnpm typecheck && pnpm test && pnpm build",
+              "production image smoke",
+              "real GCS deployment gate"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "feature_flag": "ASSET_STORAGE=minio",
+            "wave": 3,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/119"
+          }
+        ],
+        "integration_checks": [
+          "pnpm --filter @shadergrove/backend test",
+          "pnpm typecheck",
+          "pnpm check:ipc",
+          "pnpm format:check"
+        ],
+        "e2e_scenarios": [
+          "database mode retains legacy blob reads",
+          "minio replacement persists across restart through current API routes",
+          "cleanup retries after object-store deletion failure",
+          "incomplete MinIO configuration fails startup"
+        ],
+        "deferred": [
+          "production blob backfill and blob-column removal",
+          "presigned browser transfers and CDN"
+        ],
+        "version": 2,
+        "feature_slug": "minio-hybrid-storage",
+        "readiness": "deferred",
+        "project_url": "https://github.com/users/antelm-dev/projects/6"
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/117",
+          "source_path": "docs/feature-plans/minio-hybrid-storage/01-asset-reference-contract.md",
+          "status": "Backlog"
+        },
+        {
+          "id": "02",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/118",
+          "source_path": "docs/feature-plans/minio-hybrid-storage/02-minio-server-path.md",
+          "status": "Backlog"
+        },
+        {
+          "id": "03",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/119",
+          "source_path": "docs/feature-plans/minio-hybrid-storage/03-gcp-first-deployment.md",
+          "status": "Backlog"
+        }
+      ]
+    },
+    {
+      "slug": "multi-editor-windows",
+      "source_ref": "plans/multi-editor-windows",
+      "source_commit": "e2788cd7b7693e82f2ef6ea27f3189d4927335d3",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/120",
+      "status": "Ready",
+      "audit": "Editor groups and native-window infrastructure exist, but contained split-tree persistence and multiple group-aware editor shells remain planned.",
+      "agent_plan": {
+        "milestone": "multi-editor-windows-contained-splits",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-multi-editor-windows",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/multi-editor-windows-01",
+            "depends_on": [],
+            "acceptance": ["AC-LAYOUT"],
+            "checks": [
+              "pnpm --filter @shadergrove/shared test",
+              "pnpm --filter @shadergrove/shared typecheck"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/121"
+          },
+          {
+            "id": "02",
+            "branch": "codex/multi-editor-windows-02",
+            "depends_on": [],
+            "acceptance": ["AC-IDENTITY"],
+            "checks": [
+              "pnpm --filter @shadergrove/studio test:web",
+              "pnpm --filter @shadergrove/studio typecheck:web"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/122"
+          },
+          {
+            "id": "03",
+            "branch": "codex/multi-editor-windows-03",
+            "depends_on": ["01", "02"],
+            "acceptance": ["AC-SPLIT", "AC-RESIZE", "AC-CLOSE", "AC-RESTORE", "AC-RESPONSIVE"],
+            "checks": [
+              "pnpm --filter @shadergrove/studio test:web",
+              "pnpm check:i18n",
+              "pnpm --filter @shadergrove/studio typecheck:web"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/123"
+          }
+        ],
+        "integration_checks": [
+          "pnpm --filter @shadergrove/shared test",
+          "pnpm --filter @shadergrove/studio test:web",
+          "pnpm check",
+          "pnpm typecheck",
+          "pnpm lint",
+          "pnpm format:check"
+        ],
+        "e2e_scenarios": [
+          "split right, edit both groups, resize, and reload",
+          "split down and switch shaders without duplicate ownership",
+          "merge a dirty group and reject closing the final group",
+          "verify responsive and keyboard behavior around 900px"
+        ],
+        "deferred": [
+          "native editor BrowserWindow externalization and return",
+          "cross-renderer session broker and recovery",
+          "tab drag-out and arbitrary nested split management"
+        ],
+        "version": 2,
+        "feature_slug": "multi-editor-windows",
+        "readiness": "ready",
+        "project_url": "https://github.com/users/antelm-dev/projects/6"
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/121",
+          "source_path": "docs/feature-plans/multi-editor-windows/01-split-layout-contract.md",
+          "status": "Ready"
+        },
+        {
+          "id": "02",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/122",
+          "source_path": "docs/feature-plans/multi-editor-windows/02-group-aware-editor-instance.md",
+          "status": "Ready"
+        },
+        {
+          "id": "03",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/123",
+          "source_path": "docs/feature-plans/multi-editor-windows/03-contained-split-host.md",
+          "status": "Blocked"
+        }
+      ]
+    },
+    {
+      "slug": "native-bottom-panel",
+      "source_ref": "plans/native-bottom-panel",
+      "source_commit": "465d79b11e06d0e37b8e32cb3f598aff8b9d06a5",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/124",
+      "status": "Ready",
+      "audit": "Existing output/satellite infrastructure is available; the complete Problems/Output satellite lifecycle and synchronization still require the planned work.",
+      "agent_plan": {
+        "milestone": "native-bottom-panel-phase-1",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-native-bottom-panel",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/native-bottom-panel-01",
+            "depends_on": [],
+            "acceptance": ["AC-1", "AC-4", "AC-5", "AC-6"],
+            "checks": ["pnpm exec nx test @shadergrove/studio", "pnpm check:ipc"],
+            "delivery": "integration-only",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/125"
+          },
+          {
+            "id": "02",
+            "branch": "codex/native-bottom-panel-02",
+            "depends_on": ["01"],
+            "acceptance": ["AC-2", "AC-3", "AC-4", "AC-5"],
+            "checks": [
+              "pnpm exec nx test @shadergrove/studio",
+              "pnpm exec nx run @shadergrove/studio:typecheck"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/126"
+          }
+        ],
+        "integration_checks": [
+          "pnpm exec nx test @shadergrove/studio",
+          "pnpm exec nx test @shadergrove/studio",
+          "pnpm exec nx run @shadergrove/studio:typecheck",
+          "pnpm check:ipc"
+        ],
+        "e2e_scenarios": [
+          "open or focus one native panel",
+          "live log and diagnostics mirror",
+          "satellite diagnostic reveals in main editor",
+          "dock and OS-close lifecycle",
+          "web remains dock-only"
+        ],
+        "deferred": [
+          "cross-window focus state",
+          "relaunch visibility",
+          "other externalized tool panels"
+        ],
+        "version": 2,
+        "feature_slug": "native-bottom-panel",
+        "readiness": "ready",
+        "project_url": "https://github.com/users/antelm-dev/projects/6"
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/125",
+          "source_path": "docs/feature-plans/native-bottom-panel/01-native-lifecycle.md",
+          "status": "Ready"
+        },
+        {
+          "id": "02",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/126",
+          "source_path": "docs/feature-plans/native-bottom-panel/02-satellite-shell-sync.md",
+          "status": "Blocked"
+        }
+      ]
+    },
+    {
+      "slug": "plugin-tools",
+      "source_ref": "plans/plugin-tools",
+      "source_commit": "f6beea9fca1ed091d7d03da58cc18ed480238ba8",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/127",
+      "status": "Ready",
+      "audit": "Current host supports installed project import/export plugins; recipe/analyzer/image/palette tools remain planned. Reuse existing issues #83\u201386.",
+      "agent_plan": {
+        "milestone": "plugin-tools-v1",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-plugin-tools",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/plugin-tools-01",
+            "depends_on": [],
+            "acceptance": ["AC-CONTRACT", "AC-LIFECYCLE"],
+            "checks": [
+              "pnpm --filter @shadergrove/shared exec vitest run src/plugin/package.spec.ts src/plugin/tools.spec.ts",
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include 'src/app/plugins/plugin-host*.spec.ts' --include 'src/app/plugins/plugin-tools*.spec.ts'"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/128"
+          },
+          {
+            "id": "02",
+            "branch": "codex/plugin-tools-02",
+            "depends_on": ["01"],
+            "acceptance": ["AC-RECIPES", "AC-LIFECYCLE"],
+            "checks": [
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include 'src/app/plugins/tools/recipes*.spec.ts'",
+              "pnpm --filter @shadergrove/studio-e2e exec playwright test src/plugin-recipes.spec.ts"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/86"
+          },
+          {
+            "id": "03",
+            "branch": "codex/plugin-tools-03",
+            "depends_on": ["01"],
+            "acceptance": ["AC-DOCTOR", "AC-LIFECYCLE"],
+            "checks": [
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include 'src/app/plugins/tools/doctor*.spec.ts'",
+              "pnpm --filter @shadergrove/studio-e2e exec playwright test src/plugin-doctor.spec.ts"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/83"
+          },
+          {
+            "id": "04",
+            "branch": "codex/plugin-tools-04",
+            "depends_on": ["01"],
+            "acceptance": ["AC-TEXTURES", "AC-LIFECYCLE"],
+            "checks": [
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include 'src/app/plugins/tools/textures*.spec.ts'",
+              "pnpm --filter @shadergrove/studio-e2e exec playwright test src/plugin-textures.spec.ts"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/85"
+          },
+          {
+            "id": "05",
+            "branch": "codex/plugin-tools-05",
+            "depends_on": ["01", "04"],
+            "acceptance": ["AC-PALETTE", "AC-LIFECYCLE"],
+            "checks": [
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include 'src/app/plugins/tools/palette*.spec.ts'",
+              "pnpm --filter @shadergrove/studio-e2e exec playwright test src/plugin-palette.spec.ts"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "wave": 3,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/84"
+          }
+        ],
+        "integration_checks": [
+          "pnpm lint",
+          "pnpm format:check",
+          "pnpm check",
+          "pnpm typecheck",
+          "pnpm test",
+          "pnpm build:all",
+          "pnpm e2e",
+          "pnpm smoke:ssr",
+          "pnpm build:desktop",
+          "pnpm pack:desktop"
+        ],
+        "e2e_scenarios": [
+          "active contribution menus and Installed cards",
+          "independent feedback recipes and unsaved-draft cancellation",
+          "versioned Doctor reports and stale-source rejection",
+          "exact channel packing, normal generation, PNG delivery and explicit assignment",
+          "palette extraction, JSON round-trip, copied effect after uninstall",
+          "profile/package changes during preview and delivery",
+          "installed offline desktop and inert SSR/satellite/output windows"
+        ],
+        "deferred": [
+          "semantic Doctor",
+          "GPU baking",
+          "external recipe assets",
+          "asset libraries",
+          "persisted texture usage migration"
+        ],
+        "version": 2,
+        "feature_slug": "plugin-tools",
+        "readiness": "ready",
+        "project_url": "https://github.com/users/antelm-dev/projects/6"
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/128",
+          "source_path": "docs/feature-plans/plugin-tools/01-host-contracts.md",
+          "status": "Ready"
+        },
+        {
+          "id": "02",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/86",
+          "source_path": "docs/feature-plans/plugin-tools/02-project-recipes.md",
+          "status": "Blocked"
+        },
+        {
+          "id": "03",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/83",
+          "source_path": "docs/feature-plans/plugin-tools/03-shader-doctor.md",
+          "status": "Blocked"
+        },
+        {
+          "id": "04",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/85",
+          "source_path": "docs/feature-plans/plugin-tools/04-texture-utilities.md",
+          "status": "Blocked"
+        },
+        {
+          "id": "05",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/84",
+          "source_path": "docs/feature-plans/plugin-tools/05-palette-studio.md",
+          "status": "Blocked"
+        }
+      ]
+    },
+    {
+      "slug": "shader-history-phase-1",
+      "source_ref": "plans/shader-history",
+      "source_commit": "05a4c533e0885b5692a022e86f796d26fa33b341",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/129",
+      "status": "Ready",
+      "audit": "No immutable shader-history repository, transport or timeline is implemented. Existing SQL migration history is unrelated.",
+      "agent_plan": {
+        "milestone": "shader-history-phase-1",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-shader-history-phase-1",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/shader-history-01",
+            "depends_on": [],
+            "acceptance": ["AC-HIST-01", "AC-HIST-02", "AC-HIST-03", "AC-HIST-04", "AC-HIST-05"],
+            "checks": [
+              "pnpm --filter @shadergrove/backend test",
+              "pnpm --filter @shadergrove/studio test:server",
+              "pnpm gen:ipc",
+              "pnpm --filter @shadergrove/studio typecheck:desktop"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/130"
+          },
+          {
+            "id": "02",
+            "branch": "codex/shader-history-02",
+            "depends_on": ["01"],
+            "acceptance": ["AC-HIST-06", "AC-HIST-07", "AC-HIST-08"],
+            "checks": [
+              "pnpm --filter @shadergrove/studio test:web",
+              "pnpm --filter @shadergrove/studio typecheck:web",
+              "pnpm check:i18n",
+              "pnpm build",
+              "pnpm build:desktop"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/131"
+          }
+        ],
+        "integration_checks": [
+          "pnpm lint && pnpm format:check && pnpm check && pnpm typecheck && pnpm test && pnpm build",
+          "pnpm build:desktop",
+          "git diff --check"
+        ],
+        "e2e_scenarios": [
+          "history persists across a desktop restart and is newest first",
+          "a named checkpoint survives retention pruning",
+          "dirty-draft cancel is lossless and restore creates a new head",
+          "preset state restores while texture bytes and channel settings remain current",
+          "HTTP restore rejects a stale expected revision atomically"
+        ],
+        "deferred": [
+          "revision thumbnails and visual diffs",
+          "duplicate-from-revision",
+          "texture asset history",
+          "configurable and age-based retention",
+          "compile-health metadata",
+          "history-aware bundles"
+        ],
+        "version": 2,
+        "feature_slug": "shader-history-phase-1",
+        "readiness": "ready",
+        "project_url": "https://github.com/users/antelm-dev/projects/6"
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/130",
+          "source_path": "docs/feature-plans/shader-history-phase-1/01-history-domain-transports.md",
+          "status": "Ready"
+        },
+        {
+          "id": "02",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/131",
+          "source_path": "docs/feature-plans/shader-history-phase-1/02-history-ui-restore.md",
+          "status": "Blocked"
+        }
+      ]
+    },
+    {
+      "slug": "shader-tooling-foundation",
+      "source_ref": "plans/shader-tooling-foundation",
+      "source_commit": "caf55165f06fe293d7221a0138ecde2f3150eea3",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/132",
+      "status": "In Progress",
+      "audit": "Task 01 has an existing active worktree and execution control branch. Preserve its recorded launch and assignment; Task 02 remains dependent. No implementation or completion is inferred from that worktree.",
+      "agent_plan": {
+        "milestone": "shader-tooling-foundation",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-shader-tooling-foundation",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/shader-tooling-foundation-01",
+            "depends_on": [],
+            "acceptance": ["AC-BUILD", "AC-ESSL", "AC-SYMBOLS", "AC-LIFECYCLE", "AC-PROVENANCE"],
+            "checks": [
+              "pnpm --filter @shadergrove/glsl-analysis build:wasm",
+              "pnpm --filter @shadergrove/glsl-analysis test",
+              "pnpm --filter @shadergrove/glsl-analysis typecheck",
+              "pnpm --filter @shadergrove/glsl-analysis smoke:worker"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/52"
+          },
+          {
+            "id": "02",
+            "branch": "codex/shader-tooling-foundation-02",
+            "depends_on": ["01"],
+            "acceptance": ["AC-SYMBOLS", "AC-LIFECYCLE", "AC-MAPPING", "AC-EDITOR", "AC-PACKAGING"],
+            "checks": [
+              "pnpm --filter @shadergrove/studio typecheck:web",
+              "pnpm --filter @shadergrove/studio test:web -- --include \"src/app/editor/*analysis*.spec.ts\"",
+              "pnpm --filter @shadergrove/studio-e2e exec playwright test src/glsl-analysis.spec.ts --project=chromium"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/54"
+          }
+        ],
+        "integration_checks": [
+          "pnpm lint",
+          "pnpm format:check",
+          "pnpm check",
+          "pnpm nx run @shadergrove/studio:typecheck",
+          "pnpm nx run @shadergrove/studio:test",
+          "pnpm nx run @shadergrove/studio:build",
+          "pnpm smoke:ssr",
+          "pnpm nx run @shadergrove/studio:build:renderer",
+          "analysis-package-real-worker-smoke",
+          "packaged-electron-local-wasm-loading",
+          "editor-and-shader-switch-regression-e2e"
+        ],
+        "e2e_scenarios": [
+          "valid composed source exposes current diagnostics and declared symbols",
+          "include error maps correctly while accepted preview remains visible",
+          "rapid edits and project switches reject stale results",
+          "incomplete source preserves builtin completion and recovers",
+          "missing WASM and watchdog timeout preserve editor usability",
+          "SSR and production web/Electron load local compiler assets only on demand"
+        ],
+        "deferred": [
+          "tolerant parser and full semantic LSP",
+          "immutable render capture and GPU variable inspector",
+          "GPU nonfinite maps and approximate control-flow counters",
+          "SPIR-V normalization, VM support preflight and fidelity-gated pixel debugger",
+          "expression compiler, watches and conditional breakpoints",
+          "static statistics and VM whole-frame heatmaps",
+          "DAP/VSCode, cubemap/3D inspection, audio, GIF encoding",
+          "Slang/HLSL and WebGPU"
+        ],
+        "version": 2,
+        "feature_slug": "shader-tooling-foundation",
+        "readiness": "active",
+        "project_url": "https://github.com/users/antelm-dev/projects/6"
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/52",
+          "source_path": "docs/feature-plans/shader-tooling-foundation/01-essl-analysis-worker.md",
+          "status": "In Progress"
+        },
+        {
+          "id": "02",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/54",
+          "source_path": "docs/feature-plans/shader-tooling-foundation/02-monaco-project-analysis.md",
+          "status": "Blocked"
+        }
+      ]
+    },
+    {
+      "slug": "vscode-preview",
+      "source_ref": "plans/vscode-preview",
+      "source_commit": "f5b15992337a09984a62d4f4405b7346f1fd05f0",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/133",
+      "status": "Ready",
+      "audit": "No VS Code app or shared Angular-free rendering package exists yet. Keep the local/offline extension experimental and exclude MCP/AI/debugger expansion.",
+      "agent_plan": {
+        "milestone": "vscode-preview-phase-1",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-vscode-preview",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/vscode-preview-01",
+            "depends_on": [],
+            "acceptance": ["AC-RUNTIME", "AC-REGRESSION"],
+            "checks": [
+              "pnpm --filter @shadergrove/rendering typecheck",
+              "pnpm --filter @shadergrove/rendering test",
+              "pnpm --filter @shadergrove/studio typecheck:web",
+              "pnpm --filter @shadergrove/studio test:web",
+              "pnpm build",
+              "pnpm build:desktop"
+            ],
+            "delivery": "default-branch-pr",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/134"
+          },
+          {
+            "id": "02",
+            "branch": "codex/vscode-preview-02",
+            "depends_on": ["01"],
+            "acceptance": ["AC-PREVIEW", "AC-CONTROL", "AC-DIAG", "AC-LIFECYCLE", "AC-BOUNDARY"],
+            "checks": [
+              "pnpm --filter @shadergrove/vscode typecheck",
+              "pnpm --filter @shadergrove/vscode test",
+              "pnpm --filter @shadergrove/vscode build",
+              "pnpm --filter @shadergrove/vscode test:host",
+              "pnpm --filter @shadergrove/vscode package:vsix"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/135"
+          }
+        ],
+        "integration_checks": [
+          "pnpm lint && pnpm format:check && pnpm check && pnpm typecheck && pnpm test && pnpm build",
+          "pnpm build:desktop",
+          "pnpm e2e",
+          "pnpm --filter @shadergrove/vscode test:host",
+          "pnpm --filter @shadergrove/vscode package:vsix",
+          "Install generated VSIX in a clean Windows VS Code profile and run documented E2E"
+        ],
+        "e2e_scenarios": [
+          "Offline VSIX installation and unsaved native GLSL edits change real pixels",
+          "Compile failure preserves last image, maps Problems and rejects stale results",
+          "Slider WorkspaceEdit, concurrent edits, undo/redo and immediate save",
+          "Hidden/closed preview and WebGL context loss recover without leaked resources",
+          "Invalid manifest, path escape, Restricted Mode and remote workspace refusal",
+          "Studio web and installed desktop rendering regression checks"
+        ],
+        "deferred": [
+          "Stable project format and bundle interoperability",
+          "Multipass, includes, textures, presets and effects in the extension",
+          "Accounts, sync, Explore, plugins and dedicated AI tools",
+          "Marketplace, remote/web extension and cross-platform validation"
+        ],
+        "version": 2,
+        "feature_slug": "vscode-preview",
+        "readiness": "ready",
+        "project_url": "https://github.com/users/antelm-dev/projects/6"
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/134",
+          "source_path": "docs/feature-plans/vscode-preview/01-shared-renderer.md",
+          "status": "Ready"
+        },
+        {
+          "id": "02",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/135",
+          "source_path": "docs/feature-plans/vscode-preview/02-vscode-preview.md",
+          "status": "Blocked"
+        }
+      ]
+    },
+    {
+      "slug": "default-theme-language-plugins",
+      "source_ref": "plans/default-theme-language-plugins",
+      "source_commit": "3ba9c059389ee1533a474e1e5a04a3acf38bd1d2",
+      "parent": "https://github.com/antelm-dev/shadergrove/issues/136",
+      "status": "Done",
+      "audit": "Implemented and merged in PR #49 (e009c80); official default packs, theme selection and language layering exist. Migration does not establish installed-desktop or release validation.",
+      "agent_plan": {
+        "milestone": "default-theme-language-plugins-phase-1",
+        "source_base": "f4ad6d85e172d9e218bad78da65a872e29ef95a6",
+        "default_branch": "master",
+        "integration_branch": "codex/integrate-default-theme-language-plugins",
+        "tasks": [
+          {
+            "id": "01",
+            "branch": "codex/default-packs-01",
+            "depends_on": [],
+            "acceptance": ["AC-CONTRACT", "AC-DEFAULTS", "AC-BOOT"],
+            "checks": [
+              "pnpm --filter @shadergrove/shared exec vitest run src/plugin/package.spec.ts src/plugin/themes.spec.ts src/plugin/languages.spec.ts",
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include=src/app/plugins/plugin-installations.spec.ts",
+              "pnpm --filter @shadergrove/studio test:desktop -- src/desktop/main/ipc/plugins.ipc.spec.ts",
+              "pnpm check:plugins",
+              "pnpm check:i18n"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "latest-default",
+            "wave": 1,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/137"
+          },
+          {
+            "id": "02",
+            "branch": "codex/default-themes-02",
+            "depends_on": ["01"],
+            "acceptance": ["AC-THEMES", "AC-MIGRATION", "AC-LIFECYCLE"],
+            "checks": [
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include=src/app/themes/*.spec.ts --include=src/app/plugins/plugin-commands.spec.ts",
+              "pnpm --filter @shadergrove/studio-e2e exec playwright test src/plugin-themes.spec.ts"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/138"
+          },
+          {
+            "id": "03",
+            "branch": "codex/default-languages-03",
+            "depends_on": ["01"],
+            "acceptance": ["AC-LANGUAGES", "AC-MIGRATION", "AC-LIFECYCLE", "AC-BOOT"],
+            "checks": [
+              "pnpm --filter @shadergrove/studio exec ng test --watch=false --include=src/app/i18n/*.spec.ts --include=src/app/plugins/plugin-commands.spec.ts --include=src/app/plugins/plugins-page.spec.ts",
+              "pnpm --filter @shadergrove/studio-e2e exec playwright test src/plugin-languages.spec.ts",
+              "pnpm check:i18n"
+            ],
+            "delivery": "integration-only",
+            "base_policy": "integration-tip",
+            "wave": 2,
+            "issue_url": "https://github.com/antelm-dev/shadergrove/issues/139"
+          }
+        ],
+        "integration_checks": [
+          "pnpm lint && pnpm format:check && pnpm check && pnpm typecheck && pnpm test && pnpm build",
+          "pnpm build:desktop",
+          "pnpm --filter @shadergrove/studio-e2e exec playwright test src/plugin-themes.spec.ts src/plugin-languages.spec.ts src/plugins.spec.ts"
+        ],
+        "e2e_scenarios": [
+          "Fresh profile defaults, persistent disable/removal and interrupted seeding",
+          "Legacy migration, paired System themes and UI/Monaco parity",
+          "Reference-specific LTR languages, partial fallback and live formatting",
+          "Profile races, stale selections, SSR recovery and installed offline Electron"
+        ],
+        "deferred": [
+          "RTL",
+          "ICU-plurals",
+          "fonts",
+          "marketplace",
+          "cloud-sync",
+          "automatic-updates",
+          "legacy-endpoint-removal"
+        ],
+        "version": 2,
+        "feature_slug": "default-theme-language-plugins",
+        "readiness": "delivered",
+        "project_url": "https://github.com/users/antelm-dev/projects/6"
+      },
+      "tasks": [
+        {
+          "id": "01",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/137",
+          "source_path": "docs/feature-plans/default-theme-language-plugins/01-default-packs.md",
+          "status": "Done"
+        },
+        {
+          "id": "02",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/138",
+          "source_path": "docs/feature-plans/default-theme-language-plugins/02-default-themes.md",
+          "status": "Done"
+        },
+        {
+          "id": "03",
+          "issue": "https://github.com/antelm-dev/shadergrove/issues/139",
+          "source_path": "docs/feature-plans/default-theme-language-plugins/03-default-languages.md",
+          "status": "Done"
+        }
+      ]
+    }
+  ],
+  "board": [
+    {
+      "number": 100,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/100",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Community",
+      "kind": "Feature"
+    },
+    {
+      "number": 101,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/101",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Community",
+      "kind": "Task"
+    },
+    {
+      "number": 102,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/102",
+      "status": "Blocked",
+      "priority": "P2",
+      "workstream": "Community",
+      "kind": "Task"
+    },
+    {
+      "number": 103,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/103",
+      "status": "Ready",
+      "priority": "P1",
+      "workstream": "Editor",
+      "kind": "Feature"
+    },
+    {
+      "number": 104,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/104",
+      "status": "Ready",
+      "priority": "P1",
+      "workstream": "Editor",
+      "kind": "Task"
+    },
+    {
+      "number": 105,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/105",
+      "status": "Ready",
+      "priority": "P1",
+      "workstream": "Discovery",
+      "kind": "Feature"
+    },
+    {
+      "number": 106,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/106",
+      "status": "Ready",
+      "priority": "P1",
+      "workstream": "Discovery",
+      "kind": "Task"
+    },
+    {
+      "number": 107,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/107",
+      "status": "Ready",
+      "priority": "P1",
+      "workstream": "Discovery",
+      "kind": "Task"
+    },
+    {
+      "number": 108,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/108",
+      "status": "Blocked",
+      "priority": "P1",
+      "workstream": "Discovery",
+      "kind": "Feature"
+    },
+    {
+      "number": 109,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/109",
+      "status": "Blocked",
+      "priority": "P1",
+      "workstream": "Discovery",
+      "kind": "Task"
+    },
+    {
+      "number": 110,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/110",
+      "status": "Blocked",
+      "priority": "P1",
+      "workstream": "Discovery",
+      "kind": "Task"
+    },
+    {
+      "number": 111,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/111",
+      "status": "Blocked",
+      "priority": "P1",
+      "workstream": "Plugins",
+      "kind": "Feature"
+    },
+    {
+      "number": 112,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/112",
+      "status": "Blocked",
+      "priority": "P1",
+      "workstream": "Plugins",
+      "kind": "Task"
+    },
+    {
+      "number": 113,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/113",
+      "status": "Blocked",
+      "priority": "P2",
+      "workstream": "Discovery",
+      "kind": "Feature"
+    },
+    {
+      "number": 114,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/114",
+      "status": "Blocked",
+      "priority": "P2",
+      "workstream": "Discovery",
+      "kind": "Task"
+    },
+    {
+      "number": 115,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/115",
+      "status": "Backlog",
+      "priority": "P1",
+      "workstream": "Discovery",
+      "kind": "Feature"
+    },
+    {
+      "number": 116,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/116",
+      "status": "Backlog",
+      "priority": "P3",
+      "workstream": "Hosting",
+      "kind": "Feature"
+    },
+    {
+      "number": 117,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/117",
+      "status": "Backlog",
+      "priority": "P3",
+      "workstream": "Hosting",
+      "kind": "Task"
+    },
+    {
+      "number": 118,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/118",
+      "status": "Backlog",
+      "priority": "P3",
+      "workstream": "Hosting",
+      "kind": "Task"
+    },
+    {
+      "number": 119,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/119",
+      "status": "Backlog",
+      "priority": "P3",
+      "workstream": "Hosting",
+      "kind": "Task"
+    },
+    {
+      "number": 120,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/120",
+      "status": "Ready",
+      "priority": "P2",
+      "workstream": "Editor",
+      "kind": "Feature"
+    },
+    {
+      "number": 121,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/121",
+      "status": "Ready",
+      "priority": "P2",
+      "workstream": "Editor",
+      "kind": "Task"
+    },
+    {
+      "number": 122,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/122",
+      "status": "Ready",
+      "priority": "P2",
+      "workstream": "Editor",
+      "kind": "Task"
+    },
+    {
+      "number": 123,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/123",
+      "status": "Blocked",
+      "priority": "P2",
+      "workstream": "Editor",
+      "kind": "Task"
+    },
+    {
+      "number": 124,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/124",
+      "status": "Ready",
+      "priority": "P2",
+      "workstream": "Desktop",
+      "kind": "Feature"
+    },
+    {
+      "number": 125,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/125",
+      "status": "Ready",
+      "priority": "P2",
+      "workstream": "Desktop",
+      "kind": "Task"
+    },
+    {
+      "number": 126,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/126",
+      "status": "Blocked",
+      "priority": "P2",
+      "workstream": "Desktop",
+      "kind": "Task"
+    },
+    {
+      "number": 127,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/127",
+      "status": "Ready",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Feature"
+    },
+    {
+      "number": 128,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/128",
+      "status": "Ready",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Task"
+    },
+    {
+      "number": 86,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/86",
+      "status": "Blocked",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Task"
+    },
+    {
+      "number": 83,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/83",
+      "status": "Blocked",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Task"
+    },
+    {
+      "number": 85,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/85",
+      "status": "Blocked",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Task"
+    },
+    {
+      "number": 84,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/84",
+      "status": "Blocked",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Task"
+    },
+    {
+      "number": 129,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/129",
+      "status": "Ready",
+      "priority": "P1",
+      "workstream": "Editor",
+      "kind": "Feature"
+    },
+    {
+      "number": 130,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/130",
+      "status": "Ready",
+      "priority": "P1",
+      "workstream": "Editor",
+      "kind": "Task"
+    },
+    {
+      "number": 131,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/131",
+      "status": "Blocked",
+      "priority": "P1",
+      "workstream": "Editor",
+      "kind": "Task"
+    },
+    {
+      "number": 132,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/132",
+      "status": "In Progress",
+      "priority": "P0",
+      "workstream": "Language tooling",
+      "kind": "Feature"
+    },
+    {
+      "number": 52,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/52",
+      "status": "In Progress",
+      "priority": "P0",
+      "workstream": "Language tooling",
+      "kind": "Task"
+    },
+    {
+      "number": 54,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/54",
+      "status": "Blocked",
+      "priority": "P0",
+      "workstream": "Language tooling",
+      "kind": "Task"
+    },
+    {
+      "number": 133,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/133",
+      "status": "Ready",
+      "priority": "P2",
+      "workstream": "External tooling",
+      "kind": "Feature"
+    },
+    {
+      "number": 134,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/134",
+      "status": "Ready",
+      "priority": "P2",
+      "workstream": "External tooling",
+      "kind": "Task"
+    },
+    {
+      "number": 135,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/135",
+      "status": "Blocked",
+      "priority": "P2",
+      "workstream": "External tooling",
+      "kind": "Task"
+    },
+    {
+      "number": 136,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/136",
+      "status": "Done",
+      "priority": "P1",
+      "workstream": "Plugins",
+      "kind": "Feature"
+    },
+    {
+      "number": 137,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/137",
+      "status": "Done",
+      "priority": "P1",
+      "workstream": "Plugins",
+      "kind": "Task"
+    },
+    {
+      "number": 138,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/138",
+      "status": "Done",
+      "priority": "P1",
+      "workstream": "Plugins",
+      "kind": "Task"
+    },
+    {
+      "number": 139,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/139",
+      "status": "Done",
+      "priority": "P1",
+      "workstream": "Plugins",
+      "kind": "Task"
+    },
+    {
+      "number": 140,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/140",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 141,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/141",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Discovery",
+      "kind": "Idea"
+    },
+    {
+      "number": 142,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/142",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Community",
+      "kind": "Idea"
+    },
+    {
+      "number": 143,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/143",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 144,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/144",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Editor",
+      "kind": "Idea"
+    },
+    {
+      "number": 145,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/145",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Discovery",
+      "kind": "Idea"
+    },
+    {
+      "number": 146,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/146",
+      "status": "Done",
+      "priority": "P3",
+      "workstream": "Release",
+      "kind": "Archive"
+    },
+    {
+      "number": 147,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/147",
+      "status": "Backlog",
+      "priority": "P3",
+      "workstream": "Plugins",
+      "kind": "Feature"
+    },
+    {
+      "number": 148,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/148",
+      "status": "Done",
+      "priority": "P3",
+      "workstream": "Plugins",
+      "kind": "Archive"
+    },
+    {
+      "number": 149,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/149",
+      "status": "Backlog",
+      "priority": "P3",
+      "workstream": "Release",
+      "kind": "Archive"
+    },
+    {
+      "number": 150,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/150",
+      "status": "Backlog",
+      "priority": "P1",
+      "workstream": "Release",
+      "kind": "Idea"
+    },
+    {
+      "number": 82,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/82",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 81,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/81",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 80,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/80",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 79,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/79",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 78,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/78",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 77,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/77",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 76,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/76",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 75,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/75",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 74,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/74",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 73,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/73",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 72,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/72",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 71,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/71",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 70,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/70",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 69,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/69",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 68,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/68",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 67,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/67",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 66,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/66",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 65,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/65",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 64,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/64",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 63,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/63",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 62,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/62",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Plugins",
+      "kind": "Idea"
+    },
+    {
+      "number": 61,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/61",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "External tooling",
+      "kind": "Idea"
+    },
+    {
+      "number": 60,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/60",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Analysis",
+      "kind": "Idea"
+    },
+    {
+      "number": 59,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/59",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Analysis",
+      "kind": "Idea"
+    },
+    {
+      "number": 58,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/58",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Debugger",
+      "kind": "Idea"
+    },
+    {
+      "number": 57,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/57",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Debugger",
+      "kind": "Idea"
+    },
+    {
+      "number": 56,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/56",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Render inspection",
+      "kind": "Idea"
+    },
+    {
+      "number": 55,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/55",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Render inspection",
+      "kind": "Idea"
+    },
+    {
+      "number": 53,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/53",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "Debugger",
+      "kind": "Idea"
+    },
+    {
+      "number": 15,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/15",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "AI integrations",
+      "kind": "Idea"
+    },
+    {
+      "number": 14,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/14",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "AI integrations",
+      "kind": "Idea"
+    },
+    {
+      "number": 13,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/13",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "AI integrations",
+      "kind": "Idea"
+    },
+    {
+      "number": 12,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/12",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "AI integrations",
+      "kind": "Idea"
+    },
+    {
+      "number": 11,
+      "url": "https://github.com/antelm-dev/shadergrove/issues/11",
+      "status": "Backlog",
+      "priority": "P2",
+      "workstream": "AI integrations",
+      "kind": "Idea"
+    }
+  ]
+}

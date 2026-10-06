@@ -1,0 +1,12 @@
+{
+  "project": "https://github.com/users/antelm-dev/projects/6",
+  "feature_groups": 15,
+  "worker_tasks": 31,
+  "board_items": 91,
+  "original_documents": 84,
+  "contracts_and_hierarchy_verified": true,
+  "archives_hash_verified": true,
+  "helper_tests": 7,
+  "live_snapshot_verified": true,
+  "active_legacy_run_preserved": true
+}
