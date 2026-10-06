@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Review Feature Agents'
+  short_description: 'Review, test, PR, integrate, and repair work'
+  default_prompt: 'Use $review-feature-agents to review completed candidates against their frozen issue snapshot, validate delivery, create fix prompts and synchronize GitHub evidence when authorized.'

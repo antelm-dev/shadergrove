@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "repository": "antelm-dev/shadergrove",
+  "planning_source": "github-issues",
+  "project_owner": "antelm-dev",
+  "project_number": 6,
+  "project_url": "https://github.com/users/antelm-dev/projects/6",
+  "focused_shader_tooling_project": "https://github.com/users/antelm-dev/projects/5",
+  "contract_key": "agent_plan",
+  "snapshot_helper": "tools/feature-agents/github_plan.py",
+  "workflow_document": "docs/planning/README.md"
+}
