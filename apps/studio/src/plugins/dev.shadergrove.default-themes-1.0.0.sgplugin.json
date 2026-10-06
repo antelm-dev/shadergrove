@@ -1,0 +1,111 @@
+{
+  "manifest": {
+    "id": "dev.shadergrove.default-themes",
+    "version": "1.0.0",
+    "protocolVersion": 3,
+    "appVersionRange": ">=1.5.0 <2.0.0",
+    "name": "Default Themes",
+    "publisher": "Shadergrove",
+    "license": "Apache-2.0",
+    "contributions": [
+      {
+        "kind": "theme",
+        "id": "light",
+        "name": "Light",
+        "schemaVersion": 2,
+        "scheme": "light",
+        "variantGroup": "default",
+        "ui": {
+          "background": "#f7f7f8",
+          "on-background": "#1b1b1d",
+          "surface": "#f7f7f8",
+          "on-surface": "#1b1b1d",
+          "on-surface-variant": "#4f4f55",
+          "surface-container-lowest": "#ffffff",
+          "surface-container-low": "#f2f2f3",
+          "surface-container": "#ececee",
+          "surface-container-high": "#e6e6e8",
+          "surface-container-highest": "#e0e0e3",
+          "outline": "#7b7b82",
+          "outline-variant": "#d3d3d8",
+          "primary": "#276c00",
+          "on-primary": "#ffffff",
+          "primary-container": "#8cfd58",
+          "on-primary-container": "#1b5200",
+          "surface-dim": "#d9d9dc",
+          "surface-bright": "#fbfbfc",
+          "surface-variant": "#e0e0e3",
+          "inverse-surface": "#303033",
+          "inverse-on-surface": "#f2f2f3"
+        },
+        "editor": {
+          "base": "vs",
+          "background": "#fbfcfe",
+          "foreground": "#2b3445",
+          "lineHighlight": "#eef2f8",
+          "lineNumber": "#a5b0c0",
+          "tokens": {
+            "comment": "#7c8798",
+            "keyword": "#8a3fb8",
+            "directive": "#bf4e18",
+            "type": "#2758c8",
+            "predefined": "#0b7285",
+            "variable": "#96631a",
+            "number": "#a15c12",
+            "string": "#3a7d34",
+            "operator": "#0b7285"
+          }
+        }
+      },
+      {
+        "kind": "theme",
+        "id": "dark",
+        "name": "Dark",
+        "schemaVersion": 2,
+        "scheme": "dark",
+        "variantGroup": "default",
+        "ui": {
+          "background": "#141416",
+          "on-background": "#e6e6e8",
+          "surface": "#141416",
+          "on-surface": "#e6e6e8",
+          "on-surface-variant": "#a9a9af",
+          "surface-container-lowest": "#0e0e10",
+          "surface-container-low": "#1a1a1c",
+          "surface-container": "#1f1f22",
+          "surface-container-high": "#28282b",
+          "surface-container-highest": "#323236",
+          "outline": "#7b7b82",
+          "outline-variant": "#2e2e33",
+          "primary": "#71df3e",
+          "on-primary": "#103800",
+          "primary-container": "#1b5200",
+          "on-primary-container": "#8cfd58",
+          "surface-dim": "#141416",
+          "surface-bright": "#39393d",
+          "surface-variant": "#323236",
+          "inverse-surface": "#e6e6e8",
+          "inverse-on-surface": "#303033"
+        },
+        "editor": {
+          "base": "vs-dark",
+          "background": "#10141c",
+          "foreground": "#d6deeb",
+          "lineHighlight": "#1a2130",
+          "lineNumber": "#3c4759",
+          "tokens": {
+            "comment": "#6b7a8d",
+            "keyword": "#c792ea",
+            "directive": "#f78c6c",
+            "type": "#82aaff",
+            "predefined": "#89ddff",
+            "variable": "#ffcb6b",
+            "number": "#f5c078",
+            "string": "#c3e88d",
+            "operator": "#89ddff"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -9,6 +9,7 @@ ENV CI=true \
     NG_CLI_ANALYTICS=false \
     ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
+# renovate: datasource=npm depName=pnpm
 RUN npm install --global pnpm@10.28.2
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -35,25 +36,26 @@ RUN pnpm gen:ipc \
 # The SSR output keeps PostgreSQL and Swagger external. Install their runtime
 # dependencies into an isolated tree; Swagger must remain external because its
 # CommonJS internals are not compatible with the bundled ESM server.
-RUN mkdir -p /runtime-deps && cd /runtime-deps \
-    && npm init -y >/dev/null 2>&1 \
-    && npm install --omit=dev --no-package-lock pg@8.22.0 @nestjs/swagger@11.4.6
+COPY ops/runtime-deps/package.json ops/runtime-deps/package-lock.json /runtime-deps/
+RUN cd /runtime-deps && npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
 # ---- runtime ----------------------------------------------------------------
 FROM node:24-alpine AS runtime
+
+# Package installation happens in the build stage; the server only needs Node.
+# Remove npm and its bundled dependencies from the shipped image.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 WORKDIR /app
 
 ENV NODE_ENV=production \
     PORT=4000 \
-    SHADER_DATA_DIR=/data \
-    SHADER_EXAMPLES_DIR=/app/examples
+    SHADER_DATA_DIR=/data
 
-# SSR bundle + examples + i18n catalogs + the CLI, plus the PostgreSQL and
+# SSR bundle + i18n catalogs + the CLI, plus the PostgreSQL and
 # Swagger runtime dependencies. Express and Angular are inlined
 # into the bundle.
 COPY --from=build /app/dist/shadergrove ./dist/shadergrove
-COPY --from=build /app/examples ./examples
 COPY --from=build /app/i18n ./i18n
 COPY --from=build /runtime-deps/node_modules ./node_modules
 

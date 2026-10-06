@@ -45,7 +45,7 @@ async function buildDesktop() {
 async function packageDesktop() {
   const platform = options.platform ?? Platform.current();
   const target = options.mode === 'pack' ? 'dir' : null;
-  const arch = options.arch ? [options.arch] : [];
+  const arch = options.archs;
   const useStaging = process.platform === 'win32';
   const stagingDir = join(tmpdir(), 'shadergrove-electron-out');
 
@@ -121,17 +121,17 @@ function parseArguments(args) {
   }
 
   let platform;
-  let arch;
+  const archs = [];
 
   for (const argument of args) {
     if (argument === '--win') platform = Platform.WINDOWS;
     else if (argument === '--mac') platform = Platform.MAC;
     else if (argument === '--linux') platform = Platform.LINUX;
-    else if (argument.startsWith('--arch=')) arch = parseArch(argument.slice(7));
+    else if (argument.startsWith('--arch=')) archs.push(parseArch(argument.slice(7)));
     else usage(`Unknown option: ${argument}`);
   }
 
-  return { mode, platform, arch };
+  return { mode, platform, archs: [...new Set(archs)] };
 }
 
 function parseArch(value) {

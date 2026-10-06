@@ -59,7 +59,7 @@
            the toolbar is meant to be replacing. -->
       @if (!desktop.available) {
       <span class="brand" aria-label="Shadergrove">
-        <span class="brand-mark" aria-hidden="true"></span>
+        <img class="brand-mark" src="assets/shadergrove-logo.png" width="28" height="28" alt="" />
         <span class="brand-title">Shadergrove</span>
       </span>
       } @if (explore().publicExplore) {
@@ -429,22 +429,42 @@
 
   <app-theme-menu #themeMenu="appThemeMenu" />
 
+  <!-- The active packs' languages, by reference; then the bundled English, always there. -->
   <mat-menu #languageMenu="matMenu">
-    @for (option of languageOptions; track option.value) {
+    @for (entry of i18n.languages(); track entry.ref) {
     <button
       mat-menu-item
       type="button"
       role="menuitemradio"
-      [attr.aria-checked]="i18n.locale() === option.value"
-      (click)="setLanguage(option.value)"
+      [attr.lang]="entry.language.locale"
+      [attr.aria-checked]="i18n.isSelected(entry.ref)"
+      [attr.data-testid]="'language-option-' + entry.ref"
+      (click)="i18n.select(entry.ref)"
     >
       <mat-icon>translate</mat-icon>
-      <span>{{ option.labelKey | translate }}</span>
-      @if (i18n.locale() === option.value) {
+      <span>{{ i18n.label(entry) }}</span>
+      @if (i18n.isSelected(entry.ref)) {
       <mat-icon class="theme-check" aria-hidden="true">check</mat-icon>
       }
     </button>
+    } @if (i18n.languages().length > 0) {
+    <mat-divider />
     }
+    <button
+      mat-menu-item
+      type="button"
+      role="menuitemradio"
+      lang="en"
+      [attr.aria-checked]="i18n.isSelected(fallbackLanguage)"
+      data-testid="language-option-fallback-en"
+      (click)="i18n.select(fallbackLanguage)"
+    >
+      <mat-icon>language</mat-icon>
+      <span>{{ 'language.fallback' | translate }}</span>
+      @if (i18n.isSelected(fallbackLanguage)) {
+      <mat-icon class="theme-check" aria-hidden="true">check</mat-icon>
+      }
+    </button>
   </mat-menu>
 
   <mat-sidenav-container class="body" [hasBackdrop]="isHandset()">

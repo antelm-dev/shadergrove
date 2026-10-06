@@ -2,6 +2,71 @@
   "format": "shadergrove-plugin-catalogue/v1",
   "packages": [
     {
+      "id": "dev.shadergrove.default-themes",
+      "version": "1.0.0",
+      "name": "Default Themes",
+      "description": "Shadergrove's own Light and Dark themes for the app and the code editor, paired so the app can follow your system's setting.",
+      "publisher": "Shadergrove",
+      "license": "Apache-2.0",
+      "protocolVersion": 3,
+      "appVersionRange": ">=1.5.0 <2.0.0",
+      "file": "dev.shadergrove.default-themes-1.0.0.sgplugin.json",
+      "bytes": 3450,
+      "sha256": "10cf634a2e8f56c29474586b50547a270a594865be0e2c4393f8d5cbb7d85871",
+      "contributions": [
+        {
+          "kind": "theme",
+          "id": "light",
+          "name": "Light"
+        },
+        {
+          "kind": "theme",
+          "id": "dark",
+          "name": "Dark"
+        }
+      ]
+    },
+    {
+      "id": "dev.shadergrove.language-en",
+      "version": "1.0.0",
+      "name": "English",
+      "description": "Shadergrove's interface in English.",
+      "publisher": "Shadergrove",
+      "license": "Apache-2.0",
+      "protocolVersion": 3,
+      "appVersionRange": ">=1.5.0 <2.0.0",
+      "file": "dev.shadergrove.language-en-1.0.0.sgplugin.json",
+      "bytes": 44685,
+      "sha256": "594088158a9f29415005aa4446c07b6715ca5e253ba60601db37781e6ec83013",
+      "contributions": [
+        {
+          "kind": "language",
+          "id": "english",
+          "name": "English"
+        }
+      ]
+    },
+    {
+      "id": "dev.shadergrove.language-fr",
+      "version": "1.0.0",
+      "name": "French",
+      "description": "Shadergrove's interface in French (Français).",
+      "publisher": "Shadergrove",
+      "license": "Apache-2.0",
+      "protocolVersion": 3,
+      "appVersionRange": ">=1.5.0 <2.0.0",
+      "file": "dev.shadergrove.language-fr-1.0.0.sgplugin.json",
+      "bytes": 49109,
+      "sha256": "99ce4fdc4577e240273756af3001393b04c6e3242b90dc51fcd3e1815e09fe9d",
+      "contributions": [
+        {
+          "kind": "language",
+          "id": "french",
+          "name": "French"
+        }
+      ]
+    },
+    {
       "id": "dev.shadergrove.shadertoy",
       "version": "1.0.0",
       "name": "Shadertoy Import",

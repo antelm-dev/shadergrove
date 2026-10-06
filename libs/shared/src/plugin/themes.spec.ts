@@ -9,6 +9,8 @@ import {
   parsePluginThemeRef,
   pluginThemeRef,
   sanitizeAppThemeId,
+  sanitizeAppThemeMode,
+  themeVariant,
   type ThemeContribution,
 } from './themes';
 
@@ -184,9 +186,69 @@ describe('theme contributions', () => {
   it('refuses the kind under an older protocol, and a package for a future one', () => {
     const result = validatePluginPackage({
       ...themes([dark]),
-      manifest: { ...themes([dark]).manifest, protocolVersion: 3 },
+      manifest: { ...themes([dark]).manifest, protocolVersion: 4 },
     });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('paired themes (schema 2)', () => {
+  const pair = (overrides: Record<string, unknown>[] = [{}, {}]) =>
+    themes([
+      { ...dark, schemaVersion: 2, variantGroup: 'amber', ...overrides[0] },
+      { ...light, schemaVersion: 2, variantGroup: 'amber', ...overrides[1] },
+    ]);
+  const v3 = (input: ReturnType<typeof themes>) => ({
+    ...input,
+    manifest: { ...input.manifest, protocolVersion: 3 },
+  });
+
+  it('accepts one light and one dark theme sharing a group, under protocol 3', () => {
+    const result = validatePluginPackage(v3(pair()));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [first, second] = result.value.manifest.contributions as ThemeContribution[];
+    expect(first).toMatchObject({ schemaVersion: 2, variantGroup: 'amber', scheme: 'dark' });
+    expect(themeVariant([first!, second!], first!, 'light')).toBe(second);
+    expect(themeVariant([first!, second!], first!, 'dark')).toBe(first);
+  });
+
+  it('needs protocol 3 for schema 2, and refuses a group in schema 1', () => {
+    expect(errors(pair())[0]).toMatch(/theme schemaVersion 2 needs protocolVersion 3/);
+    expect(errors(v3(themes([{ ...dark, variantGroup: 'amber' }])))[0]).toMatch(
+      /variantGroup is not a known field/,
+    );
+    expect(validatePluginPackage(v3(themes([dark, light]))).ok).toBe(true);
+  });
+
+  it('refuses incomplete, doubled or malformed groups', () => {
+    expect(errors(v3(themes([{ ...dark, schemaVersion: 2, variantGroup: 'amber' }])))[0]).toMatch(
+      /exactly one light and one dark/,
+    );
+    expect(errors(v3(pair([{}, { scheme: 'dark', editor }])))[0]).toMatch(
+      /exactly one light and one dark/,
+    );
+    const third = { ...light, id: 'amber-paper', schemaVersion: 2, variantGroup: 'amber' };
+    expect(
+      errors(
+        v3(
+          themes([
+            { ...dark, schemaVersion: 2, variantGroup: 'amber' },
+            { ...light, schemaVersion: 2, variantGroup: 'amber' },
+            third,
+          ]),
+        ),
+      )[0],
+    ).toMatch(/exactly one light and one dark/);
+    expect(errors(v3(pair([{ variantGroup: 'Amber' }, {}])))[0]).toMatch(/variantGroup must be/);
+    expect(errors(v3(themes([{ ...dark, schemaVersion: 3 }])))[0]).toMatch(/not supported/);
+  });
+
+  it('pairs only within a group: an ungrouped theme has no variant', () => {
+    const result = validatePluginPackage(v3(themes([dark, light])));
+    if (!result.ok) throw new Error(result.errors[0]);
+    const all = result.value.manifest.contributions as ThemeContribution[];
+    expect(themeVariant(all, all[0]!, 'light')).toBeNull();
   });
 });
 
@@ -243,5 +305,12 @@ describe('theme references', () => {
     expect(sanitizeAppThemeId('plugin:pack')).toBe('builtin');
     expect(sanitizeAppThemeId('dark')).toBe('builtin');
     expect(sanitizeAppThemeId({ id: 'plugin:pack/dark' })).toBe('builtin');
+  });
+
+  it('sanitizes the theme mode: fixed unless it says system', () => {
+    expect(sanitizeAppThemeMode('system')).toBe('system');
+    expect(sanitizeAppThemeMode('fixed')).toBe('fixed');
+    expect(sanitizeAppThemeMode('auto')).toBe('fixed');
+    expect(sanitizeAppThemeMode(undefined)).toBe('fixed');
   });
 });

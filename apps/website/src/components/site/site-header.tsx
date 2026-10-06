@@ -25,12 +25,15 @@ export function SiteHeader() {
         <Link className={styles.desktopLink} href="/#playground">
           The grove
         </Link>
-        <a className={styles.navCta} href="https://github.com/antelm-dev/shadergrove">
-          GitHub{' '}
+        <Link className={styles.desktopLink} href="/changelog">
+          Changelog
+        </Link>
+        <Link className={styles.navCta} href="/download">
+          Download{' '}
           <span className="arrow" aria-hidden="true">
             ↗
           </span>
-        </a>
+        </Link>
       </nav>
     </header>
   );

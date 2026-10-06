@@ -6,14 +6,13 @@ import {
   provideZonelessChangeDetection,
 } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
+import { provideClientHydration, withNoIncrementalHydration } from '@angular/platform-browser';
 import { MatIconRegistry } from '@angular/material/icon';
 import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routes';
 import { HttpShaderApi, ShaderApi } from './api/shader-api';
 import { authInterceptor } from './auth/auth.interceptor';
-import { HttpI18nCatalog } from './i18n/catalog';
 import { provideI18n } from './i18n/provide-i18n';
 import { provideHostAdapters } from './plugins/host-adapters';
 import { ShadertoyApiProvider } from './plugins/providers/shadertoy-provider';
@@ -30,7 +29,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([authInterceptor])),
     HttpShaderApi,
     { provide: ShaderApi, useExisting: HttpShaderApi },
-    provideI18n(HttpI18nCatalog),
+    provideI18n(),
     // The host halves of the official plugins: what their manifests may name, nothing more.
     provideHostAdapters({
       sourceProviders: [ShadertoyApiProvider],
@@ -45,6 +44,9 @@ export const appConfig: ApplicationConfig = {
         'mat-ligature-font',
       );
     }),
-    provideClientHydration(withEventReplay()),
+    // Incremental hydration injects event-replay scripts into SSR HTML. The
+    // workspace has no deferred hydration blocks, so keep regular hydration
+    // without inline scripts that its script-src 'self' CSP would block.
+    provideClientHydration(withNoIncrementalHydration()),
   ],
 };

@@ -1,0 +1,68 @@
+name: Dependency security and SBOM
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: Image scope (all, studio, or website)
+        type: string
+        default: all
+      ref:
+        description: Commit to build and inventory (empty uses the calling workflow commit)
+        type: string
+        default: ''
+      version:
+        description: Release version for SBOM metadata (empty uses package.json)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    name: ${{ inputs.image }} · vulnerabilities · SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # renovate: datasource=node-version depName=node
+          node-version: '26.5.0'
+      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          # renovate: datasource=github-releases depName=aquasecurity/trivy
+          version: 'v0.75.0'
+      - name: Check SSR runtime lockfile
+        run: node .github/scripts/check-runtime-deps.mjs
+      - name: Generate workspace SBOM (including build tools and Electron)
+        if: inputs.image != 'website'
+        env:
+          SBOM_VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p tmp/security
+          # renovate: datasource=npm depName=@cdxgen/cdxgen
+          npm exec --yes --package=@cdxgen/cdxgen@13.3.0 -- cdxgen -t pnpm --recurse --no-install-deps --no-babel --fail-on-error --spec-version 1.6 --output tmp/security/workspace.cdx.json
+          node .github/scripts/prepare-sbom.mjs tmp/security/workspace.cdx.json
+      - name: Build production image
+        if: inputs.image != 'website'
+        run: docker build --tag shadergrove:security .
+      - name: Build website image
+        if: inputs.image != 'studio'
+        run: docker build --file Dockerfile.website --tag shadergrove-website:security .
+      - name: Inventory and scan final images
+        env:
+          IMAGE_SCOPE: ${{ inputs.image }}
+        run: bash .github/scripts/scan-images.sh "$IMAGE_SCOPE"
+      - name: Upload SBOMs and complete vulnerability reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dependency-security-${{ inputs.image }}
+          path: tmp/security/
+          if-no-files-found: error
+          retention-days: 30

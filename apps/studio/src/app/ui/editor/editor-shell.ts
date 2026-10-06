@@ -13,7 +13,7 @@ import {
 } from '@angular/core';
 
 import { EDITOR_LIMITS } from '@shadergrove/shared/editor-prefs';
-import { isContainedPlacement } from '@shadergrove/shared/surfaces';
+import { isContainedPlacement, placementFromRestorePoint } from '@shadergrove/shared/surfaces';
 import type { ResizeEdge } from '@shadergrove/shared/geometry';
 import { EditorPanel } from './editor-panel';
 import { ReducedMotion } from '../../prefs/reduced-motion';
@@ -193,7 +193,21 @@ export class EditorShell {
     return projected.mode;
   });
 
-  protected readonly dockSide = computed(() => this.projected().dockSide ?? 'bottom');
+  // Minimized chrome remains in the dock it occupied before collapsing.
+  private readonly minimizedDock = computed(() => {
+    const surface = this.surface();
+    const placement = surface.placement;
+    if (!isContainedPlacement(placement) || placement.mode !== 'minimized') return null;
+    if (placement.restore.mode !== 'docked') return null;
+    return projectSurfaceFrame(
+      { ...surface, placement: placementFromRestorePoint(placement.restore) },
+      this.registry.viewport(),
+    );
+  });
+
+  protected readonly dockSide = computed(
+    () => this.projected().dockSide ?? this.minimizedDock()?.dockSide ?? 'bottom',
+  );
 
   protected readonly windowZIndex = computed(() =>
     this.projected().stacked ? this.layout.zIndex(this.editorId) : null,
@@ -214,7 +228,7 @@ export class EditorShell {
     const mode = this.mode();
     if (mode === 'floating') return this.projected().frame?.width ?? null;
     if ((mode === 'docked' || mode === 'minimized') && this.dockSide() !== 'bottom') {
-      return this.projected().dockSize;
+      return this.projected().dockSize ?? this.minimizedDock()?.dockSize ?? null;
     }
     return null;
   });

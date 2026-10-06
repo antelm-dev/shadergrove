@@ -1,0 +1,216 @@
+name: Publish desktop packages
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      channel:
+        required: true
+        type: string
+      linux:
+        default: false
+        type: boolean
+      macos:
+        default: false
+        type: boolean
+    secrets:
+      CSC_LINK:
+        required: false
+      CSC_KEY_PASSWORD:
+        required: false
+      APPLE_ID:
+        required: false
+      APPLE_APP_SPECIFIC_PASSWORD:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      matrix: ${{ steps.platforms.outputs.matrix }}
+      platforms: ${{ steps.platforms.outputs.platforms }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.sha }}
+      - name: Resolve platforms and require the correct draft
+        id: platforms
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ inputs.sha }}
+          CHANNEL: ${{ inputs.channel }}
+          LINUX: ${{ inputs.linux }}
+          MACOS: ${{ inputs.macos }}
+        run: |
+          set -euo pipefail
+          if [ "$CHANNEL" = beta ]; then
+            bash .github/scripts/release-version.sh beta "${TAG#v}" --write
+          else
+            bash .github/scripts/release-version.sh "$CHANNEL" "${TAG#v}"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            test "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = true || {
+              echo "Release $TAG is already published"; exit 1;
+            }
+            expected=false
+            [ "$CHANNEL" = beta ] && expected=true
+            test "$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease)" = "$expected"
+            tag_sha="$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha 2>/dev/null || true)"
+            if [ -n "$tag_sha" ]; then
+              test "$tag_sha" = "$SHA" || { echo 'Release tag points at another commit'; exit 1; }
+            else
+              test "$(gh release view "$TAG" --json targetCommitish --jq .targetCommitish)" = "$SHA"
+            fi
+          elif [ "$CHANNEL" = beta ]; then
+            gh release create "$TAG" --target "$SHA" --title "Shadergrove $TAG" --generate-notes --prerelease --draft
+          else
+            echo 'The stable draft must first be created by Release Please'; exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          const include = [{ os: 'windows-latest', platform: 'windows', command: 'dist:win' }];
+          if (process.env.LINUX === 'true') include.push({ os: 'ubuntu-22.04', platform: 'linux', command: 'dist:linux' });
+          if (process.env.MACOS === 'true') include.push({ os: 'macos-15', platform: 'macos', command: 'dist:mac' });
+          appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include })}\nplatforms=${include.map(p => p.platform).join(',')}\n`);
+          NODE
+
+  package:
+    name: Package ${{ matrix.platform }}
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.sha }}
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # renovate: datasource=node-version depName=node
+          node-version: '26.5.0'
+          cache: pnpm
+      - name: Check or set the build version
+        shell: bash
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ "$CHANNEL" = beta ]; then
+            bash .github/scripts/release-version.sh beta "${TAG#v}" --write
+          else
+            bash .github/scripts/release-version.sh stable "${TAG#v}"
+          fi
+      - name: Require macOS signing and notarization credentials
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD" && test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID" || {
+            echo 'macOS release credentials are incomplete'; exit 1;
+          }
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build desktop packages
+        run: pnpm ${{ matrix.command }}
+        env:
+          NX_NO_CLOUD: 'true'
+          NX_DAEMON: 'false'
+          ELECTRON_BUILDER_PUBLISH: never
+          ELECTRON_UPDATE_CHANNEL: ${{ inputs.channel == 'stable' && 'latest' || 'beta' }}
+          CSC_LINK: ${{ matrix.platform == 'macos' && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.platform == 'macos' && secrets.CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ matrix.platform == 'macos' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.platform == 'macos' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ matrix.platform == 'macos' && secrets.APPLE_TEAM_ID || '' }}
+      - name: Collect distributables and updater files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: desktop-release-${{ matrix.platform }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            release/*.exe
+            release/*.exe.blockmap
+            release/*.AppImage
+            release/*.deb
+            release/*.dmg
+            release/*.zip
+            release/${{ inputs.channel == 'stable' && 'latest' || 'beta' }}*.yml
+
+  publish:
+    name: Verify and publish complete release
+    needs: [prepare, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Recovery may target a commit predating the verifier. Build artifacts
+      # remain pinned to inputs.sha; verification tooling follows this workflow.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.workflow_sha }}
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # renovate: datasource=node-version depName=node
+          node-version: '26.5.0'
+          cache: pnpm
+      - name: Install verification tools
+        run: pnpm install --filter @shadergrove/workspace-tools --frozen-lockfile
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: desktop-release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Download release inventories
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dependency-security-all
+          path: tmp/security
+      - name: Upload, verify and publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          CHANNEL: ${{ inputs.channel }}
+          PLATFORMS: ${{ needs.prepare.outputs.platforms }}
+        run: |
+          set -euo pipefail
+          test "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = true
+          gh release upload "$TAG" release-assets/* tmp/security/*.cdx.json --clobber
+          manifest=latest
+          [ "$CHANNEL" = beta ] && manifest=beta
+          pnpm --filter @shadergrove/workspace-tools verify:release "$TAG" "$manifest" "$PLATFORMS"
+          if [ "$CHANNEL" = beta ]; then
+            gh release edit "$TAG" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$TAG" --draft=false
+          fi

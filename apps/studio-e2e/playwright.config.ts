@@ -47,8 +47,6 @@ export default defineConfig({
       FORCE_COLOR: '0',
       // A set DATABASE_URL would win over the throwaway SQLite store serve.ts makes.
       DATABASE_URL: '',
-      SHADER_SEED: '1',
-      SHADER_EXAMPLES_DIR: '',
       BETTER_AUTH_URL: BASE_URL,
       AUTH_TRUSTED_ORIGINS: BASE_URL,
       // Sign up and sign in without a mailbox, Have I Been Pwned or a throttle.

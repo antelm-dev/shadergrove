@@ -1,13 +1,10 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Preferences, type WorkspacePreferences } from '../../prefs/preferences';
-import { I18nCatalog, type I18nCatalogMap } from '../../i18n/catalog';
 import { I18n } from '../../i18n/i18n';
+import { provideTestLanguages, speaking } from '../../i18n/testing/languages';
 import type { TranslationKey } from '../../i18n/keys';
 import {
   INFORMATIONAL_CAPABILITIES,
@@ -16,16 +13,6 @@ import {
   type ExplorerTree,
 } from './contract';
 import { ExplorerPanel } from './explorer-panel';
-
-class FileCatalog extends I18nCatalog {
-  override load(locale: 'en' | 'fr'): Promise<I18nCatalogMap> {
-    const raw = readFileSync(
-      resolve(import.meta.dirname, `../../../../../../i18n/${locale}.json`),
-      'utf8',
-    );
-    return Promise.resolve(JSON.parse(raw) as I18nCatalogMap);
-  }
-}
 
 const doc = (id: string, patch: Partial<ExplorerNode> = {}, depth = 1): ExplorerNode => ({
   id,
@@ -178,7 +165,7 @@ function dispatchDragEvent(
 }
 
 describe('ExplorerPanel', () => {
-  const language = signal({ language: 'en' as 'en' | 'fr' });
+  const language = signal(speaking('en'));
   const tree = signal<ExplorerTree>(sampleTree());
   let resizeObserverCallback: ((entries: Array<{ contentRect: { width: number } }>) => void) | null;
 
@@ -196,25 +183,24 @@ describe('ExplorerPanel', () => {
     );
 
     tree.set(sampleTree());
-    language.set({ language: 'en' });
+    language.set(speaking('en'));
     TestBed.configureTestingModule({
       imports: [ExplorerPanel],
       providers: [
         provideZonelessChangeDetection(),
         I18n,
-        { provide: I18nCatalog, useClass: FileCatalog },
+        provideTestLanguages(),
         {
           provide: Preferences,
           useValue: {
             value: language.asReadonly(),
             patch: (patch: Partial<WorkspacePreferences>) => {
-              if (patch.language) language.set({ language: patch.language });
+              language.update((value) => ({ ...value, ...patch }));
             },
           },
         },
       ],
     });
-    await TestBed.inject(I18n).ensureLoaded('en');
   });
 
   afterEach(() => {
@@ -426,8 +412,7 @@ describe('ExplorerPanel', () => {
     expect(row.textContent?.trim()).toBe('Texture slot 0');
     expect(row.textContent).not.toContain('{slot}');
 
-    language.set({ language: 'fr' });
-    await TestBed.inject(I18n).ensureLoaded('fr');
+    language.set(speaking('fr'));
     fixture.detectChanges();
 
     row = fixture.nativeElement.querySelector(
@@ -492,8 +477,7 @@ describe('ExplorerPanel', () => {
     expect(row.textContent?.trim()).toBe('Buffer “missing target”');
     expect(row.textContent).not.toContain('{name}');
 
-    language.set({ language: 'fr' });
-    await TestBed.inject(I18n).ensureLoaded('fr');
+    language.set(speaking('fr'));
     fixture.detectChanges();
 
     row = fixture.nativeElement.querySelector(

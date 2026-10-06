@@ -16,29 +16,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect affected applications
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      studio: ${{ steps.scope.outputs.studio }}
+      website: ${{ steps.scope.outputs.website }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # renovate: datasource=node-version depName=node
+          node-version: '26.5.0'
+      - uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5
+        id: shas
+        with:
+          main-branch-name: ${{ github.base_ref || github.ref_name }}
+      - name: Test application routing
+        run: node --test .github/scripts/ci-scope.test.mjs
+      - name: Test restricted deployment routing
+        run: bash .github/scripts/deploy-on-vps.test.sh
+      - name: Select applications
+        id: scope
+        env:
+          FULL_CI: ${{ github.event_name == 'workflow_dispatch' || steps.shas.outputs.noPreviousBuild == 'true' }}
+        run: node .github/scripts/ci-scope.mjs
+
   check:
-    name: lint · check · typecheck · test · build
+    name: lint · format
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
 
       # Installs the exact pnpm from package.json's `packageManager` field.
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           # Matches the `volta.node` pin; `engines` also allows 22 and 24.
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
 
       - name: Install
         run: pnpm install --frozen-lockfile
-
-      - uses: nrwl/nx-set-shas@v5
 
       - name: Lint
         run: pnpm lint
@@ -46,32 +76,86 @@ jobs:
       - name: Format
         run: pnpm format:check
 
+      - name: Check SSR runtime lockfile
+        run: |
+          node .github/scripts/check-runtime-deps.mjs
+          node --test .github/scripts/dependency-security.test.mjs
+
+  studio-check:
+    name: Studio · check · typecheck · test · build
+    needs: changes
+    if: needs.changes.outputs.studio == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # renovate: datasource=node-version depName=node
+          node-version: '26.5.0'
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
       - name: Check i18n · fonts · ipc
         run: pnpm check
 
       - name: Typecheck
-        run: pnpm gen:ipc && pnpm typecheck:scripts && pnpm nx affected -t typecheck --exclude shadergrove
+        run: pnpm gen:ipc && pnpm nx run-many -t typecheck --exclude 'shadergrove,@shadergrove/website,@shadergrove/brand'
 
       - name: Test
-        run: pnpm nx affected -t test --exclude shadergrove
+        run: pnpm nx run-many -t test --exclude 'shadergrove,@shadergrove/website,@shadergrove/brand'
 
       - name: Build
         # Desktop packaging has its own Windows job below.
-        run: pnpm nx affected -t build --exclude shadergrove
+        run: pnpm nx run-many -t build --exclude 'shadergrove,@shadergrove/website,@shadergrove/brand' && pnpm nx run @shadergrove/maintenance:build:cli
 
       - name: Production SSR smoke
-        run: pnpm build && pnpm smoke:ssr
+        run: pnpm smoke:ssr
+
+  website-check:
+    name: Website · typecheck · test · build
+    needs: changes
+    if: needs.changes.outputs.website == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # renovate: datasource=node-version depName=node
+          node-version: '26.5.0'
+          cache: pnpm
+      - name: Install website dependencies
+        run: pnpm install --filter @shadergrove/website... --filter @shadergrove/workspace-tools --frozen-lockfile
+      - name: Typecheck website and brand
+        run: pnpm --filter @shadergrove/brand typecheck && pnpm --filter @shadergrove/website typecheck
+      - name: Test brand
+        run: pnpm --filter @shadergrove/brand test
+      - name: Build static website
+        run: pnpm --filter @shadergrove/website build
+      - name: Install Chromium
+        run: pnpm --filter @shadergrove/workspace-tools exec playwright install chromium --with-deps
+      - name: Website release pages smoke
+        run: pnpm --filter @shadergrove/workspace-tools smoke:website
 
   smoke:
     name: UI smoke
+    needs: changes
+    if: needs.changes.outputs.studio == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
       - name: Install
@@ -87,14 +171,17 @@ jobs:
 
   e2e:
     name: E2E
+    needs: changes
+    if: needs.changes.outputs.studio == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
       - name: Install
@@ -108,7 +195,7 @@ jobs:
         run: pnpm e2e
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-report-${{ github.run_attempt }}
           path: |
@@ -117,26 +204,83 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  docker:
-    name: Docker image
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+  docker:
+    name: Studio Docker security
+    needs: changes
+    if: needs.changes.outputs.studio == 'true'
+    uses: ./.github/workflows/dependency-security.yml
+    with:
+      image: studio
+
+  docker-website:
+    name: Website Docker security
+    needs: changes
+    if: needs.changes.outputs.website == 'true'
+    uses: ./.github/workflows/dependency-security.yml
+    with:
+      image: website
+
+  deploy-staging:
+    name: Deploy studio staging
+    needs: [check, studio-check, smoke, e2e, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.45-155-170-120.sslip.io/
+    timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v6
-      - name: Build production image
-        run: docker build --tag shadergrove:ci .
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Queue studio deployment in Dokploy
+        env:
+          STAGING_DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
+          DEPLOY_TARGET: studio
+        run: bash .github/scripts/queue-deploy.sh
+
+  deploy-website:
+    name: Deploy website
+    needs: [check, website-check, docker-website]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://shadergrove.45-155-170-120.sslip.io/
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Queue website deployment in Dokploy
+        env:
+          STAGING_DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
+          DEPLOY_TARGET: website
+        run: bash .github/scripts/queue-deploy.sh
 
   desktop:
     name: Windows desktop package
+    needs: changes
+    if: needs.changes.outputs.studio == 'true' || github.ref == 'refs/heads/preview'
     runs-on: windows-latest
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
       - name: Install
@@ -145,7 +289,7 @@ jobs:
         run: pnpm pack:win
       - name: Upload preview application
         if: github.event_name == 'push' && github.ref == 'refs/heads/preview'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: shadergrove-preview-${{ github.sha }}
           path: release/**

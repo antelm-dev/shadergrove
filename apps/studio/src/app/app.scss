@@ -59,9 +59,15 @@ app-titlebar {
   // Material's default toolbar and icon-button metrics are intentionally roomy.
   // Keep the app chrome compact so it does not compete with the shader canvas.
   button[matIconButton] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
     width: 32px;
     height: 32px;
     padding: 6px;
+    --mat-icon-button-state-layer-size: 32px;
+    --mat-icon-button-icon-size: 20px;
 
     mat-icon {
       width: 20px;
@@ -210,21 +216,12 @@ app-titlebar {
   white-space: nowrap;
 }
 
-// The mark is a swatch of what the app makes: a gradient swept round a point.
-// It starts and ends on the accent, so it follows the theme.
 .brand-mark {
-  width: 16px;
-  height: 16px;
-  border-radius: 5px;
-  background: conic-gradient(
-    from 210deg,
-    var(--mat-sys-primary),
-    #7c5cff 34%,
-    #ff5c9d 60%,
-    #ffb547 80%,
-    var(--mat-sys-primary)
-  );
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 14%);
+  display: block;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
 }
 
 // The open document, as a document title rather than a chip: its name, then

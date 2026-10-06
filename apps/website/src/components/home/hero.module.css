@@ -23,6 +23,19 @@
   position: relative;
   z-index: 2;
 }
+/* Soften the animated field behind the copy, fading into the untouched artwork. */
+.copy::before {
+  content: '';
+  position: absolute;
+  inset: -56px -64px;
+  z-index: -1;
+  pointer-events: none;
+  background: rgb(16 20 14 / 35%);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  -webkit-mask-image: radial-gradient(ellipse, #000 35%, transparent 72%);
+  mask-image: radial-gradient(ellipse, #000 35%, transparent 72%);
+}
 .eyebrow {
   display: flex;
   align-items: center;
@@ -238,6 +251,9 @@
   }
 }
 @media (max-width: 720px) {
+  .copy::before {
+    inset: -32px -20px;
+  }
   .hero {
     grid-template-columns: 1fr;
     min-height: 0;

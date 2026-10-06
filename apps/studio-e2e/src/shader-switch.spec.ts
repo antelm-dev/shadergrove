@@ -16,7 +16,7 @@ test('switching shaders keeps the URL, the selection and the page in step', asyn
   const { shaders } = (await response.json()) as { shaders: { id: string; name: string }[] };
   const idOf = (name: string) => {
     const shader = shaders.find((candidate) => candidate.name === name);
-    if (!shader) throw new Error(`"${name}" is not in the seeded library`);
+    if (!shader) throw new Error(`"${name}" is not in the test library`);
     return shader.id;
   };
   const expectOpen = (name: string) => expectShaderOpen(page, name, idOf(name), shaders.length);

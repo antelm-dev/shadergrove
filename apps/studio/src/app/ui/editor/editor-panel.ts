@@ -88,12 +88,13 @@ type EditorSurface = Pick<CodeEditor, 'focus' | 'format' | 'layout' | 'revealIn'
         <span class="dirty" aria-live="polite">{{ status.label() }}</span>
       }
 
-      @if (activePass()) {
+      @if (activePass() && !collapsed()) {
         <button
           type="button"
           class="config-toggle"
           [matButton]="configOpen() ? 'tonal' : 'text'"
           [attr.aria-pressed]="configOpen()"
+          [attr.aria-label]="'editor.passSettings' | translate"
           [matTooltip]="'editor.passSettings' | translate"
           (click)="configOpen.set(!configOpen())"
         >
@@ -284,6 +285,7 @@ type EditorSurface = Pick<CodeEditor, 'focus' | 'format' | 'layout' | 'revealIn'
       display: flex;
       align-items: center;
       gap: 6px;
+      flex: 0 0 auto;
       min-height: 34px;
       padding: 2px 5px 2px 7px;
       border-bottom: 1px solid var(--mat-sys-outline-variant);
@@ -305,15 +307,29 @@ type EditorSurface = Pick<CodeEditor, 'focus' | 'format' | 'layout' | 'revealIn'
     }
 
     .dirty {
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
       color: var(--mat-sys-tertiary);
       font: var(--mat-sys-label-medium);
       white-space: nowrap;
     }
 
     .config-toggle {
+      flex: 0 0 28px;
       min-width: 0;
+      width: 28px;
       height: 28px;
-      padding-inline: 8px;
+      padding: 0;
+    }
+
+    .config-toggle mat-icon {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      font-size: 16px;
+      line-height: 16px;
     }
 
     .editor-body {

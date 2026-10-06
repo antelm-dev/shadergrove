@@ -6,7 +6,7 @@ const config: NextConfig = {
   output: 'export',
   reactStrictMode: true,
   // The brand library ships TypeScript sources, like the other workspace libraries.
-  transpilePackages: ['@shadergrove/brand'],
+  transpilePackages: ['@shadergrove/brand', '@shadergrove/shared'],
   // `next dev` would otherwise write AGENTS.md and CLAUDE.md into this app on every run.
   agentRules: false,
 };

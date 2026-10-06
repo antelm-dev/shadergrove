@@ -1,7 +1,6 @@
 import { app, BrowserWindow, Menu, net, safeStorage, screen, shell } from 'electron';
-import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
+import { extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { createIpcContainer } from 'electron-ipc-module';
 
 import { resolveI18nDir } from '@shadergrove/backend/i18n';
@@ -146,17 +145,6 @@ async function migrateLegacyLibrary(library: ShaderLibrary, libraryDir: string):
   }
 }
 
-/** Walks up from the cwd to the workspace `examples/` folder (development only). */
-function resolveDevExamplesDir(): string | undefined {
-  let current = process.cwd();
-  while (true) {
-    if (existsSync(join(current, 'examples', 'shaders'))) return join(current, 'examples');
-    const parent = dirname(current);
-    if (parent === current) return undefined;
-    current = parent;
-  }
-}
-
 const closeController: CloseController = {
   approved: new WeakSet(),
   openOutput: () => undefined,
@@ -226,15 +214,6 @@ prepare({
     // A second instance only forwards its link, through `second-instance`.
     if (primaryInstance) openCallback(process.argv);
     await migrateLegacyLibrary(library, libraryDir);
-    const examplesDir = env.production
-      ? join(process.resourcesPath, 'examples')
-      : resolveDevExamplesDir();
-    if (examplesDir) {
-      await library.installExamples(
-        createLegacyReader(examplesDir),
-        process.env['SHADER_SEED'] !== '0',
-      );
-    }
 
     const isAppUrl = createAppUrlChecker({
       production: env.production,
@@ -306,9 +285,10 @@ prepare({
       update: createUpdateIpc(updates),
       account: createAccountIpc(account),
       sync: createSyncIpc(sync),
-      // Only the main window manages plugins; output and satellite windows do not.
+      // Only the main window manages plugins; output and satellite windows read the data-only ones.
       plugins: createPluginsIpc(
         join(userData, 'plugins'),
+        join(userData, 'plugin-bootstrap.json'),
         (sender) => sender === mainWindow?.webContents,
       ),
     });

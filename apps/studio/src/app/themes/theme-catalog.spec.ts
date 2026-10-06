@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_THEME_REFS,
   THEME_UI_ROLES,
   parsePluginPackage,
   type PluginPackage,
@@ -17,10 +18,13 @@ import {
   UI_ROLE_PROPERTIES,
   UI_THEME_PROPERTIES,
   findPluginTheme,
+  officialThemeKey,
   pluginMonacoThemeId,
   pluginThemeEntries,
   resolveAppTheme,
   resolveEditorTheme,
+  themePairs,
+  themeVariant,
   uiThemeProperties,
 } from './theme-catalog';
 
@@ -168,5 +172,80 @@ describe('resolveEditorTheme', () => {
     const c = pluginMonacoThemeId('plugin:a_b/c');
     for (const id of [a, b, c]) expect(id).toMatch(/^[a-z0-9-]+$/);
     expect(new Set([a, b, c]).size).toBe(3);
+  });
+});
+
+/** The fixture as a protocol 3 package whose themes are one pair, as the official pack is. */
+function pairedAmber(group = 'amber', id = 'dev.example.paired-amber'): PluginPackage {
+  const json = JSON.parse(readFileSync(fixture, 'utf8'));
+  json.manifest.id = id;
+  json.manifest.protocolVersion = 3;
+  for (const theme of json.manifest.contributions) {
+    theme.schemaVersion = 2;
+    theme.variantGroup = group;
+  }
+  const parsed = parsePluginPackage(JSON.stringify(json));
+  if (!parsed.ok) throw new Error(parsed.errors.join());
+  return parsed.value;
+}
+
+describe('pairs and System mode', () => {
+  const PAIRED_DARK = 'plugin:dev.example.paired-amber/amber-dark';
+  const PAIRED_LIGHT = 'plugin:dev.example.paired-amber/amber-light';
+  const paired = pluginThemeEntries([installed(pairedAmber(), true, 'dev.example.paired-amber')]);
+  const unpaired = pluginThemeEntries([installed(amber())]);
+
+  it('finds each complete pair once, by package and group', () => {
+    expect(themePairs(paired)).toEqual([
+      {
+        key: 'dev.example.paired-amber/amber',
+        light: findPluginTheme(paired, PAIRED_LIGHT),
+        dark: findPluginTheme(paired, PAIRED_DARK),
+      },
+    ]);
+    expect(themePairs(unpaired)).toEqual([]);
+    expect(themePairs([...paired, ...unpaired])).toHaveLength(1);
+  });
+
+  it("never pairs one package's theme with another package's", () => {
+    const other = pluginThemeEntries([
+      installed(pairedAmber('amber', 'dev.example.other'), true, 'dev.example.other'),
+    ]);
+    const lightOnly = paired.filter((entry) => entry.theme.scheme === 'light');
+    const darkOther = other.filter((entry) => entry.theme.scheme === 'dark');
+    expect(themePairs([...lightOnly, ...darkOther])).toEqual([]);
+    expect(themeVariant([...lightOnly, ...darkOther], lightOnly[0]!, 'dark')).toBeNull();
+  });
+
+  it('wears the variant for the OS in system mode, and the choice itself when fixed', () => {
+    expect(resolveAppTheme(PAIRED_LIGHT, 'light', paired, 'system', 'dark')).toMatchObject({
+      kind: 'plugin',
+      scheme: 'dark',
+      entry: { ref: PAIRED_DARK },
+    });
+    expect(resolveAppTheme(PAIRED_LIGHT, 'light', paired, 'fixed', 'dark')).toMatchObject({
+      scheme: 'light',
+      entry: { ref: PAIRED_LIGHT },
+    });
+  });
+
+  it('wears an unpaired theme as it is, even in system mode', () => {
+    expect(resolveAppTheme(LIGHT, 'dark', unpaired, 'system', 'dark')).toMatchObject({
+      scheme: 'light',
+      entry: { ref: LIGHT },
+    });
+  });
+
+  it('falls back in the remembered scheme when the choice is not active', () => {
+    expect(resolveAppTheme(PAIRED_LIGHT, 'dark', [], 'system', 'light')).toEqual({
+      kind: 'builtin',
+      scheme: 'dark',
+    });
+  });
+
+  it('names only the official themes in the app language', () => {
+    expect(officialThemeKey(DEFAULT_THEME_REFS.light)).toBe('theme.light');
+    expect(officialThemeKey(DEFAULT_THEME_REFS.dark)).toBe('theme.dark');
+    expect(officialThemeKey(PAIRED_LIGHT)).toBeNull();
   });
 });

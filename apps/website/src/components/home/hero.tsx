@@ -21,14 +21,17 @@ export function Hero() {
           <div className={styles.actions}>
             <a
               className={styles.primaryLink}
-              href="https://github.com/antelm-dev/shadergrove#quick-start"
+              href={
+                process.env.NEXT_PUBLIC_STUDIO_URL ||
+                'https://github.com/antelm-dev/shadergrove#quick-start'
+              }
             >
               Start creating <span aria-hidden="true">↗</span>
             </a>
-            <a className="text-link" href="#playground">
-              Meet the grove{' '}
+            <a className="text-link" href="/download">
+              Download desktop{' '}
               <span className="arrow" aria-hidden="true">
-                ↓
+                ↗
               </span>
             </a>
           </div>

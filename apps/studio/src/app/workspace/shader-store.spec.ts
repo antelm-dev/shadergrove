@@ -30,6 +30,7 @@ import { ShaderApi } from '../api/shader-api';
 import { RendererHandle } from '../rendering/renderer-handle';
 import { documentWith, MemoryStorage } from './lifecycle/testing/lifecycle-harness';
 import { ShaderStore } from './shader-store';
+import { DraftRecovery } from './draft-recovery';
 
 /**
  * The store is tested against a fake API rather than an HTTP mock: what is
@@ -456,6 +457,34 @@ describe('ShaderStore: saving', () => {
     expect(store.record()?.fragment).toBe('void main() { gl_FragColor = vec4(0.0); }');
     expect(store.dirty()).toBe(false);
     expect(store.notice()).toEqual({ text: 'Saved “Waves”', error: false });
+  });
+
+  it('continues saving a legacy example under its personal id and clears the old draft', async () => {
+    const { store, api } = setup(makeRecord({ kind: 'template' }));
+    await store.initialize();
+    store.setFragment('void main() { gl_FragColor = vec4(0.0); }');
+    const recovery = TestBed.inject(DraftRecovery);
+    const remove = vi.spyOn(recovery, 'remove');
+    const update = vi.spyOn(api, 'update').mockImplementationOnce(async (_id, patch) => {
+      const saved = makeRecord({
+        id: 'waves-2',
+        project: patch.project,
+        fragment: imagePass(patch.project!).source,
+        revision: 2,
+      });
+      api.records.set(saved.id, saved);
+      return saved;
+    });
+
+    expect(await store.save()).toBe(true);
+    expect(store.selectedId()).toBe('waves-2');
+    expect(store.dirty()).toBe(false);
+    expect(remove).toHaveBeenCalledWith('waves');
+
+    store.setFragment(FRAGMENT);
+    expect(await store.save()).toBe(true);
+    expect(update.mock.calls.map(([id]) => id)).toEqual(['waves', 'waves-2']);
+    expect(api.records.size).toBe(2); // The shared original and one personal copy.
   });
 
   it('keeps the live params and the open preset across a save', async () => {

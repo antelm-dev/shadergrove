@@ -1,0 +1,25 @@
+// Generated from plugins/official/default-themes by tools/workspace/src/generate/official-plugins.ts — do not edit.
+// The house palette of the default themes: what is painted while no theme is worn.
+$roles: (
+  background: light-dark(#f7f7f8, #141416),
+  on-background: light-dark(#1b1b1d, #e6e6e8),
+  surface: light-dark(#f7f7f8, #141416),
+  on-surface: light-dark(#1b1b1d, #e6e6e8),
+  on-surface-variant: light-dark(#4f4f55, #a9a9af),
+  surface-container-lowest: light-dark(#ffffff, #0e0e10),
+  surface-container-low: light-dark(#f2f2f3, #1a1a1c),
+  surface-container: light-dark(#ececee, #1f1f22),
+  surface-container-high: light-dark(#e6e6e8, #28282b),
+  surface-container-highest: light-dark(#e0e0e3, #323236),
+  outline: light-dark(#7b7b82, #7b7b82),
+  outline-variant: light-dark(#d3d3d8, #2e2e33),
+  primary: light-dark(#276c00, #71df3e),
+  on-primary: light-dark(#ffffff, #103800),
+  primary-container: light-dark(#8cfd58, #1b5200),
+  on-primary-container: light-dark(#1b5200, #8cfd58),
+  surface-dim: light-dark(#d9d9dc, #141416),
+  surface-bright: light-dark(#fbfbfc, #39393d),
+  surface-variant: light-dark(#e0e0e3, #323236),
+  inverse-surface: light-dark(#303033, #e6e6e8),
+  inverse-on-surface: light-dark(#f2f2f3, #303033),
+);

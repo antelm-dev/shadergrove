@@ -17,6 +17,7 @@ import { EXPLORE_OFF, type Explore } from './publications/explore';
 import { PublicationsModule } from './publications/publications.module';
 import { ShadersModule } from './shaders/shaders.module';
 import { SystemModule } from './system/system.module';
+import { ReleasesModule } from './releases/releases.module';
 
 /**
  * The whole API: `CoreModule` provides what every feature injects (the library,
@@ -37,6 +38,7 @@ export class ApiModule implements NestModule {
       imports: [
         CoreModule.forRoot({ library, auth, auditor, explore }),
         SystemModule,
+        ReleasesModule,
         ShadersModule,
         AuthModule,
         PublicationsModule.register({ exploreOn }),

@@ -44,3 +44,26 @@ router's background segment prefetch 404s when the export is served locally. Pag
 and navigate. Linux builds (CI, deployment) write the expected file names.
 
 `design/` holds the HTML mock the site was ported from.
+
+## Downloads and changelog
+
+`/download` and `/changelog` read the Studio's public release catalogue at runtime.
+New releases and edits to published notes do not require rebuilding this static site.
+Stable is the default channel; `?channel=beta` selects previews. Permanent links use
+`/changelog?version=1.5.0` and `/download?version=1.5.0`, including future versions.
+
+Set `NEXT_PUBLIC_STUDIO_URL` when building the website. The catalogue defaults to
+that origin's `/api/releases`; `NEXT_PUBLIC_RELEASES_API_URL` overrides it. If neither
+is set, `/api/releases` must be served or proxied on the website origin. For local
+development, use `NEXT_PUBLIC_STUDIO_URL=http://localhost:4200` with Studio running.
+Both variables are Docker build arguments and Nx cache inputs. Runtime container
+environment changes do not alter a previously exported website.
+
+The catalogue permits anonymous CORS reads without cookies. GitHub credentials stay
+on Studio; downloads go directly to the published release files. Markdown is rendered
+without raw HTML or remote images. Unavailable platforms have no download link.
+
+After `pnpm build:website`, run `pnpm smoke:website` (install Playwright Chromium first).
+The smoke covers channels, direct downloads, version links, pagination, safe Markdown,
+failure/retry, mobile layout, and a newly published version without rebuilding.
+See [release distribution](../../docs/website-releases.md) for CI and platform activation.

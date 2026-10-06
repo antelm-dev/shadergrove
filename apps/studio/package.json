@@ -24,6 +24,9 @@
     "pack:dir": "node scripts/desktop/build.mjs pack",
     "pack:win": "node scripts/desktop/build.mjs pack --win",
     "dist:win": "node scripts/desktop/build.mjs dist --win",
+    "pack:linux": "node scripts/desktop/build.mjs pack --linux --arch=x64",
+    "dist:linux": "node scripts/desktop/build.mjs dist --linux --arch=x64",
+    "dist:mac": "node scripts/desktop/build.mjs dist --mac --arch=x64 --arch=arm64",
     "test:server": "vitest run --config vitest.server.config.ts",
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit"
   },
@@ -192,6 +195,15 @@
         "cache": false
       },
       "dist:win": {
+        "cache": false
+      },
+      "pack:linux": {
+        "cache": false
+      },
+      "dist:linux": {
+        "cache": false
+      },
+      "dist:mac": {
         "cache": false
       },
       "test:server": {

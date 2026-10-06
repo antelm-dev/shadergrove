@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PLUGIN_LIMITS } from '@shadergrove/shared';
-import { createPluginFiles, createPluginsIpc } from './plugins.ipc';
+import { createPluginBootstrapFile, createPluginFiles, createPluginsIpc } from './plugins.ipc';
 
 // The real module registers on Electron's ipcMain; here a module is just its handlers.
 vi.mock('electron-ipc-module', () => ({
@@ -25,6 +25,33 @@ function packageText(id: string, version = '1.0.0'): string {
       contributions: [{ kind: 'effect', id: 'tint', name: 'Tint', controls: [] }],
     },
     glsl: { tint: 'vec4 effect(vec4 c, vec2 uv) { return c; }' },
+  });
+}
+
+/** A data-only package: one partial language. */
+function languagePackText(): string {
+  return JSON.stringify({
+    manifest: {
+      id: 'dev.example.spanish',
+      version: '1.0.0',
+      protocolVersion: 3,
+      appVersionRange: '>=1.0.0',
+      name: 'Spanish',
+      publisher: 'Example',
+      license: 'MIT',
+      contributions: [
+        {
+          kind: 'language',
+          id: 'spanish',
+          name: 'Spanish',
+          schemaVersion: 1,
+          locale: 'es',
+          nativeName: 'Español',
+          direction: 'ltr',
+          messages: { 'menu.file': 'Archivo' },
+        },
+      ],
+    },
   });
 }
 
@@ -113,28 +140,161 @@ describe('plugin files', () => {
   });
 });
 
+describe('compare-and-delete', () => {
+  let dir: string;
+  let files: ReturnType<typeof createPluginFiles>;
+
+  beforeEach(async () => {
+    dir = join(await mkdtemp(join(tmpdir(), 'sg-plugins-')), 'plugins');
+    files = createPluginFiles(dir);
+  });
+
+  afterEach(async () => {
+    await rm(join(dir, '..'), { recursive: true, force: true });
+  });
+
+  it('deletes the record only while it is exactly the one expected', async () => {
+    const seeded = record(packageText('dev.example.tint'), true);
+    await files.put(seeded);
+    const other = record(packageText('dev.example.other'), true);
+    await files.put(other);
+
+    // Another install, switch or time under the same id is kept.
+    for (const changed of [
+      record(packageText('dev.example.tint', '2.0.0'), true),
+      { ...seeded, enabled: false },
+      { ...seeded, installedAt: '2026-10-02T00:00:00.000Z' },
+    ]) {
+      expect(await files.removeIf(changed)).toBe(false);
+    }
+    expect(await files.list()).toHaveLength(2);
+
+    expect(await files.removeIf(seeded)).toBe(true);
+    expect(await files.list()).toEqual([other]);
+    // Gone already: nothing to delete, and still no other record touched.
+    expect(await files.removeIf(seeded)).toBe(false);
+    expect(await files.list()).toEqual([other]);
+  });
+
+  it('runs after a write queued before it, so a reinstall in between is kept', async () => {
+    const seeded = record(packageText('dev.example.tint'), true);
+    await files.put(seeded);
+    const reinstalled = record(packageText('dev.example.tint', '2.0.0'));
+    const write = files.put(reinstalled);
+    const removal = files.removeIf(seeded);
+    await write;
+    expect(await removal).toBe(false);
+    expect(await files.list()).toEqual([reinstalled]);
+  });
+
+  it('refuses something that is not a record', async () => {
+    await expect(files.removeIf({ id: 'x' } as never)).rejects.toThrow(/Not a plugin record/);
+  });
+});
+
 describe('the plugins IPC module', () => {
-  it('answers the main window only', async () => {
+  it('lets only the main window write, and shows other windows the data-only packages', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'sg-plugins-ipc-'));
     const main = { id: 1 };
     const output = { id: 2 };
-    const handlers = createPluginsIpc(dir, (sender) => sender === (main as never)) as unknown as {
+    const handlers = createPluginsIpc(
+      dir,
+      join(dir, 'bootstrap.json'),
+      (sender) => sender === (main as never),
+    ) as unknown as {
       list: (event: { sender: unknown }) => Promise<unknown>;
       put: (event: { sender: unknown }, record: unknown) => Promise<unknown>;
       remove: (event: { sender: unknown }, id: string) => Promise<unknown>;
+      bootstrap: (event: { sender: unknown }) => Promise<unknown>;
+      saveBootstrap: (event: { sender: unknown }, state: unknown) => Promise<unknown>;
+      removeIf: (event: { sender: unknown }, expected: unknown) => Promise<unknown>;
     };
     try {
       await expect(handlers.list({ sender: main })).resolves.toEqual([]);
-      await expect(handlers.list({ sender: output })).rejects.toThrow(/main window/);
+      await expect(handlers.list({ sender: output })).resolves.toEqual([]);
       await expect(
         handlers.put({ sender: output }, record(packageText('dev.example.tint'))),
       ).rejects.toThrow(/main window/);
       await expect(handlers.remove({ sender: output }, 'dev.example.tint')).rejects.toThrow(
         /main window/,
       );
+      await expect(
+        handlers.removeIf({ sender: output }, record(packageText('dev.example.tint'))),
+      ).rejects.toThrow(/main window/);
+      // Nothing to seed outside the main window.
+      await expect(handlers.bootstrap({ sender: output })).resolves.toBeNull();
+      await expect(handlers.bootstrap({ sender: main })).resolves.toEqual({
+        version: 0,
+        packages: {},
+      });
+      await expect(
+        handlers.saveBootstrap({ sender: output }, { version: 1, packages: {} }),
+      ).rejects.toThrow(/main window/);
       expect(await readdir(dir)).toEqual([]);
+
+      // With a theme pack and a package with GLSL installed, the output window sees the theme only.
+      const theme = record(languagePackText(), true);
+      const effect = record(packageText('dev.example.tint'), true);
+      await handlers.put({ sender: main }, theme);
+      await handlers.put({ sender: main }, effect);
+      expect(
+        ((await handlers.list({ sender: main })) as { id: string }[]).map((r) => r.id).sort(),
+      ).toEqual(['dev.example.spanish', 'dev.example.tint']);
+      await expect(handlers.list({ sender: output })).resolves.toEqual([theme]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('the plugin bootstrap file', () => {
+  let dir: string;
+  let file: ReturnType<typeof createPluginBootstrapFile>;
+  const path = () => join(dir, 'plugin-bootstrap.json');
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'sg-plugin-bootstrap-'));
+    file = createPluginBootstrapFile(path());
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('reads as empty until written, then reads back what was written', async () => {
+    expect(await file.read()).toEqual({ version: 0, packages: {} });
+    const state = {
+      version: 1,
+      packages: {
+        'dev.shadergrove.default-themes': 'seeded',
+        'dev.shadergrove.language-fr': 'removed',
+      },
+    } as const;
+    await file.write(state);
+    expect(await file.read()).toEqual(state);
+    // Written whole through a renamed temporary file: nothing else is left behind.
+    expect(await readdir(dir)).toEqual(['plugin-bootstrap.json']);
+  });
+
+  it('keeps only well-formed entries for default packages, and survives a damaged file', async () => {
+    await writeFile(
+      path(),
+      JSON.stringify({
+        version: 1,
+        packages: {
+          'dev.shadergrove.language-en': 'seeded',
+          'dev.example.other': 'seeded',
+          'dev.shadergrove.language-fr': 'enabled',
+        },
+      }),
+    );
+    expect(await file.read()).toEqual({
+      version: 1,
+      packages: { 'dev.shadergrove.language-en': 'seeded' },
+    });
+    await writeFile(path(), '{ not json');
+    expect(await file.read()).toEqual({ version: 0, packages: {} });
+    await writeFile(path(), 'x'.repeat(64 * 1024));
+    expect(await file.read()).toEqual({ version: 0, packages: {} });
   });
 });

@@ -4,6 +4,11 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Finish publishing an existing draft release (for example, v2.0.0). Leave empty to run Release Please.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -17,57 +22,96 @@ jobs:
       issues: write
       pull-requests: write
     outputs:
-      created: ${{ steps.release.outputs.release_created }}
-      sha: ${{ steps.release.outputs.sha }}
-      tag: ${{ steps.release.outputs.tag_name }}
+      created: ${{ steps.target.outputs.created }}
+      sha: ${{ steps.target.outputs.sha }}
+      tag: ${{ steps.target.outputs.tag }}
 
     steps:
       - name: Create or update release pull request
         id: release
-        uses: googleapis/release-please-action@v4
+        if: ${{ !inputs.tag }}
+        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
-  windows:
-    name: Publish Windows desktop release
+      # A rerun cannot rely on Release Please reporting `release_created` again,
+      # so recovery names the tag and publishes whatever commit it points at,
+      # provided that commit is on master.
+      - name: Resolve release target
+        id: target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_TAG: ${{ inputs.tag }}
+          CREATED: ${{ steps.release.outputs.release_created }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+            SHA="$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)"
+            STATUS="$(gh api "repos/$GH_REPO/compare/master...$SHA" --jq .status)"
+            [[ "$STATUS" == identical || "$STATUS" == behind ]] || {
+              echo "$TAG points at $SHA, which is not on master"
+              exit 1
+            }
+            CREATED=true
+          fi
+          {
+            echo "created=${CREATED:-false}"
+            echo "tag=$TAG"
+            echo "sha=$SHA"
+          } >> "$GITHUB_OUTPUT"
+
+  validate:
+    name: Validate tagged commit
     needs: version
     if: needs.version.outputs.created == 'true'
-    runs-on: windows-latest
-    timeout-minutes: 25
-    permissions:
-      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ needs.version.outputs.sha }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
 
-      - name: Check tag matches package version
+      - name: Check release version
         shell: bash
-        run: |
-          VERSION="$(node -p "require('./package.json').version")"
-          test "${{ needs.version.outputs.tag }}" = "v$VERSION" || {
-            echo "Tag ${{ needs.version.outputs.tag }} does not match package version $VERSION"
-            exit 1
-          }
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: bash .github/scripts/release-version.sh stable "${TAG#v}"
 
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Build and publish installers
-        run: pnpm dist:win
-        env:
-          ELECTRON_BUILDER_PUBLISH: always
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Lint, check, typecheck, test and build
+        run: pnpm run ci
 
-      - name: Publish release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.version.outputs.tag }}
-        run: gh release edit "$TAG" --draft=false
+  sbom:
+    name: Release inventories
+    needs: [version, validate]
+    uses: ./.github/workflows/dependency-security.yml
+    with:
+      ref: ${{ needs.version.outputs.sha }}
+      version: ${{ needs.version.outputs.tag }}
+
+  desktop:
+    name: Publish desktop release
+    needs: [version, validate, sbom]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/desktop-release.yml
+    with:
+      sha: ${{ needs.version.outputs.sha }}
+      tag: ${{ needs.version.outputs.tag }}
+      channel: stable
+      linux: ${{ vars.DESKTOP_LINUX_RELEASE_ENABLED == 'true' }}
+      macos: ${{ vars.DESKTOP_MACOS_RELEASE_ENABLED == 'true' }}
+    secrets: inherit

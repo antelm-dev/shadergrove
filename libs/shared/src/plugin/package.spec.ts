@@ -67,7 +67,9 @@ describe('validatePluginPackage', () => {
     expect(errors(pkg({}, { contributions: [{ ...effect, kind: 'analyzer' }] }))[0]).toMatch(
       /kind "analyzer"/,
     );
-    expect(errors(pkg({}, { protocolVersion: 3 }))[0]).toMatch(/protocolVersion 3/);
+    expect(errors(pkg({}, { protocolVersion: 4 }))[0]).toMatch(
+      /protocolVersion 4 is not supported/,
+    );
     expect(errors(pkg({}, { scripts: { postinstall: 'x' } }))[0]).toMatch(/scripts/);
     expect(errors(pkg({ assets: [] }))[0]).toMatch(/assets/);
     expect(errors(pkg({}, { contributions: [{ ...importer, url: 'https://x' }] }))[0]).toMatch(
@@ -148,6 +150,11 @@ describe('isPluginCompatible', () => {
     expect(isPluginCompatible(manifest('>=1.5.0'), '1.4.9')).toBe(false);
     expect(isPluginCompatible(manifest('1.4.0'), '1.4.0')).toBe(true);
     expect(isPluginCompatible(manifest('>=1.4.0'), 'garbage')).toBe(false);
+  });
+
+  it('treats a beta as the release it leads to', () => {
+    expect(isPluginCompatible(manifest('>=2.0.0'), '2.0.0-beta.1')).toBe(true);
+    expect(isPluginCompatible(manifest('>=1.5.0 <2.0.0'), '2.0.0-beta.1')).toBe(false);
   });
 });
 

@@ -9,3 +9,11 @@
   color: #98a78e;
   font-size: 11px;
 }
+
+.links {
+  display: flex;
+  gap: 20px;
+}
+.links a:hover {
+  color: var(--accent);
+}

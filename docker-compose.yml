@@ -41,8 +41,6 @@ services:
       # you reach the app as something other than localhost:
       #   SHADER_ALLOWED_HOSTS=localhost,127.0.0.1,[::1],nas.local,shaders.example.com
       NG_ALLOWED_HOSTS: ${SHADER_ALLOWED_HOSTS:-localhost,127.0.0.1,[::1]}
-      # Set to 0 to start with an empty store instead of seeding it from examples/.
-      SHADER_SEED: ${SHADER_SEED:-1}
       # Marks this a production deployment: Secure cookies and HSTS, and a
       # refusal to start on a missing auth secret rather than a silent fallback
       # to a development one.

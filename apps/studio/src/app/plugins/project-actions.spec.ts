@@ -97,6 +97,12 @@ describe('ProjectPluginActions', () => {
             list: async () => [...records.values()],
             put: async (record: StoredPlugin) => void records.set(record.id, record),
             remove: async (id: string) => void records.delete(id),
+            replace: async (record: StoredPlugin) =>
+              records.get(record.id)?.installedAt === record.installedAt
+                ? (records.set(record.id, record), true)
+                : false,
+            readBootstrap: async () => null,
+            writeBootstrap: async () => undefined,
           }),
         },
         { provide: AuthService, useValue: { user, status } },

@@ -1005,12 +1005,10 @@ export function runShaderLibraryConformance(
           await lib.as({ userId: 'system' }).installExamples(source, true, 'template');
         });
 
-        it('shows the same templates to everyone, marked as such', async () => {
+        it('omits old shared templates from libraries and collection exports', async () => {
           for (const who of [ALICE, BOB]) {
-            const listed = await lib.as(who).list();
-            expect(listed.map((entry) => `${entry.id}:${entry.kind}`)).toEqual([
-              'example:template',
-            ]);
+            expect(await lib.as(who).list()).toEqual([]);
+            expect(await lib.as(who).exportAll()).toEqual([]);
           }
         });
 
@@ -1023,7 +1021,17 @@ export function runShaderLibraryConformance(
 
           // The example is untouched, and Bob sees no trace of Alice's copy.
           expect((await lib.as(BOB).read('example')).name).toBe('Bundled Example');
-          expect((await lib.as(BOB).list()).map((entry) => entry.id)).toEqual(['example']);
+          expect(await lib.as(BOB).list()).toEqual([]);
+          expect((await lib.as(ALICE).list()).map((entry) => entry.id)).toEqual([edited.id]);
+
+          // Subsequent saves update the personal copy rather than forking again.
+          const saved = await lib.as(ALICE).update(edited.id, {
+            fragment: FRAGMENT,
+            expectedRevision: edited.revision,
+          });
+          expect(saved.id).toBe(edited.id);
+          expect((await lib.as(ALICE).list()).map((entry) => entry.id)).toEqual([edited.id]);
+          expect((await lib.as(ALICE).exportAll()).map((entry) => entry.id)).toEqual([edited.id]);
         });
 
         it('refuses to delete a template', async () => {

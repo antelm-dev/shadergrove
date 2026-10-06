@@ -1,5 +1,6 @@
 @use 'sass:map';
 @use '@angular/material' as mat;
+@use 'default-theme.generated' as default-theme;
 
 // Inter and Material Symbols ship with the app (angular.json `styles`), so the
 // chrome renders the same offline, in the desktop app, and on a cold cache.
@@ -101,31 +102,18 @@ html {
   // Neutral graphite chrome. Material derives its neutrals from the primary
   // hue, and a tinted chrome competes with whatever the shader is painting; it
   // should be colourless, so the only colour on screen is the accent and the
-  // canvas.
+  // canvas. The colours are the default themes' own (generated from the
+  // `dev.shadergrove.default-themes` pack), so the fallback painted while no
+  // theme is worn is the same Light/Dark the pack paints.
   @include mat.theme-overrides(
-    (
-      background: light-dark(#f7f7f8, #141416),
-      on-background: light-dark(#1b1b1d, #e6e6e8),
-      surface: light-dark(#f7f7f8, #141416),
-      surface-dim: light-dark(#d9d9dc, #141416),
-      surface-bright: light-dark(#fbfbfc, #39393d),
-      surface-container-lowest: light-dark(#ffffff, #0e0e10),
-      surface-container-low: light-dark(#f2f2f3, #1a1a1c),
-      surface-container: light-dark(#ececee, #1f1f22),
-      surface-container-high: light-dark(#e6e6e8, #28282b),
-      surface-container-highest: light-dark(#e0e0e3, #323236),
-      surface-variant: light-dark(#e0e0e3, #323236),
-      on-surface: light-dark(#1b1b1d, #e6e6e8),
-      on-surface-variant: light-dark(#4f4f55, #a9a9af),
-      outline: light-dark(#7b7b82, #7b7b82),
-      // Hairlines between panels: present, never the loudest thing in a row.
-      outline-variant: light-dark(#d3d3d8, #2e2e33),
-      inverse-surface: light-dark(#303033, #e6e6e8),
-      inverse-on-surface: light-dark(#f2f2f3, #303033),
-      // Selection is a quiet tint of the accent rather than a second hue.
-      secondary-container:
-        color-mix(in srgb, var(--mat-sys-primary) 14%, var(--mat-sys-surface-container)),
-      on-secondary-container: var(--mat-sys-on-surface),
+    map.merge(
+      default-theme.$roles,
+      (
+        // Selection is a quiet tint of the accent rather than a second hue.
+        secondary-container:
+          color-mix(in srgb, var(--mat-sys-primary) 14%, var(--mat-sys-surface-container)),
+        on-secondary-container: var(--mat-sys-on-surface)
+      )
     )
   );
 
