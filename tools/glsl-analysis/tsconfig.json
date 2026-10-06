@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "erasableSyntaxOnly": true,
+    "allowImportingTsExtensions": true,
+    "target": "ES2024",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "lib": ["ES2024", "DOM"],
+    "typeRoots": ["../../libs/glsl-analysis/node_modules/@types"],
+    "paths": {
+      "esbuild": ["../../libs/glsl-analysis/node_modules/esbuild"],
+      "playwright": ["../../libs/glsl-analysis/node_modules/playwright"]
+    },
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["*.ts"]
+}

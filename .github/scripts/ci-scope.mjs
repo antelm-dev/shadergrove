@@ -31,6 +31,7 @@ export function classifyChanges(paths, full = false) {
       path.startsWith('libs/') ||
       path.startsWith('tools/') ||
       path.startsWith('plugins/') ||
+      path.startsWith('third_party/') ||
       path.startsWith('examples/') ||
       path.startsWith('i18n/') ||
       path.startsWith('ops/staging/') ||

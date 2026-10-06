@@ -11,6 +11,8 @@
     "dist-web/**",
     "release/**",
     "data/**",
+    "third_party/**",
+    ".tmp/**",
     "**/test-results/**",
     "**/playwright-report/**",
     "apps/studio-e2e/.auth/**",

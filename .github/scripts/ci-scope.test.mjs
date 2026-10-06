@@ -26,6 +26,8 @@ test('studio dependencies, assets and tooling skip website workloads', () => {
     'libs/future-library/src/index.ts',
     'tools/mcp/src/index.ts',
     'tools/workspace/src/smoke.ts',
+    'tools/glsl-analysis/build-wasm.ts',
+    'third_party/glslang/UPSTREAM.json',
     'plugins/official/default-theme.ts',
     'examples/demo.fs',
     'i18n/en.json',

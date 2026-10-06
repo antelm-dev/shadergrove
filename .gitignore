@@ -7,6 +7,8 @@
 /dist-web
 /release
 /tmp
+# Downloaded toolchains, upstream sources and build evidence (tools/glsl-analysis).
+/.tmp
 /out-tsc
 /bazel-out
 

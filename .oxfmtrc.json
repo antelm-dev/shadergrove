@@ -11,6 +11,8 @@
     "CHANGELOG.md",
     ".release-please-manifest.json",
     "data/**",
+    "third_party/**",
+    ".tmp/**",
     "**/test-results/**",
     "**/playwright-report/**",
     "apps/studio-e2e/.auth/**",

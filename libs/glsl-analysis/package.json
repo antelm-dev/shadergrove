@@ -1,0 +1,72 @@
+{
+  "name": "@shadergrove/glsl-analysis",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pinned glslang ESSL 100/300 analysis in a bounded Web Worker (private; not yet used by the application).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build:wasm": "node ../../tools/glsl-analysis/build-wasm.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ../../tools/glsl-analysis/tsconfig.json --noEmit",
+    "probe:cache": "node ../../tools/glsl-analysis/cache-probe.ts",
+    "smoke:worker": "node ../../tools/glsl-analysis/smoke-worker.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.19",
+    "esbuild": "^0.25.12",
+    "playwright": "^1.57.0",
+    "typescript": "~6.0.2",
+    "vitest": "4.0.8"
+  },
+  "nx": {
+    "targets": {
+      "build:wasm": {
+        "cache": true,
+        "inputs": [
+          "default",
+          "{workspaceRoot}/tools/glsl-analysis/**/*",
+          "{workspaceRoot}/third_party/glslang/**/*",
+          {
+            "env": "GLSL_ANALYSIS_PYTHON"
+          },
+          {
+            "runtime": "node --version"
+          }
+        ],
+        "outputs": [
+          "{projectRoot}/dist"
+        ]
+      },
+      "test": {
+        "dependsOn": [
+          "build:wasm"
+        ],
+        "inputs": [
+          "default",
+          "{workspaceRoot}/tools/glsl-analysis/**/*",
+          "{workspaceRoot}/third_party/glslang/**/*"
+        ]
+      },
+      "typecheck": {
+        "inputs": [
+          "default",
+          "{workspaceRoot}/tools/glsl-analysis/**/*"
+        ]
+      },
+      "smoke:worker": {
+        "cache": false,
+        "dependsOn": [
+          "build:wasm"
+        ]
+      }
+    }
+  }
+}

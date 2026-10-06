@@ -126,6 +126,11 @@ jobs:
       - name: Test
         run: pnpm nx run-many -t test --exclude 'shadergrove,@shadergrove/website,@shadergrove/brand'
 
+      - name: GLSL analysis Worker smoke
+        run: |
+          pnpm --filter @shadergrove/glsl-analysis exec playwright install chromium --with-deps
+          pnpm --filter @shadergrove/glsl-analysis smoke:worker
+
       - name: Build
         # Desktop packaging has its own Windows job below.
         run: pnpm nx run-many -t build --exclude 'shadergrove,@shadergrove/website,@shadergrove/brand' && pnpm nx run @shadergrove/maintenance:build:cli
