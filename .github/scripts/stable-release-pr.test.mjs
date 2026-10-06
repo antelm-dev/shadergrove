@@ -28,6 +28,13 @@ test('accepts the pending repository release PR and its tested merge parents', (
     base_sha: base,
   });
   requireTestedCandidate(pr, repository, head, base, base);
+  validateReleasePullRequest(
+    {
+      ...pr,
+      head: { ...pr.head, ref: 'release-please--branches--master--components--shadergrove' },
+    },
+    repository,
+  );
 });
 
 test('a rerun finds the unchanged pending PR even without Release Please outputs', () => {

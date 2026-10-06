@@ -1,0 +1,194 @@
+name: PR previews
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  pull_request_target:
+    branches: [develop]
+    types:
+      [
+        opened,
+        reopened,
+        synchronize,
+        labeled,
+        unlabeled,
+        closed,
+        ready_for_review,
+        converted_to_draft,
+      ]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number to reconcile (CI must have passed)
+        required: true
+        type: string
+  schedule:
+    - cron: '23 3 * * *'
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+# The VPS also serializes operations. Never cancel an in-flight deployment;
+# reconciliation always rechecks the live PR state and its current CI run.
+concurrency:
+  group: pr-previews-${{ github.event.pull_request.head.ref || github.event.workflow_run.head_branch || inputs.pr || github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  target:
+    name: Resolve trusted preview request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      action: ${{ steps.target.outputs.action }}
+      pr: ${{ steps.target.outputs.pr }}
+      run: ${{ steps.target.outputs.run }}
+      head: ${{ steps.target.outputs.head }}
+      base: ${{ steps.target.outputs.base }}
+      commit: ${{ steps.target.outputs.commit }}
+      reason: ${{ steps.target.outputs.reason }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # renovate: datasource=node-version depName=node
+          node-version: '26.5.0'
+      - name: Resolve current PR, CI and immutable source
+        id: target
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/scripts/preview-target.mjs
+
+  image:
+    name: Build preview image
+    needs: target
+    if: needs.target.outputs.action == 'deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      # Only a same-repository, labelled PR with successful CI reaches this
+      # job. PR code builds in an ephemeral runner with no VPS/environment key.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.target.outputs.commit }}
+          persist-credentials: false
+      - name: Build the tested merge commit
+        env:
+          IMAGE: ghcr.io/antelm-dev/shadergrove-preview:pr-${{ needs.target.outputs.pr }}-${{ needs.target.outputs.run }}
+          COMMIT: ${{ needs.target.outputs.commit }}
+        run: docker build --label "org.opencontainers.image.source=https://github.com/antelm-dev/shadergrove" --label "org.opencontainers.image.revision=$COMMIT" --tag "$IMAGE" .
+      - name: Publish immutable preview image
+        id: image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_USER: ${{ github.actor }}
+          IMAGE: ghcr.io/antelm-dev/shadergrove-preview:pr-${{ needs.target.outputs.pr }}-${{ needs.target.outputs.run }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GH_USER" --password-stdin
+          docker push "$IMAGE"
+          REF="$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE")"
+          DIGEST="${REF##*@}"
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          docker logout ghcr.io
+
+  deploy:
+    name: Deploy and verify PR preview
+    needs: [target, image]
+    if: needs.target.outputs.action == 'deploy'
+    runs-on: ubuntu-latest
+    environment:
+      name: previews
+      url: https://pr-${{ needs.target.outputs.pr }}.45-155-170-120.sslip.io/
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Deploy through restricted VPS command
+        env:
+          PREVIEW_DEPLOY_SSH_KEY: ${{ secrets.PREVIEW_DEPLOY_SSH_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_ACTION: deploy
+          PR_NUMBER: ${{ needs.target.outputs.pr }}
+          CI_RUN: ${{ needs.target.outputs.run }}
+          HEAD_SHA: ${{ needs.target.outputs.head }}
+          BASE_SHA: ${{ needs.target.outputs.base }}
+          COMMIT_SHA: ${{ needs.target.outputs.commit }}
+          IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
+        run: bash .github/scripts/preview-ssh.sh
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # renovate: datasource=node-version depName=node
+          node-version: '26.5.0'
+      - name: Install browser smoke tools
+        run: |
+          pnpm install --filter @shadergrove/workspace-tools --frozen-lockfile
+          pnpm --filter @shadergrove/workspace-tools exec playwright install chromium --with-deps
+      - name: Verify live preview in Chromium
+        env:
+          PREVIEW_URL: https://pr-${{ needs.target.outputs.pr }}.45-155-170-120.sslip.io
+        run: node .github/scripts/preview-smoke.mjs
+
+  cleanup:
+    name: Clean up closed or unlabelled previews
+    needs: target
+    if: needs.target.outputs.action == 'delete' || needs.target.outputs.action == 'prune'
+    runs-on: ubuntu-latest
+    environment: previews
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Reconcile VPS preview resources
+        env:
+          PREVIEW_DEPLOY_SSH_KEY: ${{ secrets.PREVIEW_DEPLOY_SSH_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_ACTION: ${{ needs.target.outputs.action }}
+          PR_NUMBER: ${{ needs.target.outputs.pr }}
+        run: bash .github/scripts/preview-ssh.sh
+
+  report:
+    name: Update PR preview link
+    needs: [target, deploy, cleanup]
+    if: always() && needs.target.result == 'success' && needs.target.outputs.pr
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Update the preview status comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.target.outputs.pr }}
+          PREVIEW_ACTION: ${{ needs.target.outputs.action }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          CLEANUP_RESULT: ${{ needs.cleanup.result }}
+          COMMIT_SHA: ${{ needs.target.outputs.commit }}
+          PREVIEW_REASON: ${{ needs.target.outputs.reason }}
+          WORKFLOW_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node .github/scripts/preview-report.mjs

@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: preview
+      POSTGRES_USER: preview
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [private]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U preview -d preview']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
+    security_opt: ['no-new-privileges:true']
+
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    restart: unless-stopped
+    networks: [private]
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 64
+    security_opt: ['no-new-privileges:true']
+
+  studio:
+    image: ${PREVIEW_IMAGE:?required}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://preview:${POSTGRES_PASSWORD}@postgres:5432/preview
+      NODE_ENV: production
+      PORT: '4000'
+      NG_ALLOWED_HOSTS: ${PREVIEW_HOST:?required},localhost,127.0.0.1
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?required}
+      BETTER_AUTH_URL: https://${PREVIEW_HOST}
+      AUTH_TRUSTED_ORIGINS: https://${PREVIEW_HOST}
+      AUTH_REGISTRATION: open
+      AUTH_REQUIRE_VERIFIED_EMAIL: '1'
+      AUTH_CHECK_COMPROMISED_PASSWORDS: '0'
+      MAIL_SMTP_URL: smtp://mailpit:1025
+      MAIL_FROM: Shadergrove Preview <preview@example.test>
+      TRUST_PROXY: '1'
+      PUBLIC_EXPLORE_ENABLED: '1'
+    networks: [private, edge]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${PREVIEW_PROJECT:?required}_edge
+      - traefik.http.routers.${PREVIEW_ROUTER:?required}.rule=Host(`${PREVIEW_HOST}`)
+      - traefik.http.routers.${PREVIEW_ROUTER}.entrypoints=websecure
+      - traefik.http.routers.${PREVIEW_ROUTER}.tls.certresolver=letsencrypt
+      - traefik.http.routers.${PREVIEW_ROUTER}.service=${PREVIEW_PROJECT}
+      - traefik.http.services.${PREVIEW_PROJECT}.loadbalancer.server.port=4000
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 256
+    read_only: true
+    tmpfs: [/tmp, /data]
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+
+networks:
+  private:
+    internal: true
+  edge: {}
+
+volumes:
+  postgres-data: {}

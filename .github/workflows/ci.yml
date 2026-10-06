@@ -41,6 +41,21 @@ jobs:
         run: node --test .github/scripts/beta-release.test.mjs .github/scripts/stable-release-pr.test.mjs
       - name: Test restricted deployment routing
         run: bash .github/scripts/deploy-on-vps.test.sh
+      - name: Test preview deployment routing
+        run: |
+          node --test .github/scripts/preview-target.test.mjs
+          python3 -m unittest discover -s ops/previews -p 'test_*.py'
+      - name: Record the tested PR merge commit
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'develop' && github.event.pull_request.head.repo.full_name == github.repository
+        run: node .github/scripts/preview-source.mjs
+      - name: Save preview source record
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'develop' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: preview-source
+          path: ${{ runner.temp }}/preview-source.json
+          retention-days: 7
+          if-no-files-found: error
       - name: Select applications
         id: scope
         env:

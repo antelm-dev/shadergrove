@@ -9,7 +9,10 @@ export function validateReleasePullRequest(pr, repository) {
     pr.merged ||
     pr.base?.ref !== 'master' ||
     pr.base?.repo?.full_name !== repository ||
-    pr.head?.ref !== 'release-please--branches--master' ||
+    ![
+      'release-please--branches--master',
+      'release-please--branches--master--components--shadergrove',
+    ].includes(pr.head?.ref) ||
     pr.head?.repo?.full_name !== repository ||
     !pr.labels?.some((label) => label.name === 'autorelease: pending') ||
     !Number.isSafeInteger(pr.number) ||
@@ -49,12 +52,14 @@ export function requireVersionOnlyChanges(files) {
 export function prepareReleasePullRequest(repository, releasePr, gh) {
   const api = (path) => JSON.parse(gh('api', `repos/${repository}/${path}`));
   // Release Please may leave an unchanged PR out of its outputs on a rerun.
-  const owner = repository.split('/')[0];
   const result = releasePr
     ? JSON.parse(releasePr)
-    : api(
-        `pulls?state=open&base=master&head=${encodeURIComponent(`${owner}:release-please--branches--master`)}`,
-      )[0];
+    : api('pulls?state=open&base=master&per_page=100').find((pr) =>
+        [
+          'release-please--branches--master',
+          'release-please--branches--master--components--shadergrove',
+        ].includes(pr.head?.ref),
+      );
   if (!result) return { merge: false };
   const pr = api(`pulls/${result.number}`);
   const target = validateReleasePullRequest(pr, repository);
