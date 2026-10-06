@@ -37,6 +37,8 @@ jobs:
           main-branch-name: ${{ github.base_ref || github.ref_name }}
       - name: Test application routing
         run: node --test .github/scripts/ci-scope.test.mjs
+      - name: Test automatic release routing and merge guards
+        run: node --test .github/scripts/beta-release.test.mjs .github/scripts/stable-release-pr.test.mjs
       - name: Test restricted deployment routing
         run: bash .github/scripts/deploy-on-vps.test.sh
       - name: Select applications

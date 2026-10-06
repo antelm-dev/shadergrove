@@ -1,11 +1,13 @@
 name: Beta release
 
 on:
+  push:
+    branches: [develop]
   workflow_dispatch:
     inputs:
       version:
-        description: SemVer beta version (for example, 1.1.0-beta.1)
-        required: true
+        description: Optional beta version for recovery (for example, 2.0.0-beta.1). Leave empty for automatic numbering.
+        required: false
         type: string
 
 permissions:
@@ -16,13 +18,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  version:
+    name: Prepare beta release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.target.outputs.version }}
+      tag: ${{ steps.target.outputs.tag }}
+      sha: ${{ steps.target.outputs.sha }}
+      publish: ${{ steps.target.outputs.publish }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # renovate: datasource=node-version depName=node
+          node-version: '26.5.0'
+      - name: Test beta release routing and recovery
+        run: node --test .github/scripts/beta-release.test.mjs
+      - name: Resolve build version and existing release
+        id: target
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: node .github/scripts/beta-release.mjs
+
   validate:
     name: Validate beta commit
+    needs: version
+    if: needs.version.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.version.outputs.sha }}
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
@@ -33,7 +63,7 @@ jobs:
       - name: Set build version
         shell: bash
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: bash .github/scripts/release-version.sh beta "$VERSION" --write
 
       - name: Install
@@ -44,21 +74,21 @@ jobs:
 
   sbom:
     name: Beta inventories
-    needs: validate
+    needs: [version, validate]
     uses: ./.github/workflows/dependency-security.yml
     with:
-      ref: ${{ github.sha }}
-      version: ${{ inputs.version }}
+      ref: ${{ needs.version.outputs.sha }}
+      version: ${{ needs.version.outputs.version }}
 
   desktop:
     name: Publish desktop beta
-    needs: [validate, sbom]
+    needs: [version, validate, sbom]
     permissions:
       contents: write
     uses: ./.github/workflows/desktop-release.yml
     with:
-      sha: ${{ github.sha }}
-      tag: v${{ inputs.version }}
+      sha: ${{ needs.version.outputs.sha }}
+      tag: ${{ needs.version.outputs.tag }}
       channel: beta
       linux: ${{ vars.DESKTOP_LINUX_RELEASE_ENABLED == 'true' }}
       macos: ${{ vars.DESKTOP_MACOS_RELEASE_ENABLED == 'true' }}

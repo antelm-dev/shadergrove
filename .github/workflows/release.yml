@@ -13,10 +13,16 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: stable-release
+  cancel-in-progress: false
+
 jobs:
   version:
     name: Prepare release
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: write
       issues: write
@@ -27,12 +33,85 @@ jobs:
       tag: ${{ steps.target.outputs.tag }}
 
     steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # renovate: datasource=node-version depName=node
+          node-version: '26.5.0'
+      - name: Test automatic release PR merge guards
+        run: node --test .github/scripts/stable-release-pr.test.mjs
       - name: Create or update release pull request
         id: release
         if: ${{ !inputs.tag }}
         uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          target-branch: master
+
+      - name: Resolve release PR candidate
+        id: candidate
+        if: ${{ !inputs.tag && steps.release.outputs.release_created != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+        run: node .github/scripts/stable-release-pr.mjs prepare
+
+      - name: Check out the release PR merge commit
+        if: steps.candidate.outputs.merge == 'true'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/pull/${{ steps.candidate.outputs.number }}/merge
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Require the resolved release PR head and base
+        if: steps.candidate.outputs.merge == 'true'
+        shell: bash
+        env:
+          BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
+        run: |
+          test "$(git show -s --format=%P HEAD)" = "$BASE_SHA $HEAD_SHA"
+          VERSION="$(node -p "require('./package.json').version")"
+          bash .github/scripts/release-version.sh stable "$VERSION"
+          test "$(node -p "require('./.release-please-manifest.json')['.']")" = "$VERSION"
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        if: steps.candidate.outputs.merge == 'true'
+      - name: Validate release PR before merging
+        if: steps.candidate.outputs.merge == 'true'
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run ci
+
+      - name: Merge the validated release PR
+        id: merge
+        if: steps.candidate.outputs.merge == 'true'
+        env:
+          # Merge with GITHUB_TOKEN so publication continues in this run rather
+          # than relying on (or racing) a follow-up push workflow.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.candidate.outputs.number }}
+          HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
+          BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
+        run: node .github/scripts/stable-release-pr.mjs merge
+
+      - name: Create the merged release draft and tag
+        id: merged-release
+        if: steps.merge.outputs.merged == 'true'
+        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          target-branch: master
+          skip-github-pull-request: true
+
+      - name: Require a release for the merged PR
+        if: steps.merge.outputs.merged == 'true'
+        env:
+          CREATED: ${{ steps.merged-release.outputs.release_created }}
+        run: test "$CREATED" = true
 
       # A rerun cannot rely on Release Please reporting `release_created` again,
       # so recovery names the tag and publishes whatever commit it points at,
@@ -44,9 +123,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           INPUT_TAG: ${{ inputs.tag }}
-          CREATED: ${{ steps.release.outputs.release_created }}
-          TAG: ${{ steps.release.outputs.tag_name }}
-          SHA: ${{ steps.release.outputs.sha }}
+          CREATED: ${{ steps.merged-release.outputs.release_created || steps.release.outputs.release_created }}
+          TAG: ${{ steps.merged-release.outputs.tag_name || steps.release.outputs.tag_name }}
+          SHA: ${{ steps.merged-release.outputs.sha || steps.release.outputs.sha }}
         run: |
           if [ -n "$INPUT_TAG" ]; then
             TAG="$INPUT_TAG"

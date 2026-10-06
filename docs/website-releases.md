@@ -51,14 +51,53 @@ images are disabled by the website's Markdown renderer.
 
 ## Publication pipeline
 
+Every push to `develop` starts `.github/workflows/prerelease.yml`. The upcoming
+stable version is explicitly configured in `.github/beta-release.json` (initially
+`2.0.0`); the beta version is `<base>-beta.<workflow run number>`, for example
+`2.0.0-beta.42`. Rerunning a workflow keeps its original number. Versions are
+written to `package.json` and `APP_VERSION` only in the build checkout, without
+committing version bumps back to `develop`. Update the base to the next intended
+stable version when starting a new release cycle; it must be newer than the last
+published stable release. A new beta using an already published stable base is
+refused with an instruction to update the configuration.
+
+Manual dispatch on `develop` can omit `version` to use automatic numbering or
+provide an explicit `-beta.N` version. To recover a failed draft, rerun the original
+workflow so its version and commit remain identical. A matching published beta is
+skipped; a draft is resumed only at its original commit. Reusing a beta version for
+another commit fails. Published betas use `prerelease=true`, `latest=false`, and
+the `beta` updater manifest.
+
+Every push to `master` starts `.github/workflows/release.yml`. Release Please
+creates or updates its release PR from Conventional Commits. The workflow checks
+that this is the repository's pending release PR, accepts only version/changelog
+file changes, and runs `pnpm run ci` against its merge commit before merging. Any
+independent PR checks must also pass. If the PR head or `master` changes while
+validation runs, the workflow refuses the merge; rerun it against the new state.
+The merge uses `GITHUB_TOKEN`, and a second Release Please invocation creates the
+draft/tag in the same run. This does not require GitHub's auto-merge setting or a
+personal token to trigger another workflow. Branch protection and required reviews
+still apply; the workflow does not bypass them. A failed pre-merge check leaves the
+PR open. Only release-worthy Conventional Commits produce a new release PR.
+
 Stable and beta workflows call `.github/workflows/desktop-release.yml` after validation
 of the exact commit. That workflow validates the draft and its target, builds all
 enabled platforms, collects artifacts, uploads to the draft, verifies every required
 installer and updater manifest, and only then publishes the release. A failed platform
 leaves the release in draft. Builds do not independently publish from matrix jobs.
-Retries can replace draft assets, but already published releases are refused.
+Retries can replace draft assets, but the desktop publisher refuses to modify an
+already published release (the beta entry point skips matching published betas).
 Verification tools follow the workflow revision while application builds stay pinned
 to the release commit, allowing recovery of older Windows drafts that predate those tools.
+
+Stable recovery uses manual dispatch on `master` with an existing draft's tag:
+
+```sh
+gh workflow run release.yml --ref master -f tag=v2.0.0
+```
+
+This validates and publishes the tagged commit; it does not create or merge a new
+release PR. No automatic workflow publishes assets when validation fails.
 
 Windows x64 remains enabled by default and retains installer identity and filenames.
 Linux and macOS are prepared but opt in through repository Actions variables:
