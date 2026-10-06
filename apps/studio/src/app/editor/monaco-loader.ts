@@ -9,6 +9,7 @@ import {
   GLSL_TYPES,
 } from '@shadergrove/shared/glsl-lexicon';
 import { GLSL_SNIPPETS } from './glsl-snippets';
+import { registerGlslAnalysis } from './monaco-glsl-analysis';
 
 /**
  * Loads Monaco once, on demand, in the browser only.
@@ -98,6 +99,7 @@ function registerGlsl(monaco: MonacoApi): void {
   });
 
   registerGlslCompletions(monaco);
+  registerGlslAnalysis(monaco, GLSL_LANGUAGE_ID, new Set(Object.keys(DOCUMENTED_UNIFORMS)));
   registerGlslFormatting(monaco);
 
   monaco.languages.setMonarchTokensProvider(GLSL_LANGUAGE_ID, {
@@ -152,19 +154,19 @@ function registerGlsl(monaco: MonacoApi): void {
  * file, which is useless for the things you actually need to recall: the
  * engine's built-in uniforms and the GLSL standard library.
  */
-function registerGlslCompletions(monaco: MonacoApi): void {
-  const documented: Record<string, string> = {
-    iTime: 'float — seconds since the shader started, pausable',
-    iResolution: 'vec2 — drawing-buffer size in pixels',
-    iMouse: 'vec4 — xy: pointer in pixels, z: 1 while pressed',
-    iMouseVel: 'vec2 — pointer velocity, pixels per second',
-    u_clickData: 'vec3[] — per click: xy in pixels, z: birth time (<= 0 unused)',
-    iChannel0: 'sampler2D — bound image for this channel, or a 1×1 transparent pixel if unassigned',
-    iChannel1: 'sampler2D — bound image for this channel, or a 1×1 transparent pixel if unassigned',
-    iChannel2: 'sampler2D — bound image for this channel, or a 1×1 transparent pixel if unassigned',
-    iChannel3: 'sampler2D — bound image for this channel, or a 1×1 transparent pixel if unassigned',
-  };
+const DOCUMENTED_UNIFORMS: Record<string, string> = {
+  iTime: 'float — seconds since the shader started, pausable',
+  iResolution: 'vec2 — drawing-buffer size in pixels',
+  iMouse: 'vec4 — xy: pointer in pixels, z: 1 while pressed',
+  iMouseVel: 'vec2 — pointer velocity, pixels per second',
+  u_clickData: 'vec3[] — per click: xy in pixels, z: birth time (<= 0 unused)',
+  iChannel0: 'sampler2D — bound image for this channel, or a 1×1 transparent pixel if unassigned',
+  iChannel1: 'sampler2D — bound image for this channel, or a 1×1 transparent pixel if unassigned',
+  iChannel2: 'sampler2D — bound image for this channel, or a 1×1 transparent pixel if unassigned',
+  iChannel3: 'sampler2D — bound image for this channel, or a 1×1 transparent pixel if unassigned',
+};
 
+function registerGlslCompletions(monaco: MonacoApi): void {
   monaco.languages.registerCompletionItemProvider(GLSL_LANGUAGE_ID, {
     provideCompletionItems: (model, position) => {
       const word = model.getWordUntilPosition(position);
@@ -206,7 +208,7 @@ function registerGlslCompletions(monaco: MonacoApi): void {
       return {
         suggestions: [
           ...snippets,
-          ...Object.entries(documented).map(([name, detail]) =>
+          ...Object.entries(DOCUMENTED_UNIFORMS).map(([name, detail]) =>
             item(name, CompletionItemKind.Variable, detail),
           ),
           ...GLSL_BUILTINS.map((name) => item(name, CompletionItemKind.Function)),
