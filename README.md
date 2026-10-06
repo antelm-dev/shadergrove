@@ -560,7 +560,7 @@ which is why it is validated before it is ever joined onto a path.
 data/
   .seeded                    marker; stops examples coming back after you delete them
   shaders/
-    poured-paint/
+    hex-pulse/
       meta.json              name, description, control schema, render settings
       project.json           the multi-pass project: passes, buffers, files,
                               channel wiring — the source of truth for a shader
@@ -578,8 +578,8 @@ anything reading the old two-file shape still works. A shader that predates
 project built from its `fragment.glsl`/`vertex.glsl`, wired up exactly as the old
 single-pass engine bound its four `iChannel`s.
 
-`examples/shaders/` uses exactly this layout, and is copied into `data/` the first
-time you run an empty store. `data/` is gitignored; `examples/` is not.
+`examples/shaders/` uses exactly this layout. Examples are available for explicit
+import; new stores start empty. `data/` is gitignored; `examples/` is not.
 
 Writes are atomic (temp file + rename), and mutations of a given shader are
 serialized, so a half-written `meta.json` is never observable — `project.json`
@@ -930,15 +930,11 @@ per-client config (Codex, Cursor, Windows) are documented in
 
 ## Included shaders
 
-| Shader           | Shows                                                                                                                                                                                                                         |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Poured Paint** | 43 controls. Domain-warped fbm, layers quantized into pooled bands with hard contour lips, wet specular relief, OKLab palette ramp, click ripples with chromatic dispersion, and momentum-tunable pointer smearing. Bloom on. |
-| **Aurora Veil**  | Curtains draped by warping the x axis with slow noise, over a twinkling star field.                                                                                                                                           |
-| **Hex Pulse**    | `u_clickData`: click and a wavefront crosses the lattice. Hover lights the cells under the cursor.                                                                                                                            |
-| **Warp Tunnel**  | A tunnel from `1/r` — no raymarching. Demonstrates `select` and `boolean` controls.                                                                                                                                           |
-
-Poured Paint and its five presets are carried over from the project this app grew
-out of, and are the reference for what the format can express.
+| Shader          | Shows                                                                                              |
+| --------------- | -------------------------------------------------------------------------------------------------- |
+| **Aurora Veil** | Curtains draped by warping the x axis with slow noise, over a twinkling star field.                |
+| **Hex Pulse**   | `u_clickData`: click and a wavefront crosses the lattice. Hover lights the cells under the cursor. |
+| **Warp Tunnel** | A tunnel from `1/r` — no raymarching. Demonstrates `select` and `boolean` controls.                |
 
 All shaders distributed in `examples/shaders` are original Shadergrove examples
 and are licensed under Apache-2.0 with the rest of the project.
