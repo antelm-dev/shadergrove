@@ -30,7 +30,7 @@ const root = resolve(import.meta.dirname, '../../../../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
 const parsed = parsePluginPackage(
-  read('apps/studio/src/plugins/dev.shadergrove.shadertoy-1.0.0.sgplugin.json'),
+  read('apps/studio/src/plugins/dev.shadergrove.shadertoy-1.0.1.sgplugin.json'),
 );
 if (!parsed.ok) throw new Error(parsed.errors.join('; '));
 const plugin: PluginPackage = parsed.value;

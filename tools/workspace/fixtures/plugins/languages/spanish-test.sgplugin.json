@@ -3,7 +3,7 @@
     "id": "dev.shadergrove.test-spanish",
     "version": "1.0.0",
     "protocolVersion": 3,
-    "appVersionRange": ">=1.5.0 <2.0.0",
+    "appVersionRange": ">=1.5.0 <3.0.0",
     "name": "Spanish (test fixture)",
     "publisher": "Shadergrove tests",
     "license": "CC0-1.0",

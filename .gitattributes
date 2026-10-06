@@ -1,5 +1,8 @@
 # oxfmt emits LF. Keep formatted source, docs and config stable on Windows.
 *.ts text eol=lf
+*.tsx text eol=lf
+*.css text eol=lf
+*.scss text eol=lf
 *.json text eol=lf
 *.js text eol=lf
 *.mjs text eol=lf

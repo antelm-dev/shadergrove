@@ -3,16 +3,16 @@
   "packages": [
     {
       "id": "dev.shadergrove.default-themes",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "name": "Default Themes",
       "description": "Shadergrove's own Light and Dark themes for the app and the code editor, paired so the app can follow your system's setting.",
       "publisher": "Shadergrove",
       "license": "Apache-2.0",
       "protocolVersion": 3,
-      "appVersionRange": ">=1.5.0 <2.0.0",
-      "file": "dev.shadergrove.default-themes-1.0.0.sgplugin.json",
+      "appVersionRange": ">=1.5.0 <3.0.0",
+      "file": "dev.shadergrove.default-themes-1.0.1.sgplugin.json",
       "bytes": 3450,
-      "sha256": "10cf634a2e8f56c29474586b50547a270a594865be0e2c4393f8d5cbb7d85871",
+      "sha256": "d80af48965730054299ee9df3d2c9da3cbe59f04e5f25cb815d4457d72fadd3d",
       "contributions": [
         {
           "kind": "theme",
@@ -28,16 +28,16 @@
     },
     {
       "id": "dev.shadergrove.language-en",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "name": "English",
       "description": "Shadergrove's interface in English.",
       "publisher": "Shadergrove",
       "license": "Apache-2.0",
       "protocolVersion": 3,
-      "appVersionRange": ">=1.5.0 <2.0.0",
-      "file": "dev.shadergrove.language-en-1.0.0.sgplugin.json",
+      "appVersionRange": ">=1.5.0 <3.0.0",
+      "file": "dev.shadergrove.language-en-1.0.1.sgplugin.json",
       "bytes": 44685,
-      "sha256": "594088158a9f29415005aa4446c07b6715ca5e253ba60601db37781e6ec83013",
+      "sha256": "69d13076d03669476043f53afa7c6e45441e03a50d96198030c65932ff35749d",
       "contributions": [
         {
           "kind": "language",
@@ -48,16 +48,16 @@
     },
     {
       "id": "dev.shadergrove.language-fr",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "name": "French",
       "description": "Shadergrove's interface in French (Français).",
       "publisher": "Shadergrove",
       "license": "Apache-2.0",
       "protocolVersion": 3,
-      "appVersionRange": ">=1.5.0 <2.0.0",
-      "file": "dev.shadergrove.language-fr-1.0.0.sgplugin.json",
+      "appVersionRange": ">=1.5.0 <3.0.0",
+      "file": "dev.shadergrove.language-fr-1.0.1.sgplugin.json",
       "bytes": 49109,
-      "sha256": "99ce4fdc4577e240273756af3001393b04c6e3242b90dc51fcd3e1815e09fe9d",
+      "sha256": "4bb6654a3953b5dbd0e6a1c067b79ee0c99a0ce01a6d210b52418a42a5f63763",
       "contributions": [
         {
           "kind": "language",
@@ -68,16 +68,16 @@
     },
     {
       "id": "dev.shadergrove.shadertoy",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "name": "Shadertoy Import",
       "description": "Import a Shadertoy shader into a new shader: by URL or ID with your own API key (buffers, Common, feedback and textures), or by pasting an Image pass.",
       "publisher": "Shadergrove",
       "license": "Apache-2.0",
       "protocolVersion": 2,
-      "appVersionRange": ">=1.5.0 <2.0.0",
-      "file": "dev.shadergrove.shadertoy-1.0.0.sgplugin.json",
+      "appVersionRange": ">=1.5.0 <3.0.0",
+      "file": "dev.shadergrove.shadertoy-1.0.1.sgplugin.json",
       "bytes": 19275,
-      "sha256": "3903930c1d7f3d27bc6f1c866cb0a49f39d3d4a2582320c681491e6d1dd9c9fb",
+      "sha256": "61d03984bf64131536319c27c73a3effacb1f4ae3216385d6df48a0ef701bc85",
       "contributions": [
         {
           "kind": "projectImporter",
@@ -88,16 +88,16 @@
     },
     {
       "id": "dev.shadergrove.wallpaper-engine",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "name": "Wallpaper Engine Export",
       "description": "Export the open shader — unsaved edits included — as a Wallpaper Engine web wallpaper: multipass and textures, with its controls as wallpaper properties.",
       "publisher": "Shadergrove",
       "license": "Apache-2.0",
       "protocolVersion": 2,
-      "appVersionRange": ">=1.5.0 <2.0.0",
-      "file": "dev.shadergrove.wallpaper-engine-1.0.1.sgplugin.json",
+      "appVersionRange": ">=1.5.0 <3.0.0",
+      "file": "dev.shadergrove.wallpaper-engine-1.0.2.sgplugin.json",
       "bytes": 15565,
-      "sha256": "9865126f2c7d7de7be0750e4b36ba26aae1f681d0041113bdde7f431ae0cd2e3",
+      "sha256": "68d5ab7a75a57319af52f36b7058830817ba41d37f06dbc8deb7c2c9cbf51f71",
       "contributions": [
         {
           "kind": "projectExporter",

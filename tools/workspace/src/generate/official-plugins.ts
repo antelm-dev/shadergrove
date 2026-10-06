@@ -35,6 +35,7 @@ import {
   DEFAULT_THEMES_PACKAGE_ID,
   THEME_UI_ROLES,
   isCompleteLanguage,
+  isPluginCompatible,
   parsePluginPackage,
   validateCatalogue,
   type CatalogueEntry,
@@ -42,6 +43,7 @@ import {
   type PluginPackage,
   type ThemeContribution,
 } from '@shadergrove/shared/plugin';
+import { APP_VERSION } from '@shadergrove/shared/version';
 
 import { createLogger } from '../lib/logger.js';
 import { root } from '../lib/paths.js';
@@ -203,6 +205,11 @@ export function buildOfficialPlugins(): Map<string, string> {
   for (const name of release.packages) {
     const { fileName, text, listing, plugin } = built.get(name)!;
     const { manifest } = plugin;
+    if (!isPluginCompatible(manifest, APP_VERSION)) {
+      throw new Error(
+        `${name}: appVersionRange ${manifest.appVersionRange} excludes app ${APP_VERSION}`,
+      );
+    }
     const bytes = Buffer.from(text, 'utf8');
     packages.push({
       id: manifest.id,
