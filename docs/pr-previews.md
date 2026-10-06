@@ -88,3 +88,5 @@ Local checks:
 node --test .github/scripts/preview-target.test.mjs
 python3 -m unittest discover -s ops/previews -p 'test_*.py'
 ```
+
+Preview lifecycle verification: CI source recording, image deployment, browser smoke and PR cleanup.
