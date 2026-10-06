@@ -95,6 +95,9 @@ importers:
       '@shadergrove/backend':
         specifier: workspace:*
         version: link:../../libs/backend
+      '@shadergrove/glsl-analysis':
+        specifier: workspace:*
+        version: link:../../libs/glsl-analysis
       '@shadergrove/shared':
         specifier: workspace:*
         version: link:../../libs/shared

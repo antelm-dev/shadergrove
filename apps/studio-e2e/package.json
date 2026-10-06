@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "e2e": "playwright test",
+    "e2e": "pnpm --filter @shadergrove/studio build:analysis && playwright test",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
@@ -25,6 +25,18 @@
               "@shadergrove/studio"
             ],
             "target": "gen:ipc"
+          },
+          {
+            "projects": [
+              "@shadergrove/studio"
+            ],
+            "target": "build:analysis"
+          },
+          {
+            "projects": [
+              "@shadergrove/glsl-analysis"
+            ],
+            "target": "build:wasm"
           }
         ]
       }

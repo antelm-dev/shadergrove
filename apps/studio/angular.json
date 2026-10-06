@@ -43,6 +43,16 @@
                 "glob": "*.json",
                 "input": "src/plugins",
                 "output": "/plugins"
+              },
+              {
+                "glob": "{glsl-analysis-worker.js,glsl-analysis.wasm,glsl-analysis-assets.json}",
+                "input": ".glsl-analysis-assets",
+                "output": "/glsl-analysis"
+              },
+              {
+                "glob": "*",
+                "input": ".glsl-analysis-assets/licenses",
+                "output": "/glsl-analysis/licenses"
               }
             ],
             "styles": [
@@ -160,6 +170,16 @@
                 "glob": "*.json",
                 "input": "src/plugins",
                 "output": "/plugins"
+              },
+              {
+                "glob": "{glsl-analysis-worker.js,glsl-analysis.wasm,glsl-analysis-assets.json}",
+                "input": ".glsl-analysis-assets",
+                "output": "/glsl-analysis"
+              },
+              {
+                "glob": "*",
+                "input": ".glsl-analysis-assets/licenses",
+                "output": "/glsl-analysis/licenses"
               }
             ],
             "styles": [
@@ -231,7 +251,7 @@
           "options": {
             "buildTarget": "shadergrove:build:development",
             "runner": "vitest",
-            "exclude": ["src/desktop/**", "src/server/**"]
+            "exclude": ["src/desktop/**", "src/server/**", "src/**/*.node.spec.ts"]
           }
         }
       }

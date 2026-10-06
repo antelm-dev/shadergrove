@@ -4,16 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "ng build",
-    "build:renderer": "ng run shadergrove:desktop:production",
+    "build:analysis": "pnpm --filter @shadergrove/glsl-analysis build:wasm && node scripts/copy-analysis-assets.mjs",
+    "build": "pnpm build:analysis && ng build",
+    "build:renderer": "pnpm build:analysis && ng run shadergrove:desktop:production",
     "build:desktop": "node scripts/desktop/build.mjs",
     "build:main": "rollup -c rollup.desktop.config.mjs --environment NODE_ENV:production",
-    "dev": "ng serve",
-    "dev:renderer": "ng run shadergrove:desktop-serve:development",
+    "dev": "pnpm build:analysis && ng serve",
+    "dev:renderer": "pnpm build:analysis && ng run shadergrove:desktop-serve:development",
     "dev:desktop": "node scripts/desktop/dev.mjs",
     "dev:server": "tsx src/server/index.ts",
-    "test": "pnpm test:server && pnpm test:desktop && pnpm test:web",
-    "test:web": "ng test --watch=false",
+    "test": "pnpm test:server && pnpm test:desktop && pnpm test:analysis && pnpm test:web",
+    "test:analysis": "pnpm build:analysis && vitest run --config vitest.analysis.config.ts",
+    "test:web": "pnpm build:analysis && ng test --watch=false",
     "test:desktop": "vitest run --config vitest.desktop.config.ts",
     "test:watch": "ng test --watch",
     "typecheck": "pnpm typecheck:web && pnpm typecheck:server && pnpm typecheck:desktop",
@@ -49,6 +51,7 @@
     "@nestjs/platform-express": "^11.1.28",
     "@nestjs/swagger": "^11.4.6",
     "@shadergrove/backend": "workspace:*",
+    "@shadergrove/glsl-analysis": "workspace:*",
     "@shadergrove/shared": "workspace:*",
     "better-auth": "^1.7.5",
     "drizzle-orm": "0.45.2",
@@ -101,10 +104,17 @@
           "^production",
           {
             "dependentTasksOutputFiles": "**/ipc-bridge.ts"
+          },
+          {
+            "dependentTasksOutputFiles": "**/glsl-analysis*"
+          },
+          {
+            "dependentTasksOutputFiles": "**/licenses/*"
           }
         ],
         "dependsOn": [
-          "gen:ipc"
+          "gen:ipc",
+          "^build:wasm"
         ]
       },
       "build:desktop": {
@@ -117,21 +127,24 @@
         "cache": false,
         "persistent": true,
         "dependsOn": [
-          "gen:ipc"
+          "gen:ipc",
+          "^build:wasm"
         ]
       },
       "dev:desktop": {
         "cache": false,
         "persistent": true,
         "dependsOn": [
-          "gen:ipc"
+          "gen:ipc",
+          "^build:wasm"
         ]
       },
       "test:watch": {
         "cache": false,
         "persistent": true,
         "dependsOn": [
-          "gen:ipc"
+          "gen:ipc",
+          "^build:wasm"
         ]
       },
       "dev:server": {
@@ -147,11 +160,18 @@
           "^production",
           {
             "dependentTasksOutputFiles": "**/ipc-bridge.ts"
+          },
+          {
+            "dependentTasksOutputFiles": "**/glsl-analysis*"
+          },
+          {
+            "dependentTasksOutputFiles": "**/licenses/*"
           }
         ],
         "cache": true,
         "dependsOn": [
-          "gen:ipc"
+          "gen:ipc",
+          "^build:wasm"
         ]
       },
       "build:main": {
@@ -185,7 +205,8 @@
         "cache": false,
         "persistent": true,
         "dependsOn": [
-          "gen:ipc"
+          "gen:ipc",
+          "^build:wasm"
         ]
       },
       "pack:dir": {
@@ -219,13 +240,17 @@
       },
       "test": {
         "dependsOn": [
-          "gen:ipc"
+          "gen:ipc",
+          "^build:wasm"
         ],
         "inputs": [
           "default",
           "^production",
           {
             "dependentTasksOutputFiles": "**/ipc-bridge.ts"
+          },
+          {
+            "dependentTasksOutputFiles": "**/glsl-analysis*"
           }
         ]
       },
@@ -243,7 +268,8 @@
       },
       "test:web": {
         "dependsOn": [
-          "gen:ipc"
+          "gen:ipc",
+          "^build:wasm"
         ]
       }
     },
