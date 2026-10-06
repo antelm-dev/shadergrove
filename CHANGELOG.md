@@ -1,5 +1,55 @@
 # Changelog
 
+## [2.0.0](https://github.com/antelm-dev/shadergrove/compare/v1.5.0...v2.0.0) (2026-10-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* **plugins:** importing from Shadertoy and exporting to Wallpaper Engine require installing and enabling the official plugins from Plugins → Available.
+
+### Features
+
+* **i18n:** speak the active language packs, over the bundled English ([47f3370](https://github.com/antelm-dev/shadergrove/commit/47f3370daff58aeb77bc190f81af42c07b1308e7))
+* **plugins:** cut Shadertoy import and Wallpaper Engine export over to plugins ([ba508c2](https://github.com/antelm-dev/shadergrove/commit/ba508c21636885729003906ad270818200b0fba8))
+* **plugins:** data-only theme and language packs as official defaults ([ac6a461](https://github.com/antelm-dev/shadergrove/commit/ac6a4616ecd3c817d77b80e8b849b2d15b440fee))
+* **plugins:** default theme and language packs ([e009c80](https://github.com/antelm-dev/shadergrove/commit/e009c80b08ff0383140f59386b5367592e541cd5))
+* **plugins:** install and run official project plugins from the Plugins tab ([cbb52c0](https://github.com/antelm-dev/shadergrove/commit/cbb52c09a739a9d982dee272307aa3c0d98772a8))
+* **plugins:** offer plugin commands only while their plugin is active ([076b3dc](https://github.com/antelm-dev/shadergrove/commit/076b3dcb086da4200f3b261018c7c93dab4c67f5))
+* **plugins:** offer plugin commands only while their plugin is active ([f40b1c8](https://github.com/antelm-dev/shadergrove/commit/f40b1c8f32edd88a5566ae904620d846526674f7))
+* **plugins:** protocol-2 project contracts, host calls and release catalogue ([1b11a82](https://github.com/antelm-dev/shadergrove/commit/1b11a82338c002d570297243cc9cf5603d030d2c))
+* **plugins:** seed the default packs once per plugin profile ([e33bb43](https://github.com/antelm-dev/shadergrove/commit/e33bb43c4d3eaf1660bc485807d00f465ccd242c))
+* **plugins:** Shadertoy Import and Wallpaper Engine Export as installable official plugins ([16f334d](https://github.com/antelm-dev/shadergrove/commit/16f334d20c21caee524593c3f1574024f21b1148))
+* **plugins:** Shadertoy Import package and shadertoy-api/v1 provider ([691907d](https://github.com/antelm-dev/shadergrove/commit/691907d4d59053c7976b1983d1382780a222790d))
+* **plugins:** Wallpaper Engine Export package and wallpaper-web/v1 runtime ([cf4c0a4](https://github.com/antelm-dev/shadergrove/commit/cf4c0a4c446c9d5fba40875a362c059f79421aa2))
+* **releases:** serve desktop downloads and changelogs from website ([6e2599c](https://github.com/antelm-dev/shadergrove/commit/6e2599c0006b0c0262fa7abfd46ef4ccb97b0392))
+* **themes:** wear the official Light/Dark pack, with a System mode ([99d6800](https://github.com/antelm-dev/shadergrove/commit/99d6800a14a36763aabf4c5ac1c81f144aa0b518))
+* **website:** configure studio link and soften hero backdrop ([b465c6e](https://github.com/antelm-dev/shadergrove/commit/b465c6e13a3339cda1c03eaac59b16371dec7c13))
+
+
+### Bug Fixes
+
+* **ci:** restore deployment checks with explicit shader fixtures ([80025ce](https://github.com/antelm-dev/shadergrove/commit/80025ce5d465d926e2ec8887fcaba2bc1c1659dd))
+* **ci:** restore per-application image security scopes ([870de58](https://github.com/antelm-dev/shadergrove/commit/870de581786d2317a3012c2c7691c0c7e8117bd5))
+* **deps:** patch Swagger runtime YAML parser vulnerability ([19eb5f2](https://github.com/antelm-dev/shadergrove/commit/19eb5f2a49554f98310bb9b3b9af8b89eb2693a6))
+* **desktop:** let output and satellite windows read the theme and language packs ([86a3cf7](https://github.com/antelm-dev/shadergrove/commit/86a3cf751eca3438daff8d1c6085ee6c0e2662b3))
+* **docker:** remove unused npm and apply Alpine security updates ([c8a7a54](https://github.com/antelm-dev/shadergrove/commit/c8a7a54809a252ae746670f6446f3f023fc3c4e2))
+* **plugins:** abort a project delivery as soon as the open shader changes ([b21a81e](https://github.com/antelm-dev/shadergrove/commit/b21a81e8b330b0c1b86482cadcf26676a391aa66))
+* **plugins:** address review of the project plugin workflow ([1da72ac](https://github.com/antelm-dev/shadergrove/commit/1da72ac820209451a62828fed16940a4a0f55724))
+* **plugins:** keep concurrent installs and removals of defaults during seeding ([5893a7b](https://github.com/antelm-dev/shadergrove/commit/5893a7bb719cc9265f73f59b971342b33713e65d))
+* **plugins:** keep every window's packs, theme and language in step ([939e711](https://github.com/antelm-dev/shadergrove/commit/939e7116bd3233937c49837df6d386a01b10b1ed))
+* **plugins:** revalidate kept plugin commands and follow Plugins deep links ([ae33e78](https://github.com/antelm-dev/shadergrove/commit/ae33e7893153fd839836ead6bf5569142c2c7cc2))
+* **plugins:** scroll to a deep-linked package only once ([31e9d90](https://github.com/antelm-dev/shadergrove/commit/31e9d901075ef30b6b873c6c5be12006d4047148))
+* **plugins:** seed with an atomic insert-if-absent, and only undo its own write ([abfc3f6](https://github.com/antelm-dev/shadergrove/commit/abfc3f66e23a7971a2dea4283290193419f890b9))
+* **plugins:** switch a package only while it is still installed ([4a46ee3](https://github.com/antelm-dev/shadergrove/commit/4a46ee37c9ed23918ec43c6f067c0716567bffdd))
+* **plugins:** switch only the install a window lists ([ed53fc0](https://github.com/antelm-dev/shadergrove/commit/ed53fc08850bc9f580c411b67db96bc5a8bd46b1))
+* **plugins:** undo a seed write that a concurrent removal overtook ([3fbddca](https://github.com/antelm-dev/shadergrove/commit/3fbddcad1914c7bd600227cb0339a14c87a225af))
+* **plugins:** undo a seed write with an atomic compare-and-delete ([0df7371](https://github.com/antelm-dev/shadergrove/commit/0df7371b50bc01cc2241d569916394af7d278adf))
+* **prefs,plugins:** stop windows answering each other's saves; no SSR channel ([cf73010](https://github.com/antelm-dev/shadergrove/commit/cf73010856554b5aeb50b4c5037ccdbff6cca09e))
+* **staging:** send branch metadata to Dokploy webhook ([8e4aec4](https://github.com/antelm-dev/shadergrove/commit/8e4aec4723ac7b04e722656e2ab23b266cb1a2b5))
+* **studio:** align toolbar icons and preserve minimized editor layout ([6129a9f](https://github.com/antelm-dev/shadergrove/commit/6129a9f5a0561dd2cbdbb4d3c6b5e0c0ac58043c))
+* **studio:** retire default example shaders and clear saved template drafts ([3fc256b](https://github.com/antelm-dev/shadergrove/commit/3fc256b31fc836b3f95b941f68bcae1477e5f999))
+* **studio:** update favicon and topbar logo ([f087773](https://github.com/antelm-dev/shadergrove/commit/f087773051b75dc3e72bb42cb1a73de8d290b6a3))
+
 ## [1.5.0](https://github.com/antelm-dev/shadergrove/compare/v1.4.0...v1.5.0) (2026-10-02)
 
 
