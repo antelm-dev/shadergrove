@@ -54,7 +54,7 @@ const sha256 = async (path: string) =>
 const wasmPath = join(distDir, 'glsl-analysis.wasm');
 
 let before: Awaited<ReturnType<typeof readManifest>> | undefined;
-let failure: unknown;
+const problems: unknown[] = [];
 let restored = false;
 try {
   before = await readManifest();
@@ -91,22 +91,24 @@ try {
   assert(after.build.key === before.build.key, 'original key restored');
   assert(after.files.wasm.sha256 === before.files.wasm.sha256, 'original WASM hash restored');
 } catch (error) {
-  failure = error;
+  problems.push(error);
 } finally {
-  const problems: unknown[] = failure === undefined ? [] : [failure];
+  // Cleanup never throws here (no-unsafe-finally); problems are raised after this block.
   try {
     // Never leave generated assets describing a probe selection.
     if (!restored) {
       const result = await build(pinned.compiledSources);
       const key = (await readManifest()).build.key;
       if (result.code !== 0 || (before && key !== before.build.key)) {
-        throw new Error(`cache-probe: restoring the pinned build failed\n${result.output}`);
+        problems.push(
+          new Error(`cache-probe: restoring the pinned build failed\n${result.output}`),
+        );
       }
     }
   } catch (error) {
     problems.push(error);
   }
   await rm(scratch, { recursive: true, force: true }).catch((error) => problems.push(error));
-  if (problems.length === 1) throw problems[0];
-  if (problems.length) throw new AggregateError(problems, 'cache-probe failed and restore failed');
 }
+if (problems.length === 1) throw problems[0];
+if (problems.length) throw new AggregateError(problems, 'cache-probe failed and restore failed');
