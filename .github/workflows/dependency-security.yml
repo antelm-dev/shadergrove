@@ -3,6 +3,10 @@ name: Dependency security and SBOM
 on:
   workflow_call:
     inputs:
+      image:
+        description: Image scope (all, studio, or website)
+        type: string
+        default: all
       ref:
         description: Commit to build and inventory (empty uses the calling workflow commit)
         type: string
@@ -17,7 +21,7 @@ permissions:
 
 jobs:
   inventory:
-    name: Docker images · vulnerabilities · SBOM
+    name: ${{ inputs.image }} · vulnerabilities · SBOM
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -36,6 +40,7 @@ jobs:
       - name: Check SSR runtime lockfile
         run: node .github/scripts/check-runtime-deps.mjs
       - name: Generate workspace SBOM (including build tools and Electron)
+        if: inputs.image != 'website'
         env:
           SBOM_VERSION: ${{ inputs.version }}
         run: |
@@ -44,16 +49,20 @@ jobs:
           npm exec --yes --package=@cdxgen/cdxgen@13.3.0 -- cdxgen -t pnpm --recurse --no-install-deps --no-babel --fail-on-error --spec-version 1.6 --output tmp/security/workspace.cdx.json
           node .github/scripts/prepare-sbom.mjs tmp/security/workspace.cdx.json
       - name: Build production image
+        if: inputs.image != 'website'
         run: docker build --tag shadergrove:security .
       - name: Build website image
+        if: inputs.image != 'studio'
         run: docker build --file Dockerfile.website --tag shadergrove-website:security .
       - name: Inventory and scan final images
-        run: bash .github/scripts/scan-images.sh
+        env:
+          IMAGE_SCOPE: ${{ inputs.image }}
+        run: bash .github/scripts/scan-images.sh "$IMAGE_SCOPE"
       - name: Upload SBOMs and complete vulnerability reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: dependency-security
+          name: dependency-security-${{ inputs.image }}
           path: tmp/security/
           if-no-files-found: error
           retention-days: 30

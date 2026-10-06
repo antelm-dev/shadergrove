@@ -58,7 +58,10 @@ CycloneDX SBOMs, and runs Trivy. Fixable HIGH/CRITICAL image vulnerabilities fai
 the job. Complete JSON reports retain unfixed and lower-severity findings for
 triage; no blanket ignore list or silent scanner failure is configured.
 
-The `dependency-security` artifact is retained for 30 days and contains:
+CI preserves the independent studio and website routes. The studio job uploads
+`dependency-security-studio` (workspace + studio); the website job uploads
+`dependency-security-website`. Releases build both images and upload
+`dependency-security-all`. Artifacts are retained for 30 days and contain:
 
 - `workspace.cdx.json`: all lockfile dependencies, including development/build
   tools and Electron. It is an inventory of the workspace, not a claim that every

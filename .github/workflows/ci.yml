@@ -217,12 +217,21 @@ jobs:
         with:
           fail-on-severity: high
 
-  # Builds and scans both images, so either application's deploy waits on it.
   docker:
-    name: Docker security
+    name: Studio Docker security
     needs: changes
-    if: needs.changes.outputs.studio == 'true' || needs.changes.outputs.website == 'true'
+    if: needs.changes.outputs.studio == 'true'
     uses: ./.github/workflows/dependency-security.yml
+    with:
+      image: studio
+
+  docker-website:
+    name: Website Docker security
+    needs: changes
+    if: needs.changes.outputs.website == 'true'
+    uses: ./.github/workflows/dependency-security.yml
+    with:
+      image: website
 
   deploy-staging:
     name: Deploy studio staging
@@ -244,7 +253,7 @@ jobs:
 
   deploy-website:
     name: Deploy website
-    needs: [check, website-check, docker]
+    needs: [check, website-check, docker-website]
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment:
