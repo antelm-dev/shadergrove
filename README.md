@@ -45,6 +45,7 @@ last valid version running and places compiler diagnostics in the editor.
 
 ## Contents
 
+- [User guide (GitHub Wiki)](https://github.com/antelm-dev/shadergrove/wiki)
 - [Quick start](#quick-start)
 - [Self-hosting](#self-hosting)
 - [Desktop app](#desktop-app)
@@ -348,9 +349,10 @@ Typing offers snippets for the things you would otherwise be looking up: `main`,
 
 The **Effects Rack**, in the inspector's Post-processing tab, is the
 configurable chain applied after the shader's own Image pass (never to Buffer
-A-D): **Bloom** and **Vignette** today, at most one instance of each. A master
-switch bypasses the whole chain without touching any effect's own settings;
-each effect has its own enable toggle, a reset to defaults, and remove/add.
+A-D): built-in **Bloom** and **Vignette**, plus custom GLSL effects and multiple
+instances. A master switch bypasses the whole chain without touching any effect's
+own settings; each effect has its own enable toggle, a reset to defaults, and
+remove/add.
 Reordering (drag, or the move-up/move-down buttons) changes the order the
 effects are actually applied in — order is part of the chain, not just the
 rack's display. Every change to the rack is a draft edit like any parameter:
@@ -1014,17 +1016,16 @@ pnpm test
 - **Desktop sync is upload-first.** Account-enabled builds push linked local
   shaders; they do not download the entire account library or propagate every
   deletion in both directions.
-- **No public shader publishing or Explore feed.** Web libraries are private to
-  their accounts.
+- **Public Explore is optional and web-only.** Libraries are private by default;
+  publishing shader snapshots requires a server with public Explore enabled.
 - **Plugins are local and official only.** Packages come from a file or from the
   catalogue that ships with the release; there is no hosted marketplace,
   publisher signing or automatic update, and the protocol is versioned but young.
 - **MCP production setup is explicit.** Packaged builds need application
   configuration to enable the bridge; there is no pairing screen yet.
-- **Bloom and Vignette are the only built-in post effects**, at most one
-  instance of each. Tone mapping, color grading, chromatic aberration, FXAA
-  and LUTs are not implemented. A preset can optionally capture the complete
-  render settings, including the chain.
+- **Bloom and Vignette are the built-in post effects.** The rack also supports
+  custom GLSL effects and multiple instances. A preset can optionally capture
+  the complete render settings, including the chain.
 - **Monaco's stylesheet is global** (~88 kB gzipped), not lazy: the CSS its ESM
   modules import lands in a chunk nothing links, so the editor comes out
   structurally unstyled if you rely on it. The editor's _code_ is still lazy.
