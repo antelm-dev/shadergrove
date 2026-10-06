@@ -1,0 +1,28 @@
+{
+  "emscripten": {
+    "version": "6.0.11",
+    "license": "MIT OR NCSA (Emscripten); bundled LLVM/Binaryen/libc++/musl keep their own notices",
+    "emsdkRepository": "https://github.com/emscripten-core/emsdk",
+    "emsdkCommit": "dd8e25632640cfc1fb570c7fa4cc374e8a5e5a72",
+    "emsdkManifest": "emscripten-releases-tags.json maps 6.0.11 to the release hash below",
+    "releaseHash": "f6264d4a4dd9ba24a9f0a5702835a44d1463de13",
+    "archives": {
+      "win32-x64": {
+        "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/win/f6264d4a4dd9ba24a9f0a5702835a44d1463de13/wasm-binaries.zip",
+        "format": "zip",
+        "size": 700371683,
+        "sha256": "15fb1acc6f7aef6f06fdb9b40ad67bc4de5a8d2266379e98fb4ec145972b5748"
+      },
+      "linux-x64": {
+        "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/linux/f6264d4a4dd9ba24a9f0a5702835a44d1463de13/wasm-binaries.tar.xz",
+        "format": "tar.xz",
+        "size": 304047688,
+        "sha256": "cab251b54999e8fb4260080f0e719796336570396e118865013a20b8d93dbb83"
+      }
+    }
+  },
+  "host": {
+    "python": ">=3.10 (runs emcc.py; not shipped)",
+    "node": "the Node.js running the build (NODE_JS in the generated Emscripten config; not shipped)"
+  }
+}
