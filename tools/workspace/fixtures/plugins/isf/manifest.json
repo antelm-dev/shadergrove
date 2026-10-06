@@ -2,7 +2,7 @@
   "id": "dev.shadergrove.isf",
   "version": "1.0.0",
   "protocolVersion": 1,
-  "appVersionRange": ">=1.4.0 <2.0.0",
+  "appVersionRange": ">=1.4.0 <3.0.0",
   "name": "ISF filters",
   "publisher": "Shadergrove",
   "license": "Apache-2.0",

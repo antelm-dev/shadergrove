@@ -162,8 +162,9 @@ describe('a paused preview', () => {
     engine.setPaused(true);
     settle();
     reported.length = 0;
+    // Keep time monotonic even when suite startup has already taken over 10 seconds.
+    let t = performance.now();
     const now = vi.spyOn(performance, 'now');
-    let t = 10_000;
     now.mockImplementation(() => (t += 50));
     // The first window still holds frames drawn before the pause; the next is still.
     framesDrawn(60);

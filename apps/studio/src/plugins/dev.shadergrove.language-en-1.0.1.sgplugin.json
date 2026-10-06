@@ -1,9 +1,9 @@
 {
   "manifest": {
     "id": "dev.shadergrove.language-en",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "protocolVersion": 3,
-    "appVersionRange": ">=1.5.0 <2.0.0",
+    "appVersionRange": ">=1.5.0 <3.0.0",
     "name": "English",
     "publisher": "Shadergrove",
     "license": "Apache-2.0",

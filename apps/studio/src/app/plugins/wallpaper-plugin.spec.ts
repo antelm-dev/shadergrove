@@ -28,7 +28,7 @@ import { inProcessStart } from './testing/in-process-sandbox';
 const root = resolve(import.meta.dirname, '../../../../..');
 const parsed = parsePluginPackage(
   readFileSync(
-    resolve(root, 'apps/studio/src/plugins/dev.shadergrove.wallpaper-engine-1.0.1.sgplugin.json'),
+    resolve(root, 'apps/studio/src/plugins/dev.shadergrove.wallpaper-engine-1.0.2.sgplugin.json'),
     'utf8',
   ),
 );

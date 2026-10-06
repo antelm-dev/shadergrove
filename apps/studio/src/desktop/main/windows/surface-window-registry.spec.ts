@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { asSurfaceId, WELL_KNOWN_SURFACE_IDS } from '@shadergrove/shared/surfaces';
 
@@ -12,6 +12,11 @@ import {
   resolveSurfaceBounds,
   type DisplayWorkArea,
 } from './surface-window-state';
+
+vi.mock('electron', () => ({
+  BrowserWindow: vi.fn(),
+  shell: { openExternal: vi.fn() },
+}));
 
 function fakeWindow(webContentsId: number, destroyed = false) {
   return {

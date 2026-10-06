@@ -9,6 +9,12 @@ import { SurfaceWindowManager } from './surface-window-manager';
 import { SurfaceWindowRegistry } from './surface-window-registry';
 import { SurfaceWindowStateStore } from './surface-window-state';
 
+vi.mock('electron', () => ({
+  BrowserWindow: vi.fn(),
+  shell: { openExternal: vi.fn() },
+  screen: { getAllDisplays: vi.fn() },
+}));
+
 type LoadControl =
   | { mode: 'resolve' }
   | { mode: 'reject'; message: string }

@@ -26,8 +26,10 @@ test('the editor colours GLSL on screen without waiting for a scroll', async ({ 
   await expect
     .poll(() =>
       keyword.evaluate((span) => {
-        const line = span.closest('.view-line')!;
-        const plain = getComputedStyle(line.closest('.monaco-editor')!).color;
+        // Applying the profile's theme can replace this line between polls.
+        const editor = span.closest('.monaco-editor');
+        if (!editor) return false;
+        const plain = getComputedStyle(editor).color;
         return getComputedStyle(span).color !== plain && getComputedStyle(span).color !== '';
       }),
     )
