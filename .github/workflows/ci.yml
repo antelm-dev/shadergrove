@@ -24,13 +24,14 @@ jobs:
       studio: ${{ steps.scope.outputs.studio }}
       website: ${{ steps.scope.outputs.website }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
-      - uses: nrwl/nx-set-shas@v5
+      - uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5
         id: shas
         with:
           main-branch-name: ${{ github.base_ref || github.ref_name }}
@@ -52,16 +53,17 @@ jobs:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
 
       # Installs the exact pnpm from package.json's `packageManager` field.
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           # Matches the `volta.node` pin; `engines` also allows 22 and 24.
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
 
@@ -74,6 +76,11 @@ jobs:
       - name: Format
         run: pnpm format:check
 
+      - name: Check SSR runtime lockfile
+        run: |
+          node .github/scripts/check-runtime-deps.mjs
+          node --test .github/scripts/dependency-security.test.mjs
+
   studio-check:
     name: Studio · check · typecheck · test · build
     needs: changes
@@ -81,12 +88,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
       - name: Install
@@ -115,10 +123,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
       - name: Install website dependencies
@@ -142,10 +151,11 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
       - name: Install
@@ -167,10 +177,11 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
       - name: Install
@@ -184,7 +195,7 @@ jobs:
         run: pnpm e2e
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-report-${{ github.run_attempt }}
           path: |
@@ -193,28 +204,34 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
   docker:
-    name: Studio Docker image
+    name: Studio Docker security
     needs: changes
     if: needs.changes.outputs.studio == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-
-    steps:
-      - uses: actions/checkout@v6
-      - name: Build production image
-        run: docker build --tag shadergrove:ci .
+    uses: ./.github/workflows/dependency-security.yml
+    with:
+      image: studio
 
   docker-website:
-    name: Website Docker image
+    name: Website Docker security
     needs: changes
     if: needs.changes.outputs.website == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v6
-      - name: Build website image
-        run: docker build --file Dockerfile.website --tag shadergrove-website:ci .
+    uses: ./.github/workflows/dependency-security.yml
+    with:
+      image: website
 
   deploy-staging:
     name: Deploy studio staging
@@ -227,7 +244,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Queue studio deployment in Dokploy
         env:
           STAGING_DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
@@ -244,7 +261,7 @@ jobs:
       url: https://shadergrove.45-155-170-120.sslip.io/
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Queue website deployment in Dokploy
         env:
           STAGING_DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
@@ -259,10 +276,11 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
+          # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
           cache: pnpm
       - name: Install
@@ -271,7 +289,7 @@ jobs:
         run: pnpm pack:win
       - name: Upload preview application
         if: github.event_name == 'push' && github.ref == 'refs/heads/preview'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: shadergrove-preview-${{ github.sha }}
           path: release/**

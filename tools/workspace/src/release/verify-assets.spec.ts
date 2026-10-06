@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { stringify } from 'yaml';
-import { expectedAssets, verifyAssets } from './verify-assets';
+import { expectedAssets, sbomAssets, verifyAssets } from './verify-assets';
 
 const platforms = ['windows', 'linux', 'macos'] as const;
 const checksum = Buffer.alloc(64).toString('base64');
 
 function fixture(channel: 'latest' | 'beta' = 'latest', version = '2.0.0') {
-  const assets = expectedAssets(version, channel, [...platforms]).map((name) => ({
-    name,
-    size: 100,
-  }));
+  const assets = [...expectedAssets(version, channel, [...platforms]), ...sbomAssets].map(
+    (name) => ({
+      name,
+      size: 100,
+    }),
+  );
   const manifests = Object.fromEntries(
     [
       ['', [`shadergrove-${version}-setup.exe`]],
@@ -48,7 +50,8 @@ describe('complete release verification', () => {
         (asset) =>
           asset.name.endsWith('.exe') ||
           asset.name.endsWith('.blockmap') ||
-          asset.name === 'latest.yml',
+          asset.name === 'latest.yml' ||
+          asset.name.endsWith('.cdx.json'),
       ),
       manifests,
     );
@@ -61,6 +64,7 @@ describe('complete release verification', () => {
       'shadergrove-2.0.0-arm64.dmg',
       'shadergrove-2.0.0-setup.exe.blockmap',
       'latest-mac.yml',
+      'workspace.cdx.json',
     ]) {
       expect(() =>
         verifyAssets(

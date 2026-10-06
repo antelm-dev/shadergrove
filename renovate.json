@@ -1,0 +1,58 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":semanticCommits"],
+  "baseBranchPatterns": ["develop"],
+  "timezone": "Europe/Paris",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "automerge": false,
+  "separateMajorMinor": true,
+  "minimumReleaseAge": "3 days",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "packageRules": [
+    {
+      "matchPackageNames": ["@angular/**"],
+      "groupName": "Angular"
+    },
+    {
+      "matchPackageNames": ["nx", "@nx/**"],
+      "groupName": "Nx"
+    },
+    {
+      "matchPackageNames": ["@nestjs/**"],
+      "groupName": "Nest"
+    },
+    {
+      "matchPackageNames": ["pg"],
+      "groupName": "PostgreSQL client"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "minimumReleaseAge": "0 days",
+      "groupName": "GitHub Actions"
+    },
+    {
+      "matchDatasources": ["docker"],
+      "pinDigests": true
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "automerge": false,
+    "minimumReleaseAge": "0 days",
+    "schedule": ["at any time"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^Dockerfile(?:\\.website)?$/", "/^\\.github/workflows/.*\\.yml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[^\\s]+) depName=(?<depName>[^\\s]+)\\s+(?:RUN npm install --global pnpm@|node-version: '|version: '|npm exec --yes --package=@cdxgen/cdxgen@)(?<currentValue>[^'\\s]+)"
+      ]
+    }
+  ]
+}
