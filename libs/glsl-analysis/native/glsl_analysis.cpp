@@ -570,6 +570,19 @@ private:
         pending_.push_back(point);
     }
 
+    // A control arm without braces is a bare expression node, never a point: an
+    // assignment is refused explicitly; other state changes keep their own reasons.
+    void walkArm(TIntermNode* node, const ObsContext& context)
+    {
+        glslang::TIntermBinary* binary = node ? node->getAsBinaryNode() : nullptr;
+        if (binary && binary->getOp() == glslang::EOpAssign) {
+            refuse("unbraced", binary->getLoc());
+            walk(node, false, context);
+            return;
+        }
+        walk(node, true, context);
+    }
+
     void walk(TIntermNode* node, bool statement, const ObsContext& context)
     {
         if (!node)
@@ -601,8 +614,8 @@ private:
             ObsContext branch = context;
             ++branch.conditionalDepth;
             walk(selection->getCondition(), false, context);
-            walk(selection->getTrueBlock(), false, branch);
-            walk(selection->getFalseBlock(), false, branch);
+            walkArm(selection->getTrueBlock(), branch);
+            walkArm(selection->getFalseBlock(), branch);
             return;
         }
         if (glslang::TIntermLoop* loop = node->getAsLoopNode()) {
@@ -611,7 +624,7 @@ private:
             ++body.conditionalDepth;
             ObsContext header = body;
             header.header = true;
-            walk(loop->getBody(), false, body);
+            walkArm(loop->getBody(), body);
             walk(loop->getTest(), false, header);
             walk(loop->getTerminal(), false, header);
             return;

@@ -372,6 +372,7 @@ const NATIVE_REFUSALS: Record<string, [ObservationRefusalReason, string]> = {
   precision: ['unsupported-precision', 'The compiler resolved no effective precision'],
   lvalue: ['unsupported-lvalue', 'Only a directly named variable can be observed'],
   'compound-assignment': ['unsupported-compound-assignment', 'Compound assignment is not a point'],
+  unbraced: ['statement-shape', 'An assignment that is not directly inside a braced block'],
   increment: ['unsupported-increment', 'Increment and decrement are not points'],
 };
 

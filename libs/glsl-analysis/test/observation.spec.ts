@@ -179,6 +179,7 @@ describe('typed point catalogue', () => {
         'unsupported-compound-assignment',
         'unsupported-type',
         'unsupported-storage',
+        'statement-shape',
         'ambiguous-statement',
         'location-mismatch',
       ]),

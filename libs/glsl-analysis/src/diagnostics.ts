@@ -18,6 +18,38 @@ const SEVERITY: Record<string, AnalysisDiagnostic['severity']> = {
 };
 
 /**
+ * True when a real `#line` directive exists: `#` is the first token of a line
+ * (only whitespace and comments before it) followed by `line`. Text inside
+ * comments never counts.
+ */
+export function hasLineDirective(source: string): boolean {
+  const n = source.length;
+  let atLineStart = true;
+  for (let i = 0; i < n;) {
+    const c = source[i] as string;
+    if (c === '\n' || c === '\r') {
+      atLineStart = true;
+      i++;
+    } else if (c === ' ' || c === '\t' || c === '\f' || c === '\v') {
+      i++;
+    } else if (c === '/' && source[i + 1] === '/') {
+      while (i < n && source[i] !== '\n' && source[i] !== '\r') i++;
+    } else if (c === '/' && source[i + 1] === '*') {
+      const close = source.indexOf('*/', i + 2);
+      i = close < 0 ? n : close + 2;
+    } else if (atLineStart && c === '#') {
+      if (/[ \t]*line\b/y.test(source.slice(i + 1, i + 64))) return true;
+      atLineStart = false;
+      i++;
+    } else {
+      atLineStart = false;
+      i++;
+    }
+  }
+  return false;
+}
+
+/**
  * Splits `source` into lines once so compiler byte columns can be converted to
  * UTF-16 columns. Conversion is refused when a `#line` directive is present,
  * because reported lines then no longer index the prepared source.
@@ -28,7 +60,7 @@ export class SourceLines {
 
   constructor(source: string) {
     this.lines = source.split(/\r\n|\r|\n/);
-    this.remapped = /^[ \t]*#[ \t]*line\b/m.test(source);
+    this.remapped = hasLineDirective(source);
   }
 
   location(sourceString: string, line: number, compilerColumn: number | null): CompilerLocation {
