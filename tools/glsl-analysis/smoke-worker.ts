@@ -337,6 +337,20 @@ expect(
     JSON.stringify({ points: 0, reasons: ['user-line-directive'] }),
   `comment-prefixed #line was ${JSON.stringify(at(r, 'observation', 'lineRemapped'))}`,
 );
+for (const key of ['longTrivia', 'commentTrivia', 'continuedName']) {
+  expect(
+    JSON.stringify(at(r, 'observation', 'lineDirectives', key)) ===
+      JSON.stringify({ points: 0, reasons: ['user-line-directive'] }),
+    `${key} #line must refuse the whole catalogue`,
+  );
+}
+expect(
+  at(r, 'observation', 'lineDirectives', 'continuedComment', 'points') === 2 &&
+    !JSON.stringify(at(r, 'observation', 'lineDirectives', 'continuedComment', 'reasons')).includes(
+      'user-line-directive',
+    ),
+  '#line inside a continued comment must stay inert',
+);
 expect(at(r, 'finalCheck', 'status') === 'ok', 'healthy client must be unaffected');
 
 const transfer = (path: string) =>

@@ -367,7 +367,30 @@ async function run(): Promise<void> {
       { observe: true },
     ),
   );
+  const lineVariant = async (directive: string) => {
+    const reply = await client.analyze(
+      request(
+        observedSource.replace('  float x = 0.0;', `${directive}\n  float x = 0.0;`),
+        'fragment',
+        300,
+        { observe: true },
+      ),
+    );
+    return reply.status === 'ok'
+      ? {
+          points: reply.observation?.points.length,
+          reasons: reply.observation?.refusals.map((refusal) => refusal.reason),
+        }
+      : null;
+  };
+  const lineDirectives = {
+    longTrivia: await lineVariant(`#${' '.repeat(80)}line 100`),
+    commentTrivia: await lineVariant('# /* trivia */ line 100'),
+    continuedName: await lineVariant('#li\\\nne 100'),
+    continuedComment: await lineVariant('// continued \\\n#line 100'),
+  };
   results['observation'] = {
+    lineDirectives,
     unbraced:
       unbraced.status === 'ok'
         ? {
