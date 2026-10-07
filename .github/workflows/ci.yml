@@ -196,7 +196,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.studio == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # One worker runs every spec in turn: ~13 min before the GPU observation specs, ~16 slow
+    # Chromium tests more with them.
+    timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
