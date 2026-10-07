@@ -490,7 +490,10 @@ export class CodeEditor {
     this.unbind.get(id)?.();
     this.unbind.delete(id);
     if (!analysis || model.getLanguageId() !== GLSL_LANGUAGE_ID) return;
-    this.unbind.set(id, bindAnalysisModel(monaco, model, analysis, id));
+    this.unbind.set(
+      id,
+      bindAnalysisModel(monaco, model, analysis, id, () => this.applying),
+    );
   }
 
   private monacoLanguage(language: EditorLanguage): string {

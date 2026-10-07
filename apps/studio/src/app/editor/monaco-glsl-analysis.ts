@@ -27,17 +27,23 @@ const registered = new WeakSet<object>();
  * immediately withdraws the model's analysis markers and marks the analysis
  * dirty, so nothing computed for the previous text is presented as current.
  * The returned function undoes the binding and clears the markers.
+ *
+ * `fromOutside` is true while the editor is syncing text that came from the
+ * store (a revert, a recovered draft). That change already reached the analysis
+ * through `update`, which scheduled its own job; marking dirty again would
+ * invalidate that very job and leave the analysis waiting forever.
  */
 export function bindAnalysisModel(
   monaco: MonacoApi,
   model: Monaco.editor.ITextModel,
   analysis: ProjectAnalysis,
   docId: string,
+  fromOutside: () => boolean = () => false,
 ): () => void {
   bindings.get(model)?.stop();
 
   const subscription = model.onDidChangeContent(() => {
-    analysis.markDirty();
+    if (!fromOutside()) analysis.markDirty();
     monaco.editor.setModelMarkers(model, ANALYSIS_MARKER_OWNER, []);
   });
   const binding: ModelBinding = {
