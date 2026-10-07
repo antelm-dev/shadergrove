@@ -261,6 +261,18 @@ describe('real front end through the facade', () => {
     expect(overloads[0].parameters[0].type.arraySizes).toEqual([1]);
   });
 
+  it('keeps a valid user function named toString without consulting Object.prototype', async () => {
+    const next = project(
+      'float toString() { return 0.2; } void main() { gl_FragColor = vec4(toString()); }',
+    );
+    const analysis = await analyse(next);
+    expect(analysis.diagnosticsFor(next.passes[0].id)).toEqual([]);
+    expect(() => analysis.symbolsFor(next.passes[0].id)).not.toThrow();
+    expect(
+      analysis.symbolsFor(next.passes[0].id)!.functions.map((symbol) => symbol.name),
+    ).toContain('toString');
+  });
+
   it('serves nothing between an edit and its accepted result', async () => {
     const next = project();
     const analysis = await analyse(next);
@@ -354,7 +366,7 @@ describe('real front end through the facade', () => {
 });
 
 describe('source mapping', () => {
-  const lib = 'float f() { /* ÃƒÂ©Ã¢Å“â€œ */ return undeclared_x; }';
+  const lib = 'float f() { /* ÃƒÆ’Ã‚Â©ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ */ return undeclared_x; }';
 
   function withInclude(): ShaderProject {
     const base = project(`#include "lib.glsl"\nvoid main() { gl_FragColor = vec4(f()); }`);
