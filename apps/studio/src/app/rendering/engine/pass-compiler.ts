@@ -88,6 +88,56 @@ export interface MultiPassSpec {
   passes: readonly EnginePass[];
   /** The shader's four image slots, which a `texture` binding points into. */
   textures: readonly (ChannelSource | null)[];
+  /** Which project this is. A different one ends any frame capture. */
+  projectId?: string;
+  /** The editor revision this spec was composed from; stamped on every pass it makes (or keeps) accepted. */
+  revision?: number;
+}
+
+/**
+ * What the driver accepted for a pass, kept beside the program so that an
+ * inspection can state exactly which source produced the pixels — even when a
+ * newer draft of the same pass has since been rejected. Only ever replaced by a
+ * source the driver accepted, never rebuilt from the draft.
+ */
+export interface AcceptedSource {
+  /** Non-cryptographic hash of the expanded vertex + fragment: the program's identity. */
+  readonly fingerprint: string;
+  /** The requested revision at which this exact program was last accepted. */
+  readonly revision: number | null;
+  /** Composed source before macro expansion, and the map back to the files it came from. */
+  readonly composedFragment: string;
+  readonly composedVertex: string;
+  readonly spans: readonly Readonly<SourceSpan>[];
+}
+
+/** 53-bit cyrb53 hash. Identity for display, not security. */
+export function sourceFingerprint(...parts: readonly string[]): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (const char of parts.join('\u0000')) {
+    const code = char.codePointAt(0)!;
+    h1 = Math.imul(h1 ^ code, 2654435761);
+    h2 = Math.imul(h2 ^ code, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, '0');
+}
+
+function accept(
+  pass: EnginePass,
+  fragment: string,
+  vertex: string,
+  spec: MultiPassSpec,
+): AcceptedSource {
+  return Object.freeze({
+    fingerprint: sourceFingerprint(vertex, fragment),
+    revision: spec.revision ?? null,
+    composedFragment: pass.fragment,
+    composedVertex: spec.vertex,
+    spans: Object.freeze(pass.spans.map((span) => Object.freeze({ ...span }))),
+  });
 }
 
 /**
@@ -114,6 +164,8 @@ export interface PassRuntime {
   /** What it was compiled from — an identical source next time is not recompiled. */
   readonly fragment: string;
   readonly vertex: string;
+  /** The accepted source's identity and maps. Replaced only by an accepted source. */
+  accepted: AcceptedSource;
 }
 
 export interface PassCompilerOptions {
@@ -337,6 +389,7 @@ export class PassCompiler {
       // one. Rebind its channels and its params and move on.
       if (!force && existing && existing.fragment === fragment && existing.vertex === vertex) {
         existing.channels = pass.channels;
+        existing.accepted = accept(pass, fragment, vertex, spec);
         this.registry.applyControls(existing.uniforms, spec.controls, spec.params);
         compiled.push(existing);
         previous.delete(pass.id);
@@ -430,6 +483,7 @@ export class PassCompiler {
         channels: pass.channels,
         fragment,
         vertex,
+        accepted: accept(pass, fragment, vertex, spec),
       },
       diagnostics: [],
     };

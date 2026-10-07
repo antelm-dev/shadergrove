@@ -64,6 +64,12 @@ export class FakeTexture extends FakeDisposable {
   minFilter = 0;
   generateMipmaps = true;
   flipY = true;
+  /** What an RGBA8 decoded image looks like to `render-inspection`. */
+  format = 1023;
+  type = 1009;
+  colorSpace = '';
+  mipmaps: unknown[] = [];
+  image: { width: number; height: number } | undefined = { width: 2, height: 2 };
   constructor(readonly url = '') {
     super();
   }
@@ -107,6 +113,7 @@ export class FakeRenderTarget extends FakeDisposable {
   }
 
   readonly texture = new FakeTexture();
+  readonly viewport = new FakeVector();
 
   /** How many times this target has been reallocated. A resize is never free. */
   resizes = 0;
@@ -149,6 +156,51 @@ export class FakeRenderer {
 
   private target: unknown = null;
 
+  readonly capabilities = { maxTextureSize: 4096 };
+
+  /** Flip to false to see how a capture refuses a GPU that cannot read floats back. */
+  floatReadback = true;
+
+  /** Every `readRenderTargetPixels` call: the lifecycle of a capture, not its pixels. */
+  readonly reads: { width: number; height: number }[] = [];
+
+  private readonly gl = {
+    NO_ERROR: 0,
+    FRAMEBUFFER: 1,
+    FRAMEBUFFER_COMPLETE: 2,
+    RGBA: 3,
+    UNSIGNED_BYTE: 4,
+    isContextLost: () => false,
+    getError: () => 0,
+    checkFramebufferStatus: () => 2,
+    getExtension: (name: string) =>
+      name === 'EXT_color_buffer_float' && this.floatReadback ? {} : null,
+    getContextAttributes: () => ({ alpha: true }),
+    readPixels: () => undefined,
+    drawingBufferWidth: 0,
+    drawingBufferHeight: 0,
+  };
+
+  getContext(): unknown {
+    this.gl.drawingBufferWidth = Math.floor(this.width * this.pixelRatio);
+    this.gl.drawingBufferHeight = Math.floor(this.height * this.pixelRatio);
+    return this.gl;
+  }
+  /** Lets a test say what a read returns; without one the array is left as the caller made it. */
+  readHook: ((read: { width: number; height: number; out: Float32Array }) => void) | null = null;
+
+  readRenderTargetPixels(
+    _target: unknown,
+    _x: number,
+    _y: number,
+    width: number,
+    height: number,
+    out?: Float32Array,
+  ): void {
+    this.reads.push({ width, height });
+    if (out) this.readHook?.({ width, height, out });
+  }
+
   setPixelRatio(ratio: number): void {
     this.pixelRatio = ratio;
   }
@@ -179,16 +231,32 @@ export class FakeScene {
   }
 }
 
+const identity = () => ({
+  elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+});
+
 export class FakeMesh {
+  readonly matrixWorld = identity();
   constructor(
     public geometry: unknown,
     public material: unknown,
   ) {}
 }
 
+/** The matrices a capture reads off the camera, and a `clone` that owns its own. */
+export class FakeCamera {
+  readonly isOrthographicCamera = true;
+  readonly projectionMatrix = identity();
+  readonly matrixWorldInverse = identity();
+  readonly matrixWorld = identity();
+  clone(): FakeCamera {
+    return new FakeCamera();
+  }
+}
+
 export const fakeThree = {
   Scene: FakeScene,
-  OrthographicCamera: class {},
+  OrthographicCamera: FakeCamera,
   Mesh: FakeMesh,
   PlaneGeometry: FakeDisposable,
   ShaderMaterial: FakeMaterial,
@@ -209,6 +277,9 @@ export const fakeThree = {
   },
   ColorManagement: { enabled: true },
   RGBAFormat: 1023,
+  UnsignedByteType: 1009,
+  FloatType: 1015,
+  NoColorSpace: '',
   HalfFloatType: 1016,
   RepeatWrapping: 1000,
   MirroredRepeatWrapping: 1002,

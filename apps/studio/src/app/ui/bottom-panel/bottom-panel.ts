@@ -28,8 +28,9 @@ import { ShaderStore } from '../../workspace/shader-store';
 import { OutputPanel } from './output-panel';
 import { ProblemsPanel } from './problems-panel';
 import { ProfilerPanel } from '../inspector/profiler-panel';
+import { RenderInspectionPanel } from '../inspector/render-inspection-panel';
 
-const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler'];
+const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler', 'inspection'];
 
 /**
  * The bottom-docked workspace surface: Problems, Output, and Profiler.
@@ -54,6 +55,7 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler'];
     OutputPanel,
     ProblemsPanel,
     ProfilerPanel,
+    RenderInspectionPanel,
     TranslatePipe,
   ],
   template: `
@@ -135,6 +137,22 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler'];
           <mat-icon aria-hidden="true">query_stats</mat-icon>
           <span>{{ 'panel.profiler' | translate }}</span>
         </button>
+
+        <button
+          #inspectionTab
+          type="button"
+          role="tab"
+          id="bottom-panel-tab-inspection"
+          class="tab"
+          [class.active]="tab() === 'inspection'"
+          [attr.aria-selected]="tab() === 'inspection'"
+          aria-controls="bottom-panel-panel-inspection"
+          [tabindex]="tab() === 'inspection' ? 0 : -1"
+          (click)="selectTab('inspection')"
+        >
+          <mat-icon aria-hidden="true">frame_inspect</mat-icon>
+          <span>{{ 'panel.inspection' | translate }}</span>
+        </button>
       </div>
 
       <span class="spacer"></span>
@@ -178,6 +196,15 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler'];
         [hidden]="tab() !== 'profiler'"
       >
         <app-profiler-panel />
+      </div>
+      <div
+        id="bottom-panel-panel-inspection"
+        class="tabpanel"
+        role="tabpanel"
+        aria-labelledby="bottom-panel-tab-inspection"
+        [hidden]="tab() !== 'inspection'"
+      >
+        <app-render-inspection-panel />
       </div>
     </div>
   `,
@@ -377,6 +404,7 @@ export class BottomPanel {
   private readonly problemsTab = viewChild<ElementRef<HTMLButtonElement>>('problemsTab');
   private readonly outputTab = viewChild<ElementRef<HTMLButtonElement>>('outputTab');
   private readonly profilerTab = viewChild<ElementRef<HTMLButtonElement>>('profilerTab');
+  private readonly inspectionTab = viewChild<ElementRef<HTMLButtonElement>>('inspectionTab');
 
   protected readonly tab = computed(() => this.preferences.value().bottomPanelTab);
 
@@ -460,7 +488,9 @@ export class BottomPanel {
         ? this.problemsTab()
         : tab === 'output'
           ? this.outputTab()
-          : this.profilerTab();
+          : tab === 'profiler'
+            ? this.profilerTab()
+            : this.inspectionTab();
     ref?.nativeElement.focus();
   }
 

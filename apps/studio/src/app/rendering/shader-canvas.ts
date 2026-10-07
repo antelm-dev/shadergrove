@@ -262,6 +262,8 @@ export class ShaderCanvas {
             render: draft?.render ?? DEFAULT_RENDER,
             passes,
             textures: channelState.shaderId === shaderId ? channelState.sources : EMPTY_CHANNELS,
+            projectId: shaderId ?? undefined,
+            revision,
           },
           force,
         );

@@ -2,6 +2,12 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { DesktopPlatform } from '../desktop/desktop-platform';
 
 import type { ThumbnailUpload } from '../api/shader-api';
+import {
+  FrameCaptureError,
+  type CaptureOptions,
+  type FrameSnapshot,
+  type InvalidationReason,
+} from './render-inspection';
 import type { ShaderEngine } from './shader-engine';
 import type { ProfilerSnapshot } from './performance-profiler';
 import { encodeThumbnail } from './thumbnail';
@@ -88,6 +94,11 @@ export class RendererHandle {
   /** The first engine registered becomes the active one; later ones only join the map. */
   register(contextId: string, engine: ShaderEngine): void {
     engine.onProfilerLifecycle = () => this.bumpProfilerEpoch();
+    engine.onCaptureInvalidated = (reason) => {
+      if (this.engines().get(this.activeId() ?? '') !== engine) return;
+      this.capturedFrame.set(null);
+      this.captureEnded.set(reason);
+    };
     this.engines.update((engines) => new Map(engines).set(contextId, engine));
     if (this.activeId() === null) this.activeId.set(contextId);
     this.syncProfiling();
@@ -95,7 +106,15 @@ export class RendererHandle {
 
   unregister(contextId: string): void {
     const leaving = this.engines().get(contextId);
-    if (leaving) leaving.onProfilerLifecycle = null;
+    if (leaving) {
+      leaving.onProfilerLifecycle = null;
+      leaving.onCaptureInvalidated = null;
+      leaving.releaseCapture();
+    }
+    if (this.activeId() === contextId) {
+      if (this.capturedFrame()) this.captureEnded.set('disposed');
+      this.capturedFrame.set(null);
+    }
 
     this.engines.update((engines) => {
       const next = new Map(engines);
@@ -116,9 +135,45 @@ export class RendererHandle {
 
   setActive(contextId: string): void {
     if (this.engines().has(contextId)) {
+      // A capture describes one context's frame; it never follows the toolbar to another.
+      if (contextId !== this.activeId()) {
+        const had = this.capturedFrame() !== null;
+        this.releaseCapture();
+        if (had) this.captureEnded.set('active-context');
+      }
       this.activeId.set(contextId);
       this.syncProfiling();
     }
+  }
+
+  /** The active engine's retained frame capture, until released or invalidated. */
+  readonly capturedFrame = signal<FrameSnapshot | null>(null);
+
+  /** Why the last retained capture ended without being released by a caller; cleared by the next request. */
+  readonly captureEnded = signal<InvalidationReason | null>(null);
+
+  /** Captures the active engine's next drawn frame. See `ShaderEngine.captureFrame`. */
+  async captureFrame(options?: CaptureOptions): Promise<FrameSnapshot> {
+    const engine = this.engine();
+    if (!engine) throw new FrameCaptureError('no-renderer', 'There is no active renderer.');
+    this.captureEnded.set(null);
+    const snapshot = await engine.captureFrame(options);
+    // The engine resolves inside its frame, and the callbacks of that frame run before
+    // this continuation: a release, unregister, invalidation, context switch or newer
+    // capture may already have ended this snapshot. Never publish what the engine no
+    // longer retains, and never overwrite what it retains now.
+    if (snapshot.released || this.engine() !== engine || engine.capturedFrame !== snapshot) {
+      snapshot.release();
+      throw new FrameCaptureError('released', 'The capture was released before it was published.');
+    }
+    this.capturedFrame.set(snapshot);
+    return snapshot;
+  }
+
+  releaseCapture(): void {
+    this.engine()?.releaseCapture();
+    this.capturedFrame.set(null);
+    this.captureEnded.set(null);
   }
 
   /** Save the current frame as a PNG. No-op if there is nothing rendering. */
