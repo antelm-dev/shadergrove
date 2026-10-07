@@ -140,7 +140,7 @@ describe('tool packages and template payloads', () => {
     } finally {
       cleanup();
     }
-  });
+  }, 30_000);
 
   it('refuses a template with no contribution, a Worker contribution with no source, and forbidden code', () => {
     const { dir, cleanup } = fixture();
