@@ -18,31 +18,78 @@ const SEVERITY: Record<string, AnalysisDiagnostic['severity']> = {
 };
 
 /**
- * True when a real `#line` directive exists: `#` is the first token of a line
- * (only whitespace and comments before it) followed by `line`. Text inside
- * comments never counts.
+ * True when a real `#line` directive exists, read the way the preprocessor
+ * does: backslash-newline joins physical lines first (inside comments and
+ * words too); `#` must be the first token of a logical line; comments and
+ * whitespace of any length may precede the directive name; text inside
+ * comments, continued ones included, never counts. Reads `source` only; the
+ * analyzed text is never altered.
  */
 export function hasLineDirective(source: string): boolean {
   const n = source.length;
+  // Index of the next logical character at or after `at`, past escaped newlines.
+  const skip = (at: number): number => {
+    while (source[at] === '\\') {
+      const next = source[at + 1];
+      if (next === '\n') at += 2;
+      else if (next === '\r') at += source[at + 2] === '\n' ? 3 : 2;
+      else break;
+    }
+    return at;
+  };
+  const isNewline = (c: string | undefined) => c === '\n' || c === '\r';
+  // End of the comment starting at `at` (a `/`), or -1 when none starts there.
+  const commentEnd = (at: number): number => {
+    const second = skip(at + 1);
+    if (source[second] === '/') {
+      let k = skip(second + 1);
+      while (k < n && !isNewline(source[k])) k = skip(k + 1);
+      return k;
+    }
+    if (source[second] === '*') {
+      let k = skip(second + 1);
+      while (k < n) {
+        const after = skip(k + 1);
+        if (source[k] === '*' && source[after] === '/') return after + 1;
+        k = after;
+      }
+      return n;
+    }
+    return -1;
+  };
+
   let atLineStart = true;
-  for (let i = 0; i < n;) {
+  for (let i = skip(0); i < n; i = skip(i)) {
     const c = source[i] as string;
-    if (c === '\n' || c === '\r') {
+    if (isNewline(c)) {
       atLineStart = true;
       i++;
-    } else if (c === ' ' || c === '\t' || c === '\f' || c === '\v') {
-      i++;
-    } else if (c === '/' && source[i + 1] === '/') {
-      while (i < n && source[i] !== '\n' && source[i] !== '\r') i++;
-    } else if (c === '/' && source[i + 1] === '*') {
-      const close = source.indexOf('*/', i + 2);
-      i = close < 0 ? n : close + 2;
-    } else if (atLineStart && c === '#') {
-      if (/[ \t]*line\b/y.test(source.slice(i + 1, i + 64))) return true;
+    } else if (c === '/') {
+      const end = commentEnd(i);
+      if (end < 0) {
+        atLineStart = false;
+        i++;
+      } else {
+        i = end;
+      }
+    } else if (c === '#' && atLineStart) {
+      let k = skip(i + 1);
+      for (;;) {
+        const ch = source[k];
+        if (ch === ' ' || ch === '\t' || ch === '\f' || ch === '\v') k = skip(k + 1);
+        else if (ch === '/' && commentEnd(k) >= 0) k = skip(commentEnd(k));
+        else break;
+      }
+      let name = '';
+      while (k < n && /[A-Za-z0-9_]/.test(source[k] as string)) {
+        name += source[k];
+        k = skip(k + 1);
+      }
+      if (name === 'line') return true;
       atLineStart = false;
       i++;
     } else {
-      atLineStart = false;
+      if (c !== ' ' && c !== '\t' && c !== '\f' && c !== '\v') atLineStart = false;
       i++;
     }
   }
