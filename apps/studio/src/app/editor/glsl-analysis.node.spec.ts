@@ -184,6 +184,17 @@ describe('real front end through the facade', () => {
     expect(diagnostics.every((diagnostic) => diagnostic.line !== 0)).toBe(true);
   });
 
+  it('keeps legal fragment globals whose names are generated only in the vertex stage', async () => {
+    const next = project(
+      'uniform float uv; uniform vec3 position; uniform mat4 modelMatrix; void main() { gl_FragColor = vec4(uv + position.x + modelMatrix[0][0]); }',
+    );
+    const analysis = await analyse(next);
+    expect(analysis.diagnosticsFor(next.passes[0].id)).toEqual([]);
+    expect(analysis.symbolsFor(next.passes[0].id)?.globals.map((symbol) => symbol.name)).toEqual(
+      expect.arrayContaining(['uv', 'position', 'modelMatrix']),
+    );
+  });
+
   it('serves nothing between an edit and its accepted result', async () => {
     const next = project();
     const analysis = await analyse(next);
@@ -240,6 +251,26 @@ describe('real front end through the facade', () => {
     expect(analysis.symbolsFor('buffer-a')).toBeNull();
   });
 
+  it('cancels departed projects before their pending units can fill the queue', async () => {
+    let release!: () => void;
+    behaviour.gate = new Promise<void>((resolve) => (release = resolve));
+    const analysis = makeAnalysis();
+    analysis.update({ projectId: 'pending-0', revision: 1, project: project() });
+    await until(() => behaviour.analyzed.length > 0, 'the first pending job');
+    for (let index = 1; index <= 10; index++) {
+      analysis.update({ projectId: `pending-${index}`, revision: 1, project: project() });
+      // Let the facade's zero-delay debounce submit this project's units.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    release();
+    await until(
+      () => analysis.current || analysis.health().state === 'unavailable',
+      'the latest project result',
+    );
+    expect(analysis.health().state).toBe('ready');
+    expect(analysis.snapshot()?.projectId).toBe('pending-10');
+  });
+
   it('reports a failed start-up as health, not as a shader error, and recovers', async () => {
     behaviour.initFails = true;
     const analysis = makeAnalysis();
@@ -293,6 +324,24 @@ describe('source mapping', () => {
     const inLib = analysis.snapshot()!.diagnostics.filter((d) => d.docId === 'file-lib');
     expect(inLib).toHaveLength(1);
     expect(inLib[0].passIds).toEqual(expect.arrayContaining([next.passes[0].id, 'buffer-a']));
+  });
+
+  it('remaps cached diagnostics when the same source belongs to a replacement include', async () => {
+    const before = withInclude();
+    const analysis = await analyse(before);
+    expect(analysis.diagnosticsFor('file-lib')).toHaveLength(1);
+    const after = {
+      ...before,
+      files: before.files.map((file) => ({ ...file, id: 'replacement-lib' })),
+    };
+    analysis.update({ projectId: 'p1', revision: 2, project: after });
+    await until(
+      () => analysis.current && analysis.snapshot()!.revision === 2,
+      'replacement include',
+    );
+    expect(analysis.diagnosticsFor('file-lib')).toEqual([]);
+    expect(analysis.diagnosticsFor('replacement-lib')).toHaveLength(1);
+    expect(analysis.diagnosticsFor('replacement-lib')[0].line).toBe(2);
   });
 
   it('keeps the line but refuses a column on a line the macro expansion rewrote', async () => {
