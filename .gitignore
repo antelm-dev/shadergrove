@@ -73,6 +73,7 @@ Thumbs.db
 *.log
 *.tsbuildinfo
 /apps/studio/src/desktop/contracts/ipc-bridge.ts
+/apps/studio/.glsl-analysis-assets/
 /electron-run-*.json
 **/electron-run-*.json
 

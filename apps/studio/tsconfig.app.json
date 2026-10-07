@@ -18,7 +18,8 @@
     "src/server/**/*.ts",
     "../../libs/backend/src/**/*.ts",
     "src/desktop/contracts/**/*.ts",
-    "../../libs/shared/src/**/*.ts"
+    "../../libs/shared/src/**/*.ts",
+    "../../libs/glsl-analysis/src/**/*.ts"
   ],
   "exclude": ["src/**/*.spec.ts"]
 }

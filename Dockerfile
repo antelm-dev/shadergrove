@@ -1,7 +1,16 @@
 # syntax=docker/dockerfile:1
 
 # ---- build ------------------------------------------------------------------
-FROM node:24-alpine AS build
+# Debian (glibc), not Alpine: the pinned Linux Emscripten/LLVM archive that
+# tools/glsl-analysis downloads is glibc-linked. Build stage only; the runtime
+# stage below stays Alpine.
+FROM node:24-bookworm-slim AS build
+
+# The compiler bootstrap shells out to git (pinned emsdk), python3 (emsdk) and
+# tar with xz (release archive), and downloads over HTTPS.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git python3 tar xz-utils \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -15,6 +24,7 @@ RUN npm install --global pnpm@10.28.2
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/studio/package.json ./apps/studio/
 COPY libs/backend/package.json ./libs/backend/
+COPY libs/glsl-analysis/package.json ./libs/glsl-analysis/
 COPY libs/shared/package.json ./libs/shared/
 COPY tools/maintenance/package.json ./tools/maintenance/
 COPY tools/mcp/package.json ./tools/mcp/

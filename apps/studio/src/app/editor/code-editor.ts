@@ -23,6 +23,8 @@ import type { CompileDiagnostic } from '@shadergrove/shared/diagnostic';
 import { ReducedMotion } from '../prefs/reduced-motion';
 import { FontLoader, findFont, nearestWeight } from './google-fonts';
 import { AppThemes } from '../themes/app-themes';
+import type { ProjectAnalysis } from './glsl-analysis';
+import { bindAnalysisModel, syncAnalysisMarkers } from './monaco-glsl-analysis';
 import { GLSL_LANGUAGE_ID, JSON_LANGUAGE_ID, loadMonaco, type MonacoApi } from './monaco-loader';
 
 export type EditorLanguage = 'glsl' | 'json';
@@ -101,6 +103,11 @@ export class CodeEditor {
    */
   readonly liveIds = input<readonly string[] | null>(null);
   readonly diagnostics = input<readonly CompileDiagnostic[]>([]);
+  /**
+   * Front-end analysis of the project the documents belong to. Optional: without
+   * it the editor is exactly what it was, and it never starts the analysis itself.
+   */
+  readonly analysis = input<ProjectAnalysis | null>(null);
   readonly readOnly = input(false);
   readonly appearance = input<EditorAppearance>(DEFAULT_EDITOR_APPEARANCE);
 
@@ -124,6 +131,9 @@ export class CodeEditor {
 
   /** One model per document: the text, and the undo/redo stack behind it. */
   private readonly models = new Map<string, Monaco.editor.ITextModel>();
+
+  /** Undoes each GLSL model's analysis binding. */
+  private readonly unbind = new Map<string, () => void>();
 
   /** Cursor, selection and scroll, per document. Monaco does not keep these. */
   private readonly viewStates = new Map<string, Monaco.editor.ICodeEditorViewState>();
@@ -194,6 +204,8 @@ export class CodeEditor {
         const keep = new Set(live);
         for (const [id, model] of this.models) {
           if (keep.has(id) || id === this.mounted) continue;
+          this.unbind.get(id)?.();
+          this.unbind.delete(id);
           model.dispose();
           this.models.delete(id);
           this.viewStates.delete(id);
@@ -215,6 +227,30 @@ export class CodeEditor {
         'shader-studio',
         diagnostics.map((diagnostic) => this.toMarker(monaco, model, diagnostic, doc.language)),
       );
+    });
+
+    // Analysis owns its own marker owner: these effects never touch `shader-studio`.
+    effect(() => {
+      const monaco = this.monaco();
+      const analysis = this.analysis();
+      if (!monaco) return;
+
+      untracked(() => {
+        for (const [id, model] of this.models) this.bindModel(monaco, id, model, analysis);
+      });
+    });
+
+    effect(() => {
+      const monaco = this.monaco();
+      const analysis = this.analysis();
+      this.doc();
+      // A new accepted snapshot is the only thing that puts analysis markers back.
+      analysis?.snapshot();
+      if (!monaco || !analysis) return;
+
+      untracked(() => {
+        for (const model of this.models.values()) syncAnalysisMarkers(monaco, model);
+      });
     });
 
     effect(() => {
@@ -280,6 +316,7 @@ export class CodeEditor {
     if (!model) {
       model = monaco.editor.createModel(doc.value, this.monacoLanguage(doc.language));
       this.models.set(doc.id, model);
+      this.bindModel(monaco, doc.id, model, this.analysis());
     } else if (model.getValue() !== doc.value) {
       this.applying = true;
       model.setValue(doc.value);
@@ -436,10 +473,27 @@ export class CodeEditor {
     this.destroyRef.onDestroy(() => {
       if (this.visibleTokensFrame !== null) cancelAnimationFrame(this.visibleTokensFrame);
       editor.dispose();
+      for (const stop of this.unbind.values()) stop();
+      this.unbind.clear();
       for (const model of this.models.values()) model.dispose();
       this.models.clear();
       this.viewStates.clear();
     });
+  }
+
+  private bindModel(
+    monaco: MonacoApi,
+    id: string,
+    model: Monaco.editor.ITextModel,
+    analysis: ProjectAnalysis | null,
+  ): void {
+    this.unbind.get(id)?.();
+    this.unbind.delete(id);
+    if (!analysis || model.getLanguageId() !== GLSL_LANGUAGE_ID) return;
+    this.unbind.set(
+      id,
+      bindAnalysisModel(monaco, model, analysis, id, () => this.applying),
+    );
   }
 
   private monacoLanguage(language: EditorLanguage): string {
