@@ -464,3 +464,99 @@ test('refuses a capture over the payload budget without touching the picture', a
   expect(outcome.message).toContain('Nothing was captured or downsampled');
   expect(outcome.retained).toBeNull();
 });
+
+test('counts every actual feedback frame while the live profiler samples individual passes', async ({
+  page,
+}) => {
+  await open(
+    page,
+    'Inspect profiled frames',
+    pipeline((project) => project),
+    3,
+  );
+  const runs = await page.evaluate(async () => {
+    const engine = (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine();
+    const take = async () => {
+      const snapshot = await engine.captureFrame();
+      const result = {
+        index: snapshot.frame.index,
+        output: snapshot.pixel(snapshot.passes[0].output.rawImageId, 0, 0)[0],
+      };
+      snapshot.release();
+      return result;
+    };
+    const first = await take();
+    engine.setProfilingEnabled(true);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    engine.setProfilingEnabled(false);
+    const second = await take();
+    return { first, second };
+  });
+  const frames = runs.second.index - runs.first.index;
+  expect(runs.second.output - runs.first.output).toBe(1.5 * frames);
+});
+
+test('records renderer-provided uniforms used by the accepted shader', async ({ page }) => {
+  const project = createProject(
+    `void main() {
+    gl_FragColor = vec4(float(isOrthographic), cameraPosition.xyz);
+  }`,
+    DEFAULT_VERTEX,
+  );
+  await open(page, 'Inspect renderer uniforms', project, 1);
+  const capture = await page.evaluate(async () => {
+    const engine = (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine();
+    const snapshot = await engine.captureFrame();
+    const pass = snapshot.passes[0];
+    const result = {
+      uniforms: pass.uniforms,
+      raw: snapshot.pixel(pass.output.rawImageId, 0, 0),
+      comparison: pass.output.comparison,
+    };
+    snapshot.release();
+    return result;
+  });
+  expect(capture.raw).toEqual([1, 0, 0, 0]);
+  expect(capture.comparison.status).toBe('match');
+  expect(capture.uniforms).toMatchObject({ isOrthographic: true, cameraPosition: [0, 0, 0] });
+  expect(capture.uniforms.projectionMatrix).toHaveLength(16);
+  expect(capture.uniforms.modelViewMatrix).toHaveLength(16);
+});
+
+test('does not publish a released capture after completion races with handle release', async ({
+  page,
+}) => {
+  await open(
+    page,
+    'Inspect capture publication',
+    pipeline((project) => project),
+    3,
+  );
+  const outcome = await page.evaluate(async () => {
+    const component = (window as any).ng.getComponent(document.querySelector('app-shader-canvas'));
+    const engine = component.engine();
+    const handle = component.handle;
+    const previous = engine.onFrameRendered;
+    engine.onFrameRendered = () => {
+      engine.onFrameRendered = previous;
+      previous?.();
+      handle.releaseCapture();
+    };
+    let code = 'resolved';
+    try {
+      await handle.captureFrame();
+    } catch (error: any) {
+      code = error.code;
+    }
+    return {
+      code,
+      published: handle.capturedFrame() !== null,
+      engineRetained: engine.capturedFrame !== null,
+    };
+  });
+  expect(outcome).toEqual({ code: 'released', published: false, engineRetained: false });
+});
