@@ -351,6 +351,27 @@ describe('Explore restoration', () => {
     expect(titles(harness.fixture)).toEqual(['a1']);
   });
 
+  it('keeps where the previous search was scrolled when a new search is submitted, for Back', async () => {
+    const { http, harness, location } = await visit('/explore?q=aurora');
+    nextRequest(http).flush(page(['a1', 'a2', 'a3'], 'ca'));
+    await settle(harness.fixture);
+    scrollTo(harness, 320);
+
+    submit(harness.fixture, 'bloom');
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore?q=bloom');
+    nextRequest(http).flush(page(['b1']));
+    await settle(harness.fixture);
+    scrollTo(harness, 0);
+
+    location.back();
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore?q=aurora');
+    expect(listing(http)).toHaveLength(0);
+    expect(titles(harness.fixture)).toEqual(['a1', 'a2', 'a3']);
+    expect(scroller(harness).scrollTop).toBe(320);
+  });
+
   it('ignores a page-two response that lands after the search changed', async () => {
     const { http, harness } = await visit('/explore?q=aurora');
     nextRequest(http).flush(page(['a1'], 'ca'));
@@ -460,6 +481,19 @@ describe('Explore server rendering', () => {
     await settle(harness.fixture);
     expect(titles(harness.fixture)).toEqual(['b1']);
     expect(TestBed.inject(TransferState).hasKey(key)).toBe(false);
+  });
+
+  it('hydrates an untidy q from the page the server rendered for its tidy form, with no request', async () => {
+    const http = configure();
+    TestBed.inject(TransferState).set(key, { query: 'bloom', page: page(['b1'], 'next') });
+    const harness = await RouterTestingHarness.create();
+    TestBed.inject(Router).initialNavigation();
+    await harness.navigateByUrl('/explore?q=%20bloom%20', ExplorePage);
+    await settle(harness.fixture);
+    expect(TestBed.inject(Location).path()).toBe('/explore?q=bloom');
+    expect(listing(http)).toHaveLength(0);
+    expect(titles(harness.fixture)).toEqual(['b1']);
+    expect(input(harness.fixture).value).toBe('bloom');
   });
 
   it('renders and transfers the first page of the requested q, and keeps nothing for the next request', async () => {
