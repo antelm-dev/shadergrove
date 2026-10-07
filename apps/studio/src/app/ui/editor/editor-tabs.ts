@@ -394,7 +394,7 @@ export class EditorTabs {
     const closed = this.groups.close(docId, this.groupId());
     if (!closed) return;
 
-    const nextActive = this.store.activeDoc()?.id ?? null;
+    const nextActive = this.groups.activeDocumentId(this.groupId());
     this.closed.emit(nextActive);
     queueMicrotask(() => {
       if (nextActive) this.focusTab(nextActive);
