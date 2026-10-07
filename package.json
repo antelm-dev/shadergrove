@@ -59,8 +59,8 @@
     "pg": "8.22.0"
   },
   "devDependencies": {
-    "@nx/angular": "23.1.0",
-    "@nx/nest": "23.1.0",
+    "@nx/angular": "23.2.1",
+    "@nx/nest": "23.2.1",
     "@shadergrove/shared": "workspace:*",
     "nx": "23.2.1",
     "oxfmt": "^0.58.0",
