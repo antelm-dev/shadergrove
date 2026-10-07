@@ -56,6 +56,7 @@ const EXPORTED_FUNCTIONS = [
   '_free',
   '_gla_init',
   '_gla_analyze',
+  '_gla_observe',
   '_gla_free',
   '_gla_heap_used',
 ];

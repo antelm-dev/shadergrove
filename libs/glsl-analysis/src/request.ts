@@ -36,6 +36,9 @@ export function checkRequest(value: unknown, maxSourceBytes: number): RequestChe
     issues.push('stage must be "vertex" or "fragment"');
   const source = value['source'];
   if (typeof source !== 'string') issues.push('source must be a string');
+  const observe = value['observe'];
+  if (observe !== undefined && typeof observe !== 'boolean')
+    issues.push('observe must be a boolean');
   const profile = value['profile'];
   if (
     !isRecord(profile) ||
@@ -65,6 +68,8 @@ export function checkRequest(value: unknown, maxSourceBytes: number): RequestChe
     stage: stage as GlslStage,
     profile: { language: 'essl', version } as EsslProfile,
     source: source as string,
+    // Only an explicit opt-in is carried; ordinary requests keep their exact shape.
+    ...(observe === true ? { observe: true } : {}),
   };
   return { kind: 'valid', request, sourceBytes };
 }
