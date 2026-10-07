@@ -147,6 +147,37 @@ export const GENERATED_GLOBALS: Readonly<Record<GlslStage, ReadonlySet<string>>>
   ]),
 };
 
+/**
+ * The functions each stage's prefix defines, by name and exact parameter types.
+ * Identity by signature, not by line: `#line` lets user code claim any line, and
+ * a user overload with other parameter types is the user's.
+ */
+const GENERATED_FUNCTIONS: Readonly<
+  Record<GlslStage, Readonly<Record<string, readonly string[]>>>
+> = {
+  vertex: {},
+  fragment: {
+    LinearTransferOETF: ['vec4'],
+    sRGBTransferEOTF: ['vec4'],
+    sRGBTransferOETF: ['vec4'],
+    linearToOutputTexel: ['vec4'],
+    luminance: ['vec3'],
+  },
+};
+
+/** Whether `symbol` is a function three.js's prefix defines for `stage`. */
+export function isGeneratedFunction(
+  stage: GlslStage,
+  symbol: { readonly name: string; readonly parameters: readonly { type: { base: string } }[] },
+): boolean {
+  const known = GENERATED_FUNCTIONS[stage][symbol.name];
+  return (
+    !!known &&
+    known.length === symbol.parameters.length &&
+    known.every((base, index) => symbol.parameters[index].type.base === base)
+  );
+}
+
 /** One source the front end analyses: a render pass's fragment, or the vertex shader. */
 export interface AnalysisUnit {
   /** Stable identity inside a project: the pass id, or `@vertex`. */

@@ -12,6 +12,7 @@ import type { ShaderProject } from '@shadergrove/shared/project';
 import {
   GENERATED_GLOBALS,
   dedupeDiagnostics,
+  isGeneratedFunction,
   mapDiagnostic,
   prepareUnits,
   type AnalysisUnit,
@@ -191,11 +192,10 @@ export class ProjectAnalysis {
         if (symbol.name && !generated.has(symbol.name)) globals.set(symbol.name, symbol);
       }
       for (const symbol of result.symbols.functions) {
-        // A user overload may share a generated helper's name: only a definition
-        // inside the prefix (or one we cannot place) is three.js's.
-        const line = symbol.definition?.line;
-        const inPrefix = line === undefined || line <= result.unit.prefixLines;
-        if (!generated.has(symbol.name) || !inPrefix) functions.set(symbol.signature, symbol);
+        // A user overload may share a generated helper's name; only the exact
+        // generated signature is three.js's, wherever `#line` says it is.
+        if (!isGeneratedFunction(result.unit.stage, symbol))
+          functions.set(symbol.signature, symbol);
       }
     }
     return any ? { globals: [...globals.values()], functions: [...functions.values()] } : null;

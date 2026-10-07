@@ -236,6 +236,18 @@ describe('real front end through the facade', () => {
     expect(offered[0].parameters[0].type.base).toBe('float');
   });
 
+  it('keeps a user overload of another generated helper and still hides the generated one', async () => {
+    const next = project(
+      '#line 1\nfloat sRGBTransferOETF(float x) { return x; } void main() { gl_FragColor = vec4(sRGBTransferOETF(0.5)); }',
+    );
+    const analysis = await analyse(next);
+    expect(analysis.diagnosticsFor(next.passes[0].id)).toEqual([]);
+    const offered = analysis
+      .symbolsFor(next.passes[0].id)!
+      .functions.filter((symbol) => symbol.name === 'sRGBTransferOETF');
+    expect(offered.map((symbol) => symbol.parameters[0].type.base)).toEqual(['float']);
+  });
+
   it('serves nothing between an edit and its accepted result', async () => {
     const next = project();
     const analysis = await analyse(next);
