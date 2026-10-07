@@ -314,9 +314,7 @@ test('Shadertoy Import: leaving with browser Back while a fetch runs cancels it 
   let answered = false;
   await page.route('**/api/import/shadertoy/source', async (route) => {
     await gate;
-    await route
-      .fulfill({ json: { sourceId: 'BackNav', source: fixture } })
-      .catch(() => undefined);
+    await route.fulfill({ json: { sourceId: 'BackNav', source: fixture } }).catch(() => undefined);
     answered = true;
   });
   await openStudio(page);
