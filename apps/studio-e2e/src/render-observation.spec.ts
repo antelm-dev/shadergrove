@@ -395,7 +395,8 @@ void main() {
   // A paused preview that owes a frame (any layout or control change asks for one) draws it on
   // the next animation frame, which can land in any macrotask the observation yields to between
   // readback bands. Draw exactly that real live frame right after the first band is read.
-  const framesBefore = (await page.evaluate(`${engineOf}.framesDrawn`)) as number;
+  // Frames the paused preview still owes from loading are drawn by its own loop at any time, so
+  // count only the frame drawn here: exactly one.
   await page.evaluate(() => {
     const engine = (window as any).ng
       .getComponent(document.querySelector('app-shader-canvas'))
@@ -408,13 +409,15 @@ void main() {
       if (!drawn && engine.observing) {
         drawn = true;
         renderer.readRenderTargetPixels = read;
+        const before = engine.framesDrawn;
         engine.requestFrames(1);
         engine.tick();
+        (window as any).__injectedFrames = engine.framesDrawn - before;
       }
     };
   });
   await measure(section);
-  expect(await page.evaluate(`${engineOf}.framesDrawn`)).toBe(framesBefore + 1);
+  expect(await page.evaluate(() => (window as any).__injectedFrames)).toBe(1);
   // The frozen inputs and the frozen reference are unchanged; only a live frame was drawn.
   await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
 });
@@ -766,3 +769,148 @@ test('ends the measurement when the drawing buffer is resized', async ({ page })
   await expect(panel.locator('.capture')).toBeVisible();
   await expect(section).toHaveCount(0);
 });
+
+for (const composer of [false, true]) {
+  test(`live frames drawn at the observation's yields reach the canvas with live state${composer ? ' through the post-processing composer' : ''}`, async ({
+    page,
+  }) => {
+    await open(page, `Observe yields ${composer ? 'composer' : 'plain'}`, single(), 1);
+    if (composer) {
+      // The canvas applies the draft's settings once; these stay until the draft changes.
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const engine = (window as any).ng
+              .getComponent(document.querySelector('app-shader-canvas'))
+              .engine();
+            engine.setRenderSettings({
+              postProcessing: {
+                enabled: true,
+                effects: [
+                  {
+                    type: 'vignette',
+                    instanceId: 'vignette',
+                    enabled: true,
+                    settings: { intensity: 1, softness: 0.5, roundness: 1 },
+                  },
+                ],
+              },
+            });
+            return engine.post.usesComposer() as boolean;
+          }),
+        )
+        .toBe(true);
+    }
+    const { panel, section } = await captureAndFind(page);
+    const { width, height } = await drawingBuffer(page);
+    const [x, y] = [3, 5];
+    await pick(panel, x, y);
+    await choose(section, 'hdr');
+
+    // After every observer readback, schedule one real live frame on a macrotask. The
+    // observation yields right after each readback, so each frame lands inside a yield.
+    await page.evaluate(() => {
+      const engine = (window as any).ng
+        .getComponent(document.querySelector('app-shader-canvas'))
+        .engine();
+      const renderer = engine.context.renderer;
+      const T = engine.context.three;
+      const colour = new T.Color();
+      const state = () => ({
+        target: renderer.getRenderTarget(),
+        colour: renderer.getClearColor(colour).getHex(),
+        alpha: renderer.getClearAlpha(),
+      });
+      const live = state();
+      const observerTargets = new Set<unknown>();
+      const record: any = {
+        live: { colour: live.colour, alpha: live.alpha, canvas: live.target === null },
+        yields: [] as any[],
+        renders: [] as any[],
+        frameDeltas: [] as number[],
+      };
+      (window as any).__yieldRecord = record;
+      const read = renderer.readRenderTargetPixels.bind(renderer);
+      const render = renderer.render.bind(renderer);
+      let inLive = false;
+      renderer.render = (scene: unknown, camera: unknown) => {
+        if (inLive) {
+          const now = state();
+          record.renders.push({
+            observerTarget: observerTargets.has(now.target),
+            canvas: now.target === null,
+            colour: now.colour,
+            alpha: now.alpha,
+          });
+        }
+        return render(scene, camera);
+      };
+      renderer.readRenderTargetPixels = (...args: any[]) => {
+        read(...args);
+        if (!engine.observing) return;
+        observerTargets.add(args[0]);
+        setTimeout(() => {
+          if (!engine.observing) return;
+          const now = state();
+          record.yields.push({
+            observerTarget: observerTargets.has(now.target),
+            target: now.target === live.target,
+            colour: now.colour,
+            alpha: now.alpha,
+            composer: engine.post.usesComposer(),
+          });
+          record.renders.push('frame');
+          const drawn = engine.framesDrawn;
+          inLive = true;
+          try {
+            engine.requestFrames(1);
+            engine.tick();
+          } finally {
+            inLive = false;
+          }
+          record.frameDeltas.push(engine.framesDrawn - drawn);
+        }, 0);
+      };
+    });
+    await measure(section);
+
+    const [r, g, b] = await values(section);
+    expect(r).toBeCloseTo(((x + 0.5) / width) * 4 - 2, 4);
+    expect(g).toBeCloseTo(((y + 0.5) / height) * 8, 4);
+    expect(b).toBe(-0.5);
+    await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
+
+    const record = await page.evaluate(() => (window as any).__yieldRecord);
+    expect(record.live.canvas).toBe(true);
+    // Every band, the hit and the value readback were each followed by a live frame in a yield.
+    expect(record.yields.length).toBeGreaterThanOrEqual(3);
+    // Each injected tick drew exactly one real frame (owed frames the paused preview draws on its
+    // own are extra live frames, not counted here).
+    expect(record.frameDeltas).toEqual(record.yields.map(() => 1));
+    for (const at of record.yields) {
+      expect(at).toEqual({
+        observerTarget: false,
+        target: true,
+        colour: record.live.colour,
+        alpha: record.live.alpha,
+        composer,
+      });
+    }
+    // Each live frame drew with the live clear colour, never into an observer target, and its
+    // last draw went to the canvas.
+    const frames: any[][] = [];
+    for (const entry of record.renders) {
+      if (entry === 'frame') frames.push([]);
+      else frames.at(-1)!.push(entry);
+    }
+    expect(frames).toHaveLength(record.yields.length);
+    for (const draws of frames) {
+      expect(draws.length).toBeGreaterThan(0);
+      for (const draw of draws) {
+        expect(draw.observerTarget).toBe(false);
+        expect([draw.colour, draw.alpha]).toEqual([record.live.colour, record.live.alpha]);
+      }
+      expect(draws.at(-1).canvas).toBe(true);
+    }
+  });
+}
