@@ -273,6 +273,17 @@ describe('real front end through the facade', () => {
     ).toContain('toString');
   });
 
+  it('keeps a valid user function named constructor without consulting Object.prototype', async () => {
+    const next = project(
+      'float constructor(float x) { return x; } void main() { gl_FragColor = vec4(constructor(0.2)); }',
+    );
+    const analysis = await analyse(next);
+    expect(analysis.diagnosticsFor(next.passes[0].id)).toEqual([]);
+    expect(
+      analysis.symbolsFor(next.passes[0].id)!.functions.map((symbol) => symbol.name),
+    ).toContain('constructor');
+  });
+
   it('serves nothing between an edit and its accepted result', async () => {
     const next = project();
     const analysis = await analyse(next);

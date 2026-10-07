@@ -175,7 +175,9 @@ export function isGeneratedFunction(
     }[];
   },
 ): boolean {
-  const known = GENERATED_FUNCTIONS[stage][symbol.name];
+  // Own keys only: a user function may be named `toString` or `constructor`.
+  const table = GENERATED_FUNCTIONS[stage];
+  const known = Object.hasOwn(table, symbol.name) ? table[symbol.name] : undefined;
   return (
     !!known &&
     known.length === symbol.parameters.length &&
