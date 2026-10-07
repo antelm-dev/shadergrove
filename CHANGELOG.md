@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/antelm-dev/shadergrove/compare/v2.1.0...v2.1.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **deps:** align Angular on 22.2 and patch axios and js-yaml advisories ([#163](https://github.com/antelm-dev/shadergrove/issues/163)) ([d46635d](https://github.com/antelm-dev/shadergrove/commit/d46635d8934329345af0e2b6efcebcf74bcc9fb5))
+
 ## [2.1.0](https://github.com/antelm-dev/shadergrove/compare/v2.0.0...v2.1.0) (2026-10-07)
 
 
