@@ -186,14 +186,19 @@ export class FakeRenderer {
     this.gl.drawingBufferHeight = Math.floor(this.height * this.pixelRatio);
     return this.gl;
   }
+  /** Lets a test say what a read returns; without one the array is left as the caller made it. */
+  readHook: ((read: { width: number; height: number; out: Float32Array }) => void) | null = null;
+
   readRenderTargetPixels(
     _target: unknown,
     _x: number,
     _y: number,
     width: number,
     height: number,
+    out?: Float32Array,
   ): void {
     this.reads.push({ width, height });
+    if (out) this.readHook?.({ width, height, out });
   }
 
   setPixelRatio(ratio: number): void {
@@ -226,16 +231,32 @@ export class FakeScene {
   }
 }
 
+const identity = () => ({
+  elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+});
+
 export class FakeMesh {
+  readonly matrixWorld = identity();
   constructor(
     public geometry: unknown,
     public material: unknown,
   ) {}
 }
 
+/** The matrices a capture reads off the camera, and a `clone` that owns its own. */
+export class FakeCamera {
+  readonly isOrthographicCamera = true;
+  readonly projectionMatrix = identity();
+  readonly matrixWorldInverse = identity();
+  readonly matrixWorld = identity();
+  clone(): FakeCamera {
+    return new FakeCamera();
+  }
+}
+
 export const fakeThree = {
   Scene: FakeScene,
-  OrthographicCamera: class {},
+  OrthographicCamera: FakeCamera,
   Mesh: FakeMesh,
   PlaneGeometry: FakeDisposable,
   ShaderMaterial: FakeMaterial,

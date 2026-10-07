@@ -560,3 +560,116 @@ test('does not publish a released capture after completion races with handle rel
   });
   expect(outcome).toEqual({ code: 'released', published: false, engineRetained: false });
 });
+
+const VIGNETTE = {
+  postProcessing: {
+    enabled: true,
+    effects: [
+      {
+        type: 'vignette',
+        instanceId: 'vignette',
+        enabled: true,
+        settings: { intensity: 1, softness: 0.5, roundness: 1 },
+      },
+    ],
+  },
+};
+
+test('compares the frozen replay with the live pre-effect Image behind an enabled vignette', async ({
+  page,
+}) => {
+  await open(
+    page,
+    'Inspect behind effects',
+    pipeline((project) => project),
+    3,
+  );
+  const frame = await page.evaluate(async (render) => {
+    const engine = (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine();
+    // The canvas re-applies its own settings, so assert ours until the composer is in use.
+    let snapshot: any;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      engine.setRenderSettings(render);
+      snapshot = await engine.captureFrame();
+      if (snapshot.frame.usesPostProcessing) break;
+      snapshot.release();
+    }
+    const image = snapshot.passes[snapshot.passes.length - 1];
+    const result = {
+      usesPostProcessing: snapshot.frame.usesPostProcessing,
+      raw: snapshot.pixel(image.output.rawImageId, 0, 0),
+      input: snapshot.pixel(image.inputs[0].imageId, 0, 0),
+      display: snapshot.pixel(image.output.displayImageId, 0, 0),
+      rawOrigin: image.output.rawOrigin,
+      comparison: image.output.comparison,
+      index: snapshot.frame.index,
+      a: snapshot.pixel(snapshot.passes[0].output.rawImageId, 0, 0)[0],
+    };
+    snapshot.release();
+    // History is untouched: a later capture continues from the same buffer by 1.5 a frame.
+    const later = await engine.captureFrame();
+    const next = {
+      index: later.frame.index,
+      a: later.pixel(later.passes[0].output.rawImageId, 0, 0)[0],
+    };
+    later.release();
+    return { ...result, next };
+  }, VIGNETTE);
+
+  expect(frame.usesPostProcessing).toBe(true);
+  // Negative and HDR channels survive in the raw replay, and it is the Image program's output.
+  expect(frame.raw).toEqual([frame.input[0] * 0.5, frame.input[1], -1, 1]);
+  expect(frame.raw[0]).toBeGreaterThan(1);
+  expect(frame.rawOrigin).toBe('frozen-replay');
+  expect(frame.comparison).toMatchObject({ status: 'match', reference: 'pre-effect-live' });
+  // The processed canvas is a separate 8-bit image and is not what raw reports.
+  expect(frame.display).not.toEqual(frame.raw);
+  expect(frame.next.a - frame.a).toBe(1.5 * (frame.next.index - frame.index));
+});
+
+test('refuses a replay that disagrees with the live pre-effect Image', async ({ page }) => {
+  await open(
+    page,
+    'Inspect mismatched replay',
+    pipeline((project) => project),
+    3,
+  );
+  const outcome = await page.evaluate(async (render) => {
+    const engine = (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine();
+    const renderer = engine.context.renderer;
+    const original = renderer.readRenderTargetPixels.bind(renderer);
+    // The live pre-effect reference is the first float read of a capture; perturb the later ones.
+    let reads = 0;
+    renderer.readRenderTargetPixels = (...args: any[]) => {
+      original(...args);
+      reads++;
+      const out = args[args.length - 1];
+      if (reads > 1 && out instanceof Float32Array) out[0] += 8;
+    };
+    try {
+      let code = 'resolved';
+      for (let attempt = 0; attempt < 20; attempt++) {
+        engine.setRenderSettings(render);
+        reads = 0;
+        try {
+          const snapshot = await engine.captureFrame();
+          const used = snapshot.frame.usesPostProcessing;
+          snapshot.release();
+          if (used) break;
+        } catch (error: any) {
+          code = error.code;
+          break;
+        }
+      }
+      return { code, retained: engine.capturedFrame };
+    } finally {
+      renderer.readRenderTargetPixels = original;
+    }
+  }, VIGNETTE);
+  expect(outcome.code).toBe('replay-mismatch');
+  expect(outcome.retained).toBeNull();
+});

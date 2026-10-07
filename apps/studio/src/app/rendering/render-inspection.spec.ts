@@ -343,6 +343,157 @@ describe('frame capture lifecycle', () => {
     });
   });
 
+  describe('renderer-supplied uniforms', () => {
+    it('records exactly the camera and object uniforms the accepted program names', async () => {
+      const project = migrateLegacyProject(
+        'void main() { gl_FragColor = vec4(float(isOrthographic), cameraPosition); }',
+        'void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      );
+      engine.setPasses(toSpec(project));
+
+      const snapshot = await capture();
+      const { uniforms } = snapshot.passes[0];
+
+      expect(uniforms).toMatchObject({ isOrthographic: true, cameraPosition: [0, 0, 0] });
+      expect(uniforms['projectionMatrix']).toHaveLength(16);
+      expect(uniforms['modelViewMatrix']).toHaveLength(16);
+      for (const unused of ['modelMatrix', 'viewMatrix', 'normalMatrix']) {
+        expect(uniforms).not.toHaveProperty(unused);
+      }
+    });
+
+    it('invents nothing for a program that names none', async () => {
+      const { project } = feedbackProject();
+      engine.setPasses(toSpec(project));
+
+      const snapshot = await capture();
+
+      for (const pass of snapshot.passes) {
+        expect(Object.keys(pass.uniforms)).not.toContain('projectionMatrix');
+        expect(Object.keys(pass.uniforms)).not.toContain('isOrthographic');
+      }
+    });
+  });
+
+  describe('behind post-processing', () => {
+    type Phase = 'before' | 'reference' | 'after';
+
+    /** Stands in for a composer: draws the Image pass, shows its output to the observer, then "applies effects". */
+    function behindEffects(observe: 'frame' | 'wrong-size' | 'never' = 'frame') {
+      const post = (
+        engine as unknown as {
+          post: { usesComposer(): boolean; render(...args: unknown[]): void };
+        }
+      ).post;
+      let phase: Phase = 'before';
+      vi.spyOn(post, 'usesComposer').mockReturnValue(true);
+      vi.spyOn(post, 'render').mockImplementation((scene, _camera, observer) => {
+        renderer.render(scene as never);
+        if (observe === 'never') return;
+        const size = observe === 'frame' ? CANVAS : { width: 64, height: 64 };
+        phase = 'reference';
+        (observer as ((texture: unknown, width: number, height: number) => void) | undefined)?.(
+          {},
+          size.width,
+          size.height,
+        );
+        phase = 'after';
+      });
+      return {
+        /** What the next frame-sized reads return, for the reference and for the replay. */
+        returns(reference: number, replay: number) {
+          renderer.readHook = ({ width, height, out }) => {
+            if (width !== CANVAS.width || height !== CANVAS.height) return;
+            if (phase === 'reference') out.fill(reference);
+            else if (phase === 'after') out.fill(replay);
+          };
+        },
+      };
+    }
+
+    it('holds the frozen replay to the live pre-effect output and keeps the processed canvas apart', async () => {
+      const { project } = feedbackProject();
+      engine.setPasses(toSpec(project));
+      behindEffects().returns(-1.5, -1.5);
+
+      const snapshot = await capture();
+      const image = snapshot.passes[1];
+
+      expect(snapshot.frame.usesPostProcessing).toBe(true);
+      expect(image.output.comparison).toEqual({
+        status: 'match',
+        reference: 'pre-effect-live',
+        maxDelta: 0,
+        comparedChannels: 4,
+        skippedNonFinite: 0,
+      });
+      expect(image.output.rawOrigin).toBe('frozen-replay');
+      expect(snapshot.image(image.output.rawImageId!).format).toBe('rgba32f');
+      expect(snapshot.image(image.output.displayImageId!).format).toBe('rgba8');
+    });
+
+    it('accepts a replay within a half float of the live buffer, and no further', async () => {
+      const { project } = feedbackProject();
+      engine.setPasses(toSpec(project));
+      behindEffects().returns(1000, 1000.25);
+
+      const snapshot = await capture();
+
+      expect(snapshot.passes[1].output.comparison).toMatchObject({
+        status: 'match',
+        maxDelta: 0.25,
+      });
+    });
+
+    it('refuses a replay that disagrees with the live output, and disposes every temporary', async () => {
+      const { project } = feedbackProject();
+      engine.setPasses(toSpec(project));
+      behindEffects().returns(1, 2);
+      const before = FakeRenderTarget.created.length;
+
+      expect(await code(capture())).toBe('replay-mismatch');
+
+      expect(engine.capturedFrame).toBeNull();
+      const extra = FakeRenderTarget.created.slice(before);
+      expect(extra.length).toBeGreaterThan(0);
+      expect(extra.every((target) => target.disposed)).toBe(true);
+      expect(renderer.getRenderTarget()).toBeNull();
+    });
+
+    it.each(['never', 'wrong-size'] as const)(
+      'refuses honestly when the pre-effect output is %s observed',
+      async (observe) => {
+        const { project } = feedbackProject();
+        engine.setPasses(toSpec(project));
+        behindEffects(observe);
+        const before = FakeRenderTarget.created.length;
+
+        await expect(capture()).rejects.toMatchObject({ code: 'unsupported' });
+
+        expect(engine.capturedFrame).toBeNull();
+        expect(FakeRenderTarget.created.slice(before).every((target) => target.disposed)).toBe(
+          true,
+        );
+      },
+    );
+
+    it('counts the reference payload in the budget, before reading anything', async () => {
+      const { project } = feedbackProject();
+      engine.setPasses(toSpec(project));
+      // 1920×1150 fits the budget with no effects (52 bytes a pixel) but not with a reference (68).
+      renderer.width = 1920;
+      renderer.height = 1150;
+      const control = await capture();
+      expect(control.passes[1].output.comparison).toMatchObject({ reference: 'canvas' });
+      control.release();
+
+      behindEffects();
+      const reads = renderer.reads.length;
+      expect(await code(capture())).toBe('budget');
+      expect(renderer.reads.length).toBe(reads);
+    });
+  });
+
   describe('invalidation', () => {
     async function retained() {
       const { project } = feedbackProject();
