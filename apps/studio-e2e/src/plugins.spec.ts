@@ -1,6 +1,7 @@
 // The official Shadertoy and Wallpaper Engine plugins, end to end in the
 // browser: discovered under Available, installed (off), switched on, run from
-// Installed — paste and API imports, a ZIP export of the open draft — kept
+// the editor's menus and from Installed — paste and API imports through the
+// host's import dialog, a ZIP export of the open draft — kept
 // across a reload, and removed. Their menu entries exist only while the plugin
 // is installed and switched on, and use it then. Shadertoy itself is never
 // contacted: the app's own provider routes are answered by the test, which is
@@ -138,65 +139,211 @@ test('Shadertoy Import: discovered, installed off, paste and API imports, kept, 
   await backToEditor(page);
   expect(await importExportItems(page)).not.toContainEqual(expect.stringMatching(/Shadertoy/));
 
-  // Switched on: the menu and the New shader dialog both lead to its form in Plugins.
+  // Switched on: the menu and the New shader dialog both open the importer's own dialog,
+  // right where the user is — no trip to Plugins.
   await openPlugins(page);
   await setEnabled(page, SHADERTOY, true);
   await backToEditor(page);
+  const editorUrl = new URL(page.url()).pathname;
   await menuItem(page, /New shader/);
   await page
     .getByRole('dialog')
     .getByRole('button', { name: /Import from Shadertoy/ })
     .click();
-  await expect(page).toHaveURL(`/plugins?use=${SHADERTOY}`);
-  await backToEditor(page);
+  const dialog = page.getByRole('dialog', { name: /Import from Shadertoy/ });
+  await expect(dialog).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe(editorUrl);
+  await expect(dialog.getByTestId('import-run')).toBeDisabled();
+  await dialog.getByTestId('import-cancel').click();
+  await expect(dialog).toHaveCount(0);
+
   await menuItem(page, /Import from Shadertoy/);
-  await expect(page).toHaveURL(`/plugins?use=${SHADERTOY}`);
-  await expect(page.getByTestId(`plugin-${SHADERTOY}`)).toHaveClass(/focused/);
+  await expect(dialog).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe(editorUrl);
+  // Escape closes it and gives the keyboard back to where the menu was opened from.
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'More actions' })).toBeFocused();
 
   // Paste: one Image pass becomes a new shader, created whole.
-  await page.getByTestId(`mode-paste-${IMPORTER}`).check();
-  await page.getByTestId(`paste-name-${IMPORTER}`).fill('Pasted Waves');
-  await page
-    .getByTestId(`paste-source-${IMPORTER}`)
+  await menuItem(page, /Import from Shadertoy/);
+  await dialog.getByTestId('import-mode-paste').check();
+  await dialog.getByTestId('import-paste-name').fill('Pasted Waves');
+  await dialog
+    .getByTestId('import-paste-source')
     .fill('void mainImage(out vec4 c, in vec2 p) { c = vec4(p / iResolution.xy, 0.5, 1.0); }');
-  await page.getByTestId(`run-${IMPORTER}`).click();
-  await expect(page.getByTestId('plugin-message')).toContainText('Imported “Pasted Waves”.');
+  await dialog.getByTestId('import-run').click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('.mat-mdc-snack-bar-container')).toContainText(
+    'Imported “Pasted Waves”.',
+  );
   expect(await shaderNames(page)).toContain('Pasted Waves');
 
-  // Invalid source is refused with a readable error, and nothing is created.
+  // Invalid source is refused with a readable error in the dialog, which stays; nothing is created.
   const before = (await shaderNames(page)).length;
-  await page.getByTestId(`paste-source-${IMPORTER}`).fill('void main() {}');
-  await page.getByTestId(`run-${IMPORTER}`).click();
-  await expect(page.getByTestId('plugin-message')).toContainText('mainImage');
+  await menuItem(page, /Import from Shadertoy/);
+  await dialog.getByTestId('import-mode-paste').check();
+  await dialog.getByTestId('import-paste-source').fill('void main() {}');
+  await dialog.getByTestId('import-run').click();
+  await expect(dialog.getByTestId('import-message')).toContainText('mainImage');
   expect(await shaderNames(page)).toHaveLength(before);
 
-  // API: the host fetches the document; the warnings of the conversion are shown.
-  await page.getByTestId(`mode-provider-${IMPORTER}`).check();
-  await page.getByTestId(`field-idOrUrl-${IMPORTER}`).fill('https://www.shadertoy.com/view/ParFix');
-  await page.getByTestId(`field-apiKey-${IMPORTER}`).fill('e2e-key');
-  await page.getByTestId(`run-${IMPORTER}`).click();
-  await expect(page.getByTestId('plugin-message')).toContainText('Imported “Parity fixture”.');
-  await expect(page.getByTestId('plugin-warnings')).toContainText('sound pass');
-  await expect(page.getByTestId('plugin-warnings')).toContainText('Failed to download a texture');
+  // API: the host fetches the document; the conversion's warnings stay until the user goes on.
+  await dialog.getByTestId('import-mode-provider').check();
+  await dialog.getByTestId('import-field-idOrUrl').fill('https://www.shadertoy.com/view/ParFix');
+  await dialog.getByTestId('import-field-apiKey').fill('e2e-key');
+  await dialog.getByTestId('import-run').click();
+  await expect(dialog.getByTestId('import-done')).toContainText('Imported “Parity fixture”.');
+  await expect(dialog.getByTestId('import-warnings')).toContainText('sound pass');
+  await expect(dialog.getByTestId('import-warnings')).toContainText('Failed to download a texture');
   expect(sourceRequests).toEqual([{ idOrUrl: 'ParFix', apiKey: 'e2e-key' }]);
   expect(await shaderNames(page)).toContain('Parity fixture');
+  await dialog.getByTestId('import-editor').click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('.doc-name')).toHaveText('Parity fixture');
+
+  // The Installed page opens the very same dialog, in place, and says what happened itself.
+  await openPlugins(page);
+  await page.getByTestId(`open-import-${IMPORTER}`).click();
+  await expect(dialog).toBeVisible();
+  await expect(page).toHaveURL(/\/plugins/);
+  await dialog.getByTestId('import-mode-paste').check();
+  await dialog.getByTestId('import-paste-name').fill('Installed Waves');
+  await dialog
+    .getByTestId('import-paste-source')
+    .fill('void mainImage(out vec4 c, in vec2 p) { c = vec4(p / iResolution.xy, 0.25, 1.0); }');
+  await dialog.getByTestId('import-run').click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId('plugin-message')).toContainText('Imported “Installed Waves”.');
+  expect(await shaderNames(page)).toContain('Installed Waves');
 
   // Kept across a reload, still on, with the key remembered by the host.
   await page.reload();
   const toggle = page.getByTestId(`plugin-enable-${SHADERTOY}`).getByRole('switch');
   await expect(toggle).toBeChecked();
-  await expect(page.getByTestId(`field-apiKey-${IMPORTER}`)).toHaveValue('e2e-key');
+  await page.getByTestId(`open-import-${IMPORTER}`).click();
+  await dialog.getByTestId('import-mode-provider').check();
+  await expect(dialog.getByTestId('import-field-apiKey')).toHaveValue('e2e-key');
+  await dialog.getByTestId('import-cancel').click();
+  await expect(dialog).toHaveCount(0);
 
   // Removing the plugin keeps what it imported.
   await page.getByTestId(`plugin-remove-${SHADERTOY}`).click();
   await expect(page.getByTestId(`plugin-${SHADERTOY}`)).toHaveCount(0);
   await expect(page.getByTestId(`install-available-${SHADERTOY}`)).toBeVisible();
   expect(await shaderNames(page)).toEqual(
-    expect.arrayContaining(['Pasted Waves', 'Parity fixture']),
+    expect.arrayContaining(['Pasted Waves', 'Parity fixture', 'Installed Waves']),
   );
   // …and takes its menu entry with it.
   await backToEditor(page);
   expect(await importExportItems(page)).not.toContainEqual(expect.stringMatching(/Shadertoy/));
+});
+
+test('Shadertoy Import keeps the open draft: a declined replacement and a cancelled fetch import nothing', async ({
+  page,
+}) => {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((done) => (release = done));
+  let slow = false;
+  await page.route('**/api/import/shadertoy/source', async (route) => {
+    if (slow) await gate;
+    await route.fulfill({ json: { sourceId: 'ParFix', source: fixture } }).catch(() => undefined);
+  });
+  await page.addInitScript(() => {
+    // Not in the plugin sandbox's frames: they have no storage to give.
+    if (window.top !== window) return;
+    localStorage.setItem(
+      'shader-studio.preferences',
+      JSON.stringify({ paused: true, editorOpen: true, browserOpen: false }),
+    );
+  });
+  await page.goto('/');
+  const shell = page.locator('app-editor-shell');
+  const dirty = shell.getByText('Unsaved changes', { exact: true });
+  await expect(shell.locator('.monaco-editor')).toBeVisible();
+
+  await openPlugins(page);
+  await installAvailable(page, SHADERTOY);
+  await setEnabled(page, SHADERTOY, true);
+  await backToEditor(page);
+  await expect(shell.locator('.monaco-editor')).toBeVisible();
+  await shell.locator('.monaco-editor').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('\n// unsaved draft');
+  await expect(dirty).toBeVisible();
+  const before = await shaderNames(page);
+
+  const dialog = page.getByRole('dialog', { name: /Import from Shadertoy/ });
+  await menuItem(page, /Import from Shadertoy/);
+  await dialog.getByTestId('import-mode-paste').check();
+  await dialog.getByTestId('import-paste-name').fill('Declined');
+  await dialog
+    .getByTestId('import-paste-source')
+    .fill('void mainImage(out vec4 c, in vec2 p) { c = vec4(1.0); }');
+  await dialog.getByTestId('import-run').click();
+
+  // Replacing the open work asks first; declining keeps the draft, the form and the library as they were.
+  const unsaved = page.getByRole('dialog', { name: 'Unsaved changes' });
+  await expect(unsaved).toBeVisible();
+  await unsaved.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog.getByTestId('import-message')).toContainText('Cancelled');
+  await expect(dialog.getByTestId('import-paste-name')).toHaveValue('Declined');
+  await expect(dirty).toBeVisible();
+  expect(await shaderNames(page)).toEqual(before);
+
+  // A fetch under way is cancelled by closing the dialog, which waits for it to end.
+  slow = true;
+  await dialog.getByTestId('import-mode-provider').check();
+  await dialog.getByTestId('import-field-idOrUrl').fill('ParFix');
+  await dialog.getByTestId('import-field-apiKey').fill('e2e-key');
+  await dialog.getByTestId('import-run').click();
+  await expect(dialog.getByTestId('import-step')).toBeVisible();
+  await dialog.getByTestId('import-cancel').click();
+  await expect(dialog).toHaveCount(0);
+  release();
+  await expect(unsaved).toHaveCount(0);
+  await expect(dirty).toBeVisible();
+  expect(await shaderNames(page)).toEqual(before);
+});
+
+test('Shadertoy Import: leaving with browser Back while a fetch runs cancels it and imports nothing', async ({
+  page,
+}) => {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((done) => (release = done));
+  let answered = false;
+  await page.route('**/api/import/shadertoy/source', async (route) => {
+    await gate;
+    await route.fulfill({ json: { sourceId: 'BackNav', source: fixture } }).catch(() => undefined);
+    answered = true;
+  });
+  await openStudio(page);
+  await openPlugins(page);
+  if (await page.getByTestId(`install-available-${SHADERTOY}`).isVisible()) {
+    await installAvailable(page, SHADERTOY);
+  }
+  const toggle = page.getByTestId(`plugin-enable-${SHADERTOY}`).getByRole('switch');
+  if (!(await toggle.isChecked())) await setEnabled(page, SHADERTOY, true);
+  await backToEditor(page);
+  const before = await shaderNames(page);
+
+  const dialog = page.getByRole('dialog', { name: /Import from Shadertoy/ });
+  await menuItem(page, /Import from Shadertoy/);
+  await dialog.getByTestId('import-mode-provider').check();
+  await dialog.getByTestId('import-field-idOrUrl').fill('BackNav');
+  await dialog.getByTestId('import-field-apiKey').fill('e2e-key');
+  await dialog.getByTestId('import-run').click();
+  await expect(dialog.getByTestId('import-step')).toBeVisible();
+
+  // Browser Back closes every open dialog (MatDialog closeOnNavigation). Closing the
+  // dialog while it runs must cancel that run (AC-IMPORT-LIFECYCLE), as Cancel does.
+  await page.goBack();
+  await expect(dialog).toHaveCount(0);
+  release();
+  await expect.poll(() => answered).toBe(true);
+  // Give an un-cancelled run time to convert, adopt and save.
+  await page.waitForTimeout(5_000);
+  expect(await shaderNames(page)).toEqual(before);
 });
 
 test('Wallpaper Engine Export: offered only while on, exports the open draft as a ZIP', async ({

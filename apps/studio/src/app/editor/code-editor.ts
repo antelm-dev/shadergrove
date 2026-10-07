@@ -2,6 +2,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  InjectionToken,
   afterNextRender,
   computed,
   effect,
@@ -29,11 +30,25 @@ import { GLSL_LANGUAGE_ID, JSON_LANGUAGE_ID, loadMonaco, type MonacoApi } from '
 
 export type EditorLanguage = 'glsl' | 'json';
 
+/** How Monaco is obtained. Only a test has a reason to provide anything else. */
+export const MONACO_LOADER = new InjectionToken<() => Promise<MonacoApi>>('MONACO_LOADER', {
+  providedIn: 'root',
+  factory: () => loadMonaco,
+});
+
 /** One document the editor can show. The id is what its state is filed under. */
 export interface EditorDoc {
   id: string;
   language: EditorLanguage;
   value: string;
+  /**
+   * What owns this document's contents — the shader, for the config tab. A
+   * document whose id outlives its owner (`@config` is always `@config`) would
+   * otherwise carry the previous owner's undo history into the next one
+   * whenever the two texts happen to be equal; a scope that changes starts the
+   * model's history afresh. Absent, the document's history is left alone.
+   */
+  scope?: string;
 }
 
 /**
@@ -124,6 +139,7 @@ export class CodeEditor {
   private readonly fonts = inject(FontLoader);
   private readonly reducedMotion = inject(ReducedMotion);
   private readonly themes = inject(AppThemes);
+  private readonly loadMonaco = inject(MONACO_LOADER);
 
   private readonly monaco = signal<MonacoApi | null>(null);
   private editor: Monaco.editor.IStandaloneCodeEditor | null = null;
@@ -137,6 +153,9 @@ export class CodeEditor {
 
   /** Cursor, selection and scroll, per document. Monaco does not keep these. */
   private readonly viewStates = new Map<string, Monaco.editor.ICodeEditorViewState>();
+
+  /** The `scope` each model was last synchronised under. */
+  private readonly scopes = new Map<string, string>();
 
   /** Which document's model is currently in the editor. */
   private mounted: string | null = null;
@@ -209,6 +228,7 @@ export class CodeEditor {
           model.dispose();
           this.models.delete(id);
           this.viewStates.delete(id);
+          this.scopes.delete(id);
         }
       });
     });
@@ -298,11 +318,12 @@ export class CodeEditor {
       // Never for text the user just typed: that already round-tripped through
       // `valueChange`, and reassigning it here would flatten the undo stack.
       const model = this.models.get(doc.id);
-      if (model && model.getValue() !== doc.value) {
+      if (model && this.needsReset(model, doc)) {
         this.applying = true;
         model.setValue(doc.value);
         this.applying = false;
       }
+      this.rememberScope(doc);
       this.flushPendingReveal(doc.id);
       return;
     }
@@ -314,14 +335,15 @@ export class CodeEditor {
 
     let model = this.models.get(doc.id);
     if (!model) {
-      model = monaco.editor.createModel(doc.value, this.monacoLanguage(doc.language));
+      model = this.createModel(monaco, doc);
       this.models.set(doc.id, model);
       this.bindModel(monaco, doc.id, model, this.analysis());
-    } else if (model.getValue() !== doc.value) {
+    } else if (this.needsReset(model, doc)) {
       this.applying = true;
       model.setValue(doc.value);
       this.applying = false;
     }
+    this.rememberScope(doc);
 
     this.applying = true;
     editor.setModel(model);
@@ -336,6 +358,21 @@ export class CodeEditor {
     // After the view state, never before: a held reveal is a deliberate jump to a
     // line, and it has to beat the cursor this document was last left at.
     this.flushPendingReveal(doc.id);
+  }
+
+  /**
+   * Whether a model has to be rewritten to match its document: the text differs,
+   * or the document now belongs to something else. `setValue` is what clears the
+   * undo stack, which is the point in the second case — an edit made for one
+   * shader must not be undoable from the next.
+   */
+  private needsReset(model: Monaco.editor.ITextModel, doc: EditorDoc): boolean {
+    if (model.getValue() !== doc.value) return true;
+    return doc.scope !== undefined && this.scopes.get(doc.id) !== doc.scope;
+  }
+
+  private rememberScope(doc: EditorDoc): void {
+    if (doc.scope !== undefined) this.scopes.set(doc.id, doc.scope);
   }
 
   /**
@@ -421,6 +458,68 @@ export class CodeEditor {
   }
 
   /**
+   * Replace a document's text as one undoable edit, the way typing would, and
+   * report it through `valueChange` exactly once.
+   *
+   * For writers that are not the keyboard — the Config builder — whose result
+   * should still be one Ctrl+Z away. Only the span that differs is replaced, so
+   * the cursor and scroll of the JSON view survive. It works on the model, not
+   * the editor, so it also lands when another document is on screen; the change
+   * event only fires for the mounted model, which is why the report is made here
+   * and the echo is suppressed.
+   *
+   * Returns false when there is no model for the document yet — Monaco still
+   * loading, or the document never shown — and the caller writes the store
+   * directly; the model is created from the store's text when it first appears.
+   */
+  applyEdit(docId: string, value: string): boolean {
+    const model = this.models.get(docId);
+    if (!this.editor || !model) return false;
+
+    const before = model.getValue();
+    if (before === value) return true;
+
+    let start = 0;
+    const shared = Math.min(before.length, value.length);
+    while (start < shared && before[start] === value[start]) start++;
+    let end = 0;
+    while (
+      end < shared - start &&
+      before[before.length - 1 - end] === value[value.length - 1 - end]
+    ) {
+      end++;
+    }
+
+    const from = model.getPositionAt(start);
+    const to = model.getPositionAt(before.length - end);
+    this.applying = true;
+    try {
+      model.pushStackElement();
+      model.pushEditOperations(
+        null,
+        [
+          {
+            range: {
+              startLineNumber: from.lineNumber,
+              startColumn: from.column,
+              endLineNumber: to.lineNumber,
+              endColumn: to.column,
+            },
+            text: value.slice(start, value.length - end),
+          },
+        ],
+        () => null,
+      );
+      model.pushStackElement();
+    } finally {
+      this.applying = false;
+    }
+
+    this.valueChange.emit({ id: docId, value: model.getValue() });
+    return true;
+  }
+
+  /**
    * Run the language's formatter over the buffer. Goes through Monaco's own
    * action rather than the provider directly, so the edit arrives on the
    * editor's undo stack exactly as it would from Shift+Alt+F.
@@ -430,14 +529,15 @@ export class CodeEditor {
   }
 
   private async boot(): Promise<void> {
-    const monaco = await loadMonaco();
+    const monaco = await this.loadMonaco();
     // Monaco's theme is global, and `AppThemes` alone sets it — painted before
     // this editor exists, so it never shows Monaco's default first.
     this.themes.attachMonaco(monaco);
 
     const doc = untracked(this.doc);
-    const model = monaco.editor.createModel(doc.value, this.monacoLanguage(doc.language));
+    const model = this.createModel(monaco, doc);
     this.models.set(doc.id, model);
+    this.rememberScope(doc);
     this.mounted = doc.id;
 
     const editor = monaco.editor.create(this.host().nativeElement, {
@@ -494,6 +594,19 @@ export class CodeEditor {
       id,
       bindAnalysisModel(monaco, model, analysis, id, () => this.applying),
     );
+  }
+
+  /**
+   * A model for a document. A model made from text with no line break takes the
+   * platform's line ending — CRLF on Windows — and an edit written into it then
+   * returns CRLF text for a document the app keeps with LF, so that an `[]` Config
+   * the builder has just written to would no longer equal what it wrote. JSON is
+   * only ever the Config, and the Config is serialized with LF.
+   */
+  private createModel(monaco: MonacoApi, doc: EditorDoc): Monaco.editor.ITextModel {
+    const model = monaco.editor.createModel(doc.value, this.monacoLanguage(doc.language));
+    if (doc.language === 'json') model.setEOL(monaco.editor.EndOfLineSequence.LF);
+    return model;
   }
 
   private monacoLanguage(language: EditorLanguage): string {

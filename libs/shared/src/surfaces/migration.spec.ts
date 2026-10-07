@@ -7,7 +7,12 @@ import {
   migratePreferences,
   roundTripLayout,
 } from './migration';
-import { WELL_KNOWN_SURFACE_IDS } from './types';
+import {
+  DEFAULT_EDITOR_GROUP_ID,
+  editorSurfaceId,
+  LAYOUT_VERSION,
+  WELL_KNOWN_SURFACE_IDS,
+} from './types';
 
 const LEGACY_DEFAULTS = {
   editorOpen: false,
@@ -40,7 +45,7 @@ const LEGACY_DEFAULTS = {
 describe('migrateLayoutFromPreferences', () => {
   it('migrates legacy defaults into a versioned layout', () => {
     const layout = migrateLayoutFromPreferences(LEGACY_DEFAULTS);
-    expect(layout.version).toBe(1);
+    expect(layout.version).toBe(2);
 
     const byKind = Object.fromEntries(layout.surfaces.map((s) => [s.kind, s]));
     expect(byKind['preview']?.placement).toEqual({ host: 'contained', mode: 'stage' });
@@ -253,7 +258,7 @@ describe('migrateLayoutFromPreferences', () => {
       inspectorTab: 'nope',
       bottomPanelHeight: Number.NaN,
     });
-    expect(layout.version).toBe(1);
+    expect(layout.version).toBe(2);
     expect(layout.surfaces.length).toBeGreaterThanOrEqual(5);
   });
 
@@ -271,5 +276,40 @@ describe('migrateLayoutFromPreferences', () => {
       rect: { x: 10, y: 20, width: 640, height: 480 },
     });
     expect(preview?.open).toBe(true);
+  });
+
+  it('migrates legacy preferences to exactly one default editor leaf', () => {
+    const layout = migrateLayoutFromPreferences(LEGACY_DEFAULTS);
+    expect(layout.version).toBe(LAYOUT_VERSION);
+    expect(layout.editorLayout).toEqual({
+      kind: 'leaf',
+      surfaceId: editorSurfaceId(DEFAULT_EDITOR_GROUP_ID),
+    });
+  });
+
+  it('migrates a version-1 layout without altering surfaces or z-order', () => {
+    const v2 = migrateLayoutFromPreferences({
+      ...LEGACY_DEFAULTS,
+      editorOpen: true,
+      inspectorWidth: 360,
+    });
+    const v1 = { version: 1, surfaces: v2.surfaces, zOrder: [...v2.zOrder].reverse() };
+
+    const migrated = migrateLayoutFromPreferences({ [SURFACES_LAYOUT_KEY]: v1 });
+
+    expect(migrated.version).toBe(2);
+    expect(migrated.surfaces).toEqual(v2.surfaces);
+    expect(migrated.zOrder).toEqual(v1.zOrder);
+    expect(migrated.editorLayout).toEqual({
+      kind: 'leaf',
+      surfaceId: editorSurfaceId(DEFAULT_EDITOR_GROUP_ID),
+    });
+  });
+
+  it('is idempotent across repeated preference migrations', () => {
+    const once = migratePreferences(LEGACY_DEFAULTS);
+    const twice = migratePreferences(once.preferences);
+    expect(twice.layout).toEqual(once.layout);
+    expect(twice.preferences).toEqual(once.preferences);
   });
 });
