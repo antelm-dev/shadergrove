@@ -8,10 +8,10 @@ import { expect, test } from './fixtures';
 test.describe.configure({ timeout: 180_000 });
 const chip = (page: Page) => page.locator('.analysis-chip');
 
-async function fixture(page: Page, name: string) {
+async function fixture(page: Page, name: string, vertex = DEFAULT_VERTEX) {
   const fragment =
     '#include "outer.glsl"\nvoid main() { gl_FragColor = vec4(reviewWave(reviewGain)); }';
-  const project = createProject(fragment, DEFAULT_VERTEX);
+  const project = createProject(fragment, vertex);
   project.passes.find((pass) => pass.kind === 'common')!.source = 'uniform float reviewGain;';
   project.files.push(
     { id: 'review-outer', name: 'outer.glsl', source: '#include "inner.glsl"' },
@@ -22,7 +22,7 @@ async function fixture(page: Page, name: string) {
     },
   );
   const response = await page.request.post('/api/shaders', {
-    data: { name, fragment, vertex: DEFAULT_VERTEX, project },
+    data: { name, fragment, vertex, project },
   });
   expect(response.ok(), await response.text()).toBe(true);
   const { shader: created } = (await response.json()) as { shader: { id: string } };
@@ -58,7 +58,11 @@ async function placeCursor(page: Page, needle: string) {
 test('reverting external text and switching projects on Vertex keep analysis current', async ({
   page,
 }) => {
-  const id = await fixture(page, 'Review external revision');
+  const id = await fixture(
+    page,
+    'Review external revision',
+    DEFAULT_VERTEX + '\n// distinct project vertex',
+  );
   await page.locator('.monaco-editor').first().click();
   await page.keyboard.press('Control+End');
   await page.keyboard.insertText('\nvoid broken( {');
@@ -69,6 +73,7 @@ test('reverting external text and switching projects on Vertex keep analysis cur
   await expect(chip(page)).toHaveAttribute('data-analysis', 'ready');
   await page.getByRole('treeitem', { name: /Vertex/ }).click();
   await expect(page.getByRole('tab', { name: /Vertex/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.view-lines')).toContainText('distinct project vertex');
   await expect(chip(page)).toHaveAttribute('data-analysis', 'ready');
   const response = await page.request.get('/api/shaders');
   const { shaders } = (await response.json()) as { shaders: { id: string; name: string }[] };
@@ -76,6 +81,7 @@ test('reverting external text and switching projects on Vertex keep analysis cur
   await page.locator('app-shader-browser .shader-row', { hasText: other.name }).click();
   await expect(page).toHaveURL(`/shaders/${encodeURIComponent(other.id)}`);
   await page.getByRole('treeitem', { name: /Vertex/ }).click();
+  await expect(page.locator('.view-lines')).not.toContainText('distinct project vertex');
   await expect(chip(page)).toHaveAttribute('data-analysis', 'ready');
   const state = await page.evaluate(() => {
     const panel = (window as any).ng.getComponent(document.querySelector('app-editor-panel'));
