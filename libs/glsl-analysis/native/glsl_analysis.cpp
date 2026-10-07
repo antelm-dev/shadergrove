@@ -15,7 +15,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
+#include <set>
 #include <string>
+#include <vector>
 
 #include <emscripten/emscripten.h>
 
@@ -384,32 +387,290 @@ void writeSymbols(Json& json, glslang::TIntermediate& intermediate)
     json.boolean(truncated);
 }
 
-}  // namespace
+// ---------------------------------------------------------------------------
+// Opt-in observation catalogue (gla_observe only; ordinary analysis never runs
+// this). Walks the semantic tree for statement-level `local = expr;` nodes whose
+// target is a directly declared float/vec2/vec3/vec4 local, and reports the
+// compiler's view: symbol id, effective type/precision, a source-location HINT
+// and control context. Nothing here proves an editable span; the TypeScript
+// verifier re-derives and checks every point against the exact prepared source.
 
-extern "C" {
+constexpr int kMaxObservationPoints = 128;
+constexpr int kMaxObservationRefusals = 128;
 
-EMSCRIPTEN_KEEPALIVE char* gla_init()
+struct ObsContext {
+    int loopDepth = 0;
+    int conditionalDepth = 0;
+    bool header = false;
+};
+
+struct ObsPoint {
+    std::string function;
+    std::string name;
+    long long symbolId = 0;
+    std::string base;
+    const char* precision = nullptr;
+    int line = 0;
+    int column = 0;
+    ObsContext context;
+};
+
+struct ObsRefusal {
+    const char* reason;
+    int line;
+    int column;
+};
+
+class ObservationWalker {
+public:
+    void walkFunction(glslang::TIntermAggregate& function)
+    {
+        const glslang::TString& mangled = function.getName();
+        const size_t paren = mangled.find('(');
+        function_ = std::string(mangled.c_str(), paren == glslang::TString::npos ? mangled.size() : paren);
+        names_.clear();
+        pending_.clear();
+        for (TIntermNode* child : function.getSequence())
+            walk(child, false, ObsContext());
+        for (ObsPoint& point : pending_) {
+            const bool ambiguous = names_[point.name].size() > 1;
+            if (static_cast<int>(points_.size()) == kMaxObservationPoints) {
+                pointsTruncated_ = true;
+                continue;
+            }
+            points_.push_back(point);
+            ambiguous_.push_back(ambiguous);
+        }
+    }
+
+    void write(Json& json) const
+    {
+        json.key("observation");
+        json.raw('{');
+        json.key("points");
+        json.raw('[');
+        for (size_t i = 0; i < points_.size(); ++i) {
+            const ObsPoint& point = points_[i];
+            if (i)
+                json.raw(',');
+            json.raw('{');
+            json.key("function");
+            json.string(point.function);
+            json.raw(',');
+            json.key("name");
+            json.string(point.name);
+            json.raw(',');
+            json.key("symbolId");
+            json.number(point.symbolId);
+            json.raw(',');
+            json.key("base");
+            json.string(point.base);
+            json.raw(',');
+            json.key("precision");
+            if (point.precision)
+                json.string(point.precision);
+            else
+                json.raw("null");
+            json.raw(',');
+            json.key("line");
+            json.number(point.line);
+            json.raw(',');
+            json.key("column");
+            json.number(point.column);
+            json.raw(',');
+            json.key("loopDepth");
+            json.number(point.context.loopDepth);
+            json.raw(',');
+            json.key("conditionalDepth");
+            json.number(point.context.conditionalDepth);
+            json.raw(',');
+            json.key("header");
+            json.boolean(point.context.header);
+            json.raw(',');
+            json.key("ambiguousName");
+            json.boolean(ambiguous_[i]);
+            json.raw('}');
+        }
+        json.raw("],");
+        json.key("refusals");
+        json.raw('[');
+        for (size_t i = 0; i < refusals_.size(); ++i) {
+            if (i)
+                json.raw(',');
+            json.raw('{');
+            json.key("reason");
+            json.string(refusals_[i].reason);
+            json.raw(',');
+            json.key("line");
+            json.number(refusals_[i].line);
+            json.raw(',');
+            json.key("column");
+            json.number(refusals_[i].column);
+            json.raw('}');
+        }
+        json.raw("],");
+        json.key("pointsTruncated");
+        json.boolean(pointsTruncated_);
+        json.raw(',');
+        json.key("refusalsTruncated");
+        json.boolean(refusalsTruncated_);
+        json.raw('}');
+    }
+
+private:
+    void refuse(const char* reason, const glslang::TSourceLoc& loc)
+    {
+        if (static_cast<int>(refusals_.size()) == kMaxObservationRefusals) {
+            refusalsTruncated_ = true;
+            return;
+        }
+        refusals_.push_back({reason, loc.line, loc.column});
+    }
+
+    void consider(glslang::TIntermBinary& binary, const ObsContext& context)
+    {
+        const glslang::TOperator op = binary.getOp();
+        if (op != glslang::EOpAssign) {
+            if (binary.modifiesState())
+                refuse("compound-assignment", binary.getLoc());
+            return;
+        }
+        const glslang::TIntermSymbol* target = binary.getLeft()->getAsSymbolNode();
+        if (!target) {
+            refuse("lvalue", binary.getLoc());
+            return;
+        }
+        const glslang::TType& type = target->getType();
+        const bool floatFamily = type.getBasicType() == glslang::EbtFloat && !type.isArray() &&
+                                 !type.isMatrix() && !type.isStruct() &&
+                                 (type.isScalar() || type.isVector());
+        if (!floatFamily) {
+            refuse("type", binary.getLoc());
+            return;
+        }
+        if (type.getQualifier().storage != glslang::EvqTemporary) {
+            refuse("storage", binary.getLoc());
+            return;
+        }
+        const char* precision = precisionName(type.getQualifier().precision);
+        if (!precision) {
+            refuse("precision", binary.getLoc());
+            return;
+        }
+        ObsPoint point;
+        point.function = function_;
+        point.name = target->getName().c_str();
+        // glslang tags ids above 2^53; the low 32 bits are the per-compile counter.
+        point.symbolId = target->getId() & 0xffffffffLL;
+        point.base = baseTypeText(type);
+        point.precision = precision;
+        point.line = binary.getLoc().line;
+        point.column = binary.getLoc().column;
+        point.context = context;
+        pending_.push_back(point);
+    }
+
+    // A control arm without braces is a bare expression node, never a point: an
+    // assignment is refused explicitly; other state changes keep their own reasons.
+    void walkArm(TIntermNode* node, const ObsContext& context)
+    {
+        glslang::TIntermBinary* binary = node ? node->getAsBinaryNode() : nullptr;
+        if (binary && binary->getOp() == glslang::EOpAssign) {
+            refuse("unbraced", binary->getLoc());
+            walk(node, false, context);
+            return;
+        }
+        walk(node, true, context);
+    }
+
+    void walk(TIntermNode* node, bool statement, const ObsContext& context)
+    {
+        if (!node)
+            return;
+        if (glslang::TIntermVariableDecl* declaration = node->getAsVariableDecl()) {
+            walk(declaration->getInitNode(), statement, context);
+            return;
+        }
+        if (glslang::TIntermAggregate* aggregate = node->getAsAggregate()) {
+            const bool sequence = aggregate->getOp() == glslang::EOpSequence;
+            for (TIntermNode* child : aggregate->getSequence())
+                walk(child, sequence, context);
+            return;
+        }
+        if (glslang::TIntermBinary* binary = node->getAsBinaryNode()) {
+            if (statement)
+                consider(*binary, context);
+            walk(binary->getLeft(), false, context);
+            walk(binary->getRight(), false, context);
+            return;
+        }
+        if (glslang::TIntermUnary* unary = node->getAsUnaryNode()) {
+            if (statement && unary->modifiesState())
+                refuse("increment", unary->getLoc());
+            walk(unary->getOperand(), false, context);
+            return;
+        }
+        if (glslang::TIntermSelection* selection = node->getAsSelectionNode()) {
+            ObsContext branch = context;
+            ++branch.conditionalDepth;
+            walk(selection->getCondition(), false, context);
+            walkArm(selection->getTrueBlock(), branch);
+            walkArm(selection->getFalseBlock(), branch);
+            return;
+        }
+        if (glslang::TIntermLoop* loop = node->getAsLoopNode()) {
+            ObsContext body = context;
+            ++body.loopDepth;
+            ++body.conditionalDepth;
+            ObsContext header = body;
+            header.header = true;
+            walkArm(loop->getBody(), body);
+            walk(loop->getTest(), false, header);
+            walk(loop->getTerminal(), false, header);
+            return;
+        }
+        if (glslang::TIntermSwitch* choice = node->getAsSwitchNode()) {
+            ObsContext body = context;
+            ++body.conditionalDepth;
+            walk(choice->getCondition(), false, context);
+            walk(choice->getBody(), false, body);
+            return;
+        }
+        if (glslang::TIntermBranch* branch = node->getAsBranchNode()) {
+            walk(branch->getExpression(), false, context);
+            return;
+        }
+        if (const glslang::TIntermSymbol* symbol = node->getAsSymbolNode())
+            names_[symbol->getName().c_str()].insert(symbol->getId());
+    }
+
+    std::string function_;
+    std::map<std::string, std::set<long long>> names_;
+    std::vector<ObsPoint> pending_;
+    std::vector<ObsPoint> points_;
+    std::vector<bool> ambiguous_;
+    std::vector<ObsRefusal> refusals_;
+    bool pointsTruncated_ = false;
+    bool refusalsTruncated_ = false;
+};
+
+void writeObservation(Json& json, glslang::TIntermediate& intermediate)
 {
-    const bool initialized = glslang::InitializeProcess();
-    Json json;
-    json.raw('{');
-    json.key("initialized");
-    json.boolean(initialized);
-    json.raw(',');
-    json.key("glslangVersion");
-    json.string(std::to_string(GLSLANG_VERSION_MAJOR) + "." + std::to_string(GLSLANG_VERSION_MINOR) +
-                "." + std::to_string(GLSLANG_VERSION_PATCH) + GLSLANG_VERSION_FLAVOR);
-    json.raw(',');
-    json.key("glslangCommit");
-    json.string(GLA_GLSLANG_COMMIT);
-    json.raw('}');
-    return json.release();
+    ObservationWalker walker;
+    glslang::TIntermAggregate* root =
+        intermediate.getTreeRoot() ? intermediate.getTreeRoot()->getAsAggregate() : nullptr;
+    if (root) {
+        for (TIntermNode* node : root->getSequence()) {
+            glslang::TIntermAggregate* aggregate = node->getAsAggregate();
+            if (aggregate && aggregate->getOp() == glslang::EOpFunction)
+                walker.walkFunction(*aggregate);
+        }
+    }
+    walker.write(json);
 }
 
-// stage: 0 = vertex, 1 = fragment. `source` is UTF-8 of `length` bytes.
-// Returns a malloc'd JSON document that the caller frees with gla_free, or
-// null if the reply itself could not be allocated.
-EMSCRIPTEN_KEEPALIVE char* gla_analyze(const char* source, int length, int stage)
+// stage: 0 = vertex, 1 = fragment. `observe` appends the opt-in catalogue.
+char* analyzeSource(const char* source, int length, int stage, bool observe)
 {
     const EShLanguage language = stage == 0 ? EShLangVertex : EShLangFragment;
     // Validation mode: errors plus columns, never SPIR-V or Vulkan rules.
@@ -449,6 +710,10 @@ EMSCRIPTEN_KEEPALIVE char* gla_analyze(const char* source, int length, int stage
             // Collected before linking: link-time checks prune uncalled functions.
             writeSymbols(json, *intermediate);
             json.raw(',');
+            if (observe) {
+                writeObservation(json, *intermediate);
+                json.raw(',');
+            }
             glslang::TProgram program;  // destroyed before `shader`, as required
             program.addShader(&shader);
             linked = program.link(messages);
@@ -461,6 +726,42 @@ EMSCRIPTEN_KEEPALIVE char* gla_analyze(const char* source, int length, int stage
     }
     json.raw('}');
     return json.release();
+}
+
+}  // namespace
+
+extern "C" {
+
+EMSCRIPTEN_KEEPALIVE char* gla_init()
+{
+    const bool initialized = glslang::InitializeProcess();
+    Json json;
+    json.raw('{');
+    json.key("initialized");
+    json.boolean(initialized);
+    json.raw(',');
+    json.key("glslangVersion");
+    json.string(std::to_string(GLSLANG_VERSION_MAJOR) + "." + std::to_string(GLSLANG_VERSION_MINOR) +
+                "." + std::to_string(GLSLANG_VERSION_PATCH) + GLSLANG_VERSION_FLAVOR);
+    json.raw(',');
+    json.key("glslangCommit");
+    json.string(GLA_GLSLANG_COMMIT);
+    json.raw('}');
+    return json.release();
+}
+
+// stage: 0 = vertex, 1 = fragment. `source` is UTF-8 of `length` bytes.
+// Returns a malloc'd JSON document that the caller frees with gla_free, or
+// null if the reply itself could not be allocated.
+EMSCRIPTEN_KEEPALIVE char* gla_analyze(const char* source, int length, int stage)
+{
+    return analyzeSource(source, length, stage, false);
+}
+
+// Same contract as gla_analyze plus the opt-in observation catalogue.
+EMSCRIPTEN_KEEPALIVE char* gla_observe(const char* source, int length, int stage)
+{
+    return analyzeSource(source, length, stage, true);
 }
 
 EMSCRIPTEN_KEEPALIVE void gla_free(char* reply)
