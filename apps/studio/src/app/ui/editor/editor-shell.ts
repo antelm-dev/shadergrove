@@ -8,13 +8,23 @@ import {
   computed,
   effect,
   inject,
+  input,
   untracked,
   viewChild,
 } from '@angular/core';
 
 import { EDITOR_LIMITS } from '@shadergrove/shared/editor-prefs';
-import { isContainedPlacement, placementFromRestorePoint } from '@shadergrove/shared/surfaces';
+import {
+  DEFAULT_EDITOR_GROUP_ID,
+  createDefaultSurface,
+  editorSurfaceId,
+  isContainedPlacement,
+  placementFromRestorePoint,
+  type EditorGroupId,
+  type SurfaceId,
+} from '@shadergrove/shared/surfaces';
 import type { ResizeEdge } from '@shadergrove/shared/geometry';
+import { EditorGroups } from './editor-groups';
 import { EditorPanel } from './editor-panel';
 import { ReducedMotion } from '../../prefs/reduced-motion';
 import {
@@ -47,6 +57,8 @@ import {
 
     <app-editor-panel
       #panel
+      [groupId]="groupId()"
+      [surfaceId]="editorId()"
       [collapsed]="mode() === 'minimized'"
       [dragEnabled]="mode() === 'floating'"
       (dragStart)="onDrag($event)"
@@ -158,13 +170,16 @@ import {
     '[style.z-index]': 'windowZIndex()',
     '(pointerdown)': 'activate()',
     '(focusin)': 'activate()',
+    '[attr.data-editor-group]': 'groupId()',
+    '[attr.data-surface-id]': 'editorId()',
     role: 'region',
-    'aria-label': 'Source editor',
+    '[attr.aria-label]': 'regionLabel()',
   },
 })
 export class EditorShell {
   protected readonly layout = inject(SurfaceLayoutService);
   protected readonly registry = inject(SurfaceRegistry);
+  private readonly groups = inject(EditorGroups);
   protected readonly limits = EDITOR_LIMITS;
 
   private readonly host = inject(ElementRef<HTMLElement>);
@@ -174,10 +189,29 @@ export class EditorShell {
 
   private readonly panel = viewChild.required(EditorPanel);
 
-  protected readonly editorId = this.layout.editorId;
+  /** The editor group this shell shows. Absent means the legacy lone editor (default group, store-driven). */
+  readonly groupId = input<EditorGroupId | null>(null);
+  /** The surface that frames it. Absent means the one derived from `groupId`. */
+  readonly surfaceId = input<SurfaceId | null>(null);
+
+  protected readonly editorId = computed(
+    () => this.surfaceId() ?? editorSurfaceId(this.groupId() ?? DEFAULT_EDITOR_GROUP_ID),
+  );
   protected readonly gesture = new SurfaceGeometryGesture();
 
-  private readonly surface = computed(() => this.layout.editor());
+  private readonly surface = computed(
+    () =>
+      this.registry.get(this.editorId()) ?? createDefaultSurface('editor', { id: this.editorId() }),
+  );
+
+  /** Unchanged for a lone group; numbered once several groups need telling apart. */
+  protected readonly regionLabel = computed(() => {
+    const groupId = this.groupId();
+    if (groupId === null) return 'Source editor';
+    const ids = this.groups.groupIds();
+    const index = ids.indexOf(groupId);
+    return ids.length > 1 && index >= 0 ? `Source editor ${index + 1}` : 'Source editor';
+  });
 
   protected readonly projected = computed(() =>
     projectSurfaceFrame(this.surface(), this.registry.viewport(), {
@@ -210,7 +244,7 @@ export class EditorShell {
   );
 
   protected readonly windowZIndex = computed(() =>
-    this.projected().stacked ? this.layout.zIndex(this.editorId) : null,
+    this.projected().stacked ? this.layout.zIndex(this.editorId()) : null,
   );
 
   protected readonly hostRect = computed(() =>
@@ -293,7 +327,7 @@ export class EditorShell {
       },
       (commit) => {
         if (commit.rect) {
-          this.layout.commitFloatingRect(this.editorId, commit.rect);
+          this.layout.commitFloatingRect(this.editorId(), commit.rect);
           this.scheduleRelayout();
         }
       },
@@ -316,7 +350,7 @@ export class EditorShell {
       },
       (commit) => {
         if (commit.rect) {
-          this.layout.commitFloatingRect(this.editorId, commit.rect);
+          this.layout.commitFloatingRect(this.editorId(), commit.rect);
           this.scheduleRelayout();
         }
       },
@@ -339,7 +373,7 @@ export class EditorShell {
       },
       (commit) => {
         if (commit.dockSize !== undefined) {
-          this.layout.commitDockSize(this.editorId, commit.dockSize);
+          this.layout.commitDockSize(this.editorId(), commit.dockSize);
           this.scheduleRelayout();
         }
       },
@@ -359,7 +393,7 @@ export class EditorShell {
     );
     if (!next) return;
     payload.event.preventDefault();
-    this.layout.commitFloatingRect(this.editorId, next);
+    this.layout.commitFloatingRect(this.editorId(), next);
     this.scheduleRelayout();
   }
 
@@ -375,12 +409,15 @@ export class EditorShell {
     );
     if (next === null) return;
     payload.event.preventDefault();
-    this.layout.commitDockSize(this.editorId, next);
+    this.layout.commitDockSize(this.editorId(), next);
     this.scheduleRelayout();
   }
 
   protected activate(): void {
-    if (this.projected().stacked) this.layout.activate(this.editorId);
+    if (this.projected().stacked) this.layout.activate(this.editorId());
+    const groupId = this.groupId();
+    if (groupId !== null && this.groups.activeGroupId() !== groupId)
+      this.groups.activateGroup(groupId);
   }
 
   protected dockResizeLabel(): string {

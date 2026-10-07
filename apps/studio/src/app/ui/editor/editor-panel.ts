@@ -27,6 +27,12 @@ import {
 } from '@shadergrove/shared/panel-prefs';
 import { CONFIG_DOC } from '@shadergrove/shared/diagnostic';
 import { findPass } from '@shadergrove/shared/project';
+import {
+  DEFAULT_EDITOR_GROUP_ID,
+  editorSurfaceId,
+  type EditorGroupId,
+  type SurfaceId,
+} from '@shadergrove/shared/surfaces';
 import { CodeEditor, type EditorDoc } from '../../editor/code-editor';
 import { EditorSettings } from '../../editor/editor-settings';
 import {
@@ -35,7 +41,7 @@ import {
   type EditorLocationRequest,
 } from '../../editor/editor-navigation';
 import { Preferences } from '../../prefs/preferences';
-import { ShaderStore } from '../../workspace/shader-store';
+import { ShaderStore, type EditorDocument } from '../../workspace/shader-store';
 import { DocumentStatus } from './document-status';
 import { EditorTabs } from './editor-tabs';
 import { EditorWindowControls } from './editor-window-controls';
@@ -83,7 +89,8 @@ type ConfigView = 'builder' | 'json';
     >
       <app-editor-tabs
         class="tabs"
-        [activeId]="store.activeDoc()?.id ?? null"
+        [activeId]="activeDoc()?.id ?? null"
+        [groupId]="ownGroupId()"
         (select)="selectDoc($event)"
         (closed)="onTabClosed($event)"
       />
@@ -108,7 +115,7 @@ type ConfigView = 'builder' | 'json';
         </button>
       }
 
-      <app-editor-window-controls />
+      <app-editor-window-controls [surfaceId]="surfaceId()" />
     </div>
 
     <mat-menu #editorMenu="matMenu">
@@ -555,6 +562,14 @@ export class EditorPanel {
   protected readonly groups = inject(EditorGroups);
   protected readonly fileExplorerLimits = FILE_EXPLORER_LIMITS;
 
+  /**
+   * The group whose tabs and active document this panel shows. Absent means the
+   * legacy lone editor: the default group's tabs, `store.activeDoc()` and every
+   * navigation request, even for a document a group nobody renders owns.
+   */
+  readonly groupId = input<EditorGroupId | null>(null);
+  /** The surface framing this panel, for its window controls; default when absent. */
+  readonly surfaceId = input<SurfaceId>(editorSurfaceId(DEFAULT_EDITOR_GROUP_ID));
   readonly collapsed = input(false);
   readonly dragEnabled = input(false);
   readonly dragStart = output<PointerEvent>();
@@ -575,7 +590,16 @@ export class EditorPanel {
   private readonly liveExplorerWidth = signal<number | null>(null);
   private stopExplorerResize: (() => void) | null = null;
 
-  protected readonly activeDoc = computed(() => this.store.activeDoc());
+  protected readonly ownGroupId = computed(() => this.groupId() ?? DEFAULT_EDITOR_GROUP_ID);
+  /**
+   * With an explicit group, that group's document, not `store.activeDoc()`: the
+   * store's is one global pick, and every panel would otherwise show the same file.
+   */
+  protected readonly activeDoc = computed<EditorDocument | null>(() => {
+    if (this.groupId() === null) return this.store.activeDoc();
+    const id = this.groups.activeDocumentId(this.groupId()!);
+    return (id && this.store.documents().find((doc) => doc.id === id)) || null;
+  });
   protected readonly explorerPreferredOpen = computed(
     () => this.preferences.value().fileExplorerOpen,
   );
@@ -588,7 +612,7 @@ export class EditorPanel {
       loading: this.store.loading(),
       project: this.store.project(),
       documents: this.store.documents(),
-      activeDocId: this.store.activeDoc()?.id ?? null,
+      activeDocId: this.activeDoc()?.id ?? null,
       dirty: this.store.dirty(),
       compiling: this.store.compiling(),
       errorCountFor: (docId) => this.store.errorCountFor(docId),
@@ -701,7 +725,7 @@ export class EditorPanel {
   }
 
   protected selectDoc(id: string): void {
-    this.groups.activate(id);
+    this.groups.activate(id, this.ownGroupId());
     queueMicrotask(() => this.relayout());
   }
 
@@ -728,7 +752,7 @@ export class EditorPanel {
     await this.workspace.runExplorerCommand(event.command, event.docId);
     queueMicrotask(() => {
       if (this.explorerDocked() || this.explorerOverlayOpen()) {
-        this.explorerPanel()?.focusNode(event.docId ?? this.store.activeDoc()?.id ?? null);
+        this.explorerPanel()?.focusNode(event.docId ?? this.activeDoc()?.id ?? null);
       } else {
         this.focusEditor();
       }
@@ -754,7 +778,7 @@ export class EditorPanel {
     this.overlayDismissed.set(false);
     queueMicrotask(() => {
       if (this.explorerDocked() || this.explorerOverlayOpen()) {
-        this.explorerPanel()?.focusNode(this.store.activeDoc()?.id ?? null);
+        this.explorerPanel()?.focusNode(this.activeDoc()?.id ?? null);
       }
     });
   }
@@ -831,9 +855,9 @@ export class EditorPanel {
       this.store.documents().map((doc) => doc.id),
       this.activeDoc()?.id ?? null,
     );
-    if (!resolved) return;
+    if (!resolved || !this.ownsNavigation(resolved.docId)) return;
 
-    this.groups.activate(resolved.docId);
+    this.groups.activate(resolved.docId, this.ownGroupId());
 
     // The Config has two views. A line to put the cursor on is JSON's; so is a
     // buffer the builder cannot read. Merely opening it shows the builder.
@@ -845,6 +869,18 @@ export class EditorPanel {
     else this.focusEditor();
 
     queueMicrotask(() => this.relayout());
+  }
+
+  /**
+   * With explicit groups, every mounted panel sees every navigation request; only the one whose group
+   * holds the document (or, for a document no group holds, the active group)
+   * acts on it — the rest would pull the document's tab into their own strip.
+   */
+  private ownsNavigation(docId: string): boolean {
+    if (this.groupId() === null) return true;
+    const owner = this.groups.ownerGroupId(docId);
+    if (owner) return owner === this.groupId();
+    return (this.groups.activeGroupId() ?? this.groups.primaryGroupId) === this.groupId();
   }
 
   /**

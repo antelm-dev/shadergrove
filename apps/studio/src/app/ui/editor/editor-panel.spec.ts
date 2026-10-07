@@ -21,7 +21,12 @@ import {
   resolvePassOrder,
   type ShaderProject,
 } from '@shadergrove/shared/project';
-import { migrateLayoutFromPreferences } from '@shadergrove/shared/surfaces';
+import {
+  DEFAULT_EDITOR_GROUP_ID,
+  editorSurfaceId,
+  migrateLayoutFromPreferences,
+  type EditorGroupId,
+} from '@shadergrove/shared/surfaces';
 import {
   Preferences,
   createDefaultWorkspacePreferences,
@@ -60,6 +65,7 @@ class CodeEditorStub {
 
   layoutCalls = 0;
   focusCalls = 0;
+  revealCalls: Array<[string, number]> = [];
   applied: Array<{ id: string; value: string }> = [];
   applyResult = true;
 
@@ -76,7 +82,9 @@ class CodeEditorStub {
     this.focusCalls += 1;
   }
 
-  revealIn(): void {}
+  revealIn(docId: string, line: number): void {
+    this.revealCalls.push([docId, line]);
+  }
 
   async format(): Promise<void> {}
 }
@@ -107,6 +115,7 @@ class ControlsBuilderStub {
 })
 class EditorTabsStub {
   readonly activeId = input<string | null>(null);
+  readonly groupId = input<EditorGroupId>(DEFAULT_EDITOR_GROUP_ID);
   readonly select = output<string>();
   readonly closed = output<string | null>();
 
@@ -118,7 +127,9 @@ class EditorTabsStub {
   standalone: true,
   template: '',
 })
-class EditorWindowControlsStub {}
+class EditorWindowControlsStub {
+  readonly surfaceId = input<string>('');
+}
 
 @Component({
   selector: 'app-pass-config-panel',
@@ -283,6 +294,7 @@ describe('EditorPanel file explorer integration', () => {
       },
     );
 
+    navigation = signal<EditorLocationRequest | null>(null);
     store = new FakeStore();
     preferences = new FakePreferences();
     workspace = {
@@ -443,6 +455,141 @@ describe('EditorPanel file explorer integration', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('explorer.state.noProject');
   });
+
+  describe('group identity', () => {
+    function mountGroup(groupId?: EditorGroupId) {
+      const fixture = TestBed.createComponent(EditorPanel);
+      if (groupId) fixture.componentRef.setInput('groupId', groupId);
+      fixture.detectChanges();
+      return fixture;
+    }
+
+    function docsOf(fixture: ReturnType<typeof mountGroup>) {
+      return {
+        editor: codeEditor(fixture as ReturnType<typeof mount>),
+        tabs: tabs(fixture as ReturnType<typeof mount>),
+      };
+    }
+
+    /** Default group shows the image pass; a second group owns the first buffer. */
+    function mountTwoGroups() {
+      const primary = mountGroup(DEFAULT_EDITOR_GROUP_ID);
+      const groups = TestBed.inject(EditorGroups);
+      const second = groups.createGroup()!;
+      const buffer = store.documents().find((doc) => doc.passKind === 'buffer')!;
+      groups.activate(buffer.id, second);
+      const other = mountGroup(second);
+      primary.detectChanges();
+      other.detectChanges();
+      return { primary, other, second, buffer, groups };
+    }
+
+    it('keeps the default input path on the default group', () => {
+      const fixture = mountGroup();
+      const image = imagePass(store.project()!);
+      const { editor, tabs: strip } = docsOf(fixture);
+
+      expect(editor.doc().id).toBe(image.id);
+      expect(strip.activeId()).toBe(image.id);
+      expect(strip.groupId()).toBe(DEFAULT_EDITOR_GROUP_ID);
+    });
+
+    // Legacy single editor: no group is bound, so a document moved into a group
+    // nobody renders must stay visible and reachable, as before groups existed.
+    it('shows store.activeDoc() when no group is bound, even for a document another group owns', () => {
+      const fixture = mountGroup();
+      const groups = TestBed.inject(EditorGroups);
+      const second = groups.createGroup()!;
+      const buffer = store.documents().find((doc) => doc.passKind === 'buffer')!;
+      groups.activate(buffer.id, second);
+      fixture.detectChanges();
+
+      expect(groups.ownerGroupId(buffer.id)).toBe(second);
+      expect(docsOf(fixture).editor.doc().id).toBe(buffer.id);
+
+      const file = store.documents().find((doc) => doc.kind === 'file')!;
+      groups.activate(file.id, second);
+      fixture.detectChanges();
+      store.selectDoc(buffer.id);
+      fixture.detectChanges();
+      expect(docsOf(fixture).editor.doc().id).toBe(buffer.id);
+    });
+
+    it('accepts every navigation request when no group is bound', () => {
+      const fixture = mountGroup();
+      const groups = TestBed.inject(EditorGroups);
+      const second = groups.createGroup()!;
+      const buffer = store.documents().find((doc) => doc.passKind === 'buffer')!;
+      groups.activate(buffer.id, second);
+
+      navigation.set({ docId: buffer.id, line: 3, requestId: 1 });
+      fixture.detectChanges();
+
+      expect(docsOf(fixture).editor.revealCalls).toEqual([[buffer.id, 3]]);
+      expect(docsOf(fixture).editor.doc().id).toBe(buffer.id);
+    });
+
+    it('shows each group its own active document and tab strip identity', () => {
+      const { primary, other, second, buffer } = mountTwoGroups();
+      const image = imagePass(store.project()!);
+
+      expect(docsOf(primary).editor.doc().id).toBe(image.id);
+      expect(docsOf(other).editor.doc().id).toBe(buffer.id);
+      expect(docsOf(primary).tabs.groupId()).toBe(DEFAULT_EDITOR_GROUP_ID);
+      expect(docsOf(other).tabs.groupId()).toBe(second);
+      expect(docsOf(other).tabs.activeId()).toBe(buffer.id);
+      // The store's one global pick is the last activation, so it cannot be what
+      // the first panel shows.
+      expect(store.activeDoc()?.id).toBe(buffer.id);
+    });
+
+    it('routes tab selection and explorer selection to the panel own group', () => {
+      const { primary, other, second, buffer, groups } = mountTwoGroups();
+      const image = imagePass(store.project()!);
+      const file = store.documents().find((doc) => doc.kind === 'file')!;
+
+      docsOf(other).tabs.select.emit(file.id);
+      primary.detectChanges();
+      other.detectChanges();
+
+      expect(groups.activeDocumentId(second)).toBe(file.id);
+      expect(groups.activeDocumentId(DEFAULT_EDITOR_GROUP_ID)).toBe(image.id);
+      expect(docsOf(other).editor.doc().id).toBe(file.id);
+      expect(docsOf(primary).editor.doc().id).toBe(image.id);
+
+      const row = primary.nativeElement.querySelector(
+        `[data-node-id="${buffer.id}"]`,
+      ) as HTMLElement;
+      row.click();
+      primary.detectChanges();
+      // The buffer is owned by the second group, so the first cannot take it.
+      expect(groups.ownerGroupId(buffer.id)).toBe(second);
+      expect(docsOf(primary).editor.doc().id).toBe(image.id);
+    });
+
+    it('lets only the owning group act on a navigation request', () => {
+      const { primary, other, buffer } = mountTwoGroups();
+
+      navigation.set({ docId: buffer.id, line: 7, requestId: 1 });
+      primary.detectChanges();
+      other.detectChanges();
+
+      expect(docsOf(other).editor.revealCalls).toEqual([[buffer.id, 7]]);
+      expect(docsOf(primary).editor.revealCalls).toEqual([]);
+    });
+
+    it('forwards the surface input to its window controls', () => {
+      const { other, second } = mountTwoGroups();
+      const controls = other.debugElement.query(By.directive(EditorWindowControlsStub))
+        .componentInstance as EditorWindowControlsStub;
+
+      expect(controls.surfaceId()).toBe(editorSurfaceId(DEFAULT_EDITOR_GROUP_ID));
+      other.componentRef.setInput('surfaceId', editorSurfaceId(second));
+      other.detectChanges();
+      expect(controls.surfaceId()).toBe(editorSurfaceId(second));
+    });
+  });
+
   describe('Config views', () => {
     function builder(fixture: ReturnType<typeof mount>): ControlsBuilderStub {
       return fixture.debugElement.query(By.directive(ControlsBuilderStub))
