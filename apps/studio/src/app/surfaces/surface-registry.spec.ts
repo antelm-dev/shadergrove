@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  LAYOUT_VERSION,
   WELL_KNOWN_SURFACE_IDS,
   createDefaultSurface,
   editorSurfaceId,
@@ -109,7 +110,7 @@ describe('SurfaceRegistry', () => {
   it('snapshots layout preferences without browser globals', () => {
     registry.ensure('preview');
     const snap = registry.snapshot();
-    expect(snap.version).toBe(1);
+    expect(snap.version).toBe(LAYOUT_VERSION);
     expect(snap.surfaces.some((s) => s.kind === 'preview')).toBe(true);
   });
 });
