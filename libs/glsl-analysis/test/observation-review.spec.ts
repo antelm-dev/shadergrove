@@ -32,3 +32,23 @@ it('explicitly refuses an unsupported unbraced assignment instead of silently dr
   // Its semantic assignment must still explain why no selectable point exists.
   expect(refusals.some((refusal) => refusal.line === 7)).toBe(true);
 });
+
+it('refuses the entire catalogue for a valid line directive with a leading comment', () => {
+  const source = [
+    '#version 300 es',
+    'precision highp float;',
+    'out vec4 color;',
+    'void main() {',
+    '  float before = 1.0;',
+    '/* comment */ #line 100',
+    '  float after = 2.0;',
+    '  color = vec4(before + after);',
+    '}',
+  ].join('\n');
+  const result = frontend.analyze({ ...job(source, 'fragment', 300), observe: true });
+  if (result.status !== 'ok' || !result.observation) throw new Error('Expected valid catalogue');
+  expect(result.observation.points).toEqual([]);
+  expect(result.observation.refusals.map((refusal) => refusal.reason)).toEqual([
+    'user-line-directive',
+  ]);
+});
