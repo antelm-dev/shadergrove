@@ -27,3 +27,7 @@ packageExtensions:
       typescript: ~6.0.2
 
 strictDepBuilds: false
+
+overrides:
+  # GHSA-542g-h47m-68v8 and siblings, pulled in by nx.
+  axios: ^1.20.0
