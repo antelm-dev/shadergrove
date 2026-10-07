@@ -82,6 +82,9 @@ export class TextureManager {
   /** Decode state for cached image textures; a transition waits until none are still loading. */
   private readonly status = new Map<string, LoadStatus>();
 
+  /** Keys whose decode failed: settled like any other, but with nothing behind them. */
+  private readonly failed = new Set<string>();
+
   private live: readonly (ChannelSource | null)[] = [null, null, null, null];
 
   private disposed = false;
@@ -150,6 +153,7 @@ export class TextureManager {
         (error) => {
           console.warn(`[shader-engine] failed to load texture "${source.url}":`, error);
           this.options.warn?.(`Failed to load texture "${source.url}": ${String(error)}`);
+          this.failed.add(key);
           this.settle(key);
         },
       ),
@@ -159,6 +163,15 @@ export class TextureManager {
 
     this.cache.set(key, texture);
     return texture;
+  }
+
+  /** What is actually behind a slot: nothing assigned, still decoding, failed, or usable. */
+  slotState(index: number): 'empty' | 'loading' | 'failed' | 'ready' {
+    const source = this.live[index] ?? null;
+    if (!source) return 'empty';
+    const key = cacheKey(source);
+    if (this.status.get(key) === 'loading') return 'loading';
+    return this.failed.has(key) ? 'failed' : 'ready';
   }
 
   /** True once every image texture used by the current slots has decoded or failed. */
@@ -272,6 +285,7 @@ export class TextureManager {
     // Emptied, so a decode still in flight settles into a key nobody holds and
     // is dropped rather than firing `onSettled` on a disposed engine.
     this.status.clear();
+    this.failed.clear();
     this.placeholder.dispose();
 
     this.onSettled = null;
@@ -314,6 +328,7 @@ export class TextureManager {
       texture.dispose();
       this.cache.delete(key);
       this.status.delete(key);
+      this.failed.delete(key);
     }
   }
 }

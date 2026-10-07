@@ -28,6 +28,9 @@ import { VIGNETTE_SHADER, setVignetteUniforms } from './vignette-pass';
 /** One built pass, whichever effect type it belongs to. */
 type EffectPass = UnrealBloomPass | ShaderPass;
 
+/** Sees the scene pass's result, in the composer's own buffer, before any effect has touched it. */
+export type PreEffectObserver = (texture: THREE.Texture, width: number, height: number) => void;
+
 /**
  * What happens to a frame between the shader and the canvas: the ordered
  * `postProcessing` chain from `RenderSettings`, applied after the final Image
@@ -256,9 +259,32 @@ export class PostProcessing {
    * pass the frame goes through the chain; otherwise straight at the canvas —
    * which is also what happens while the import is still in flight.
    */
-  render(scene: THREE.Scene, camera: THREE.Camera): void {
-    if (this.usesComposer()) this.composer!.render();
-    else this.context.renderer.render(scene, camera);
+  render(scene: THREE.Scene, camera: THREE.Camera, observe?: PreEffectObserver): void {
+    if (!this.usesComposer()) {
+      this.context.renderer.render(scene, camera);
+      return;
+    }
+    const composer = this.composer!;
+    if (!observe) {
+      composer.render();
+      return;
+    }
+    // A capture asks to see the Image pass's own output, after the scene pass and before
+    // any effect: a pass of the composer's own kind that draws nothing, for this one frame.
+    const tap = {
+      enabled: true,
+      needsSwap: false,
+      renderToScreen: false,
+      setSize: () => undefined,
+      render: (_renderer: unknown, _write: unknown, read: THREE.WebGLRenderTarget) =>
+        observe(read.texture, read.width, read.height),
+    };
+    composer.insertPass(tap as unknown as EffectPass, 1);
+    try {
+      composer.render();
+    } finally {
+      composer.removePass(tap as unknown as EffectPass);
+    }
   }
 
   /** The clock custom effects see as `u_time`, in seconds. */

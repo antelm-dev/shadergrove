@@ -13,6 +13,8 @@ interface StubEngine {
   onProfilerLifecycle: (() => void) | null;
   profilerSnapshot: () => ReturnType<PerformanceProfiler['snapshot']>;
   resetProfilerSamples: () => void;
+  releaseCapture: () => void;
+  onCaptureInvalidated: (() => void) | null;
 }
 
 function stubEngine(): StubEngine {
@@ -27,6 +29,8 @@ function stubEngine(): StubEngine {
   const engine: StubEngine = {
     profiler,
     onProfilerLifecycle: null,
+    onCaptureInvalidated: null,
+    releaseCapture: () => undefined,
     setProfilingEnabled: vi.fn((enabled: boolean) => {
       const generation = profiler.generation;
       profiler.setEnabled(enabled);
@@ -145,5 +149,136 @@ describe('RendererHandle profiling sync', () => {
     expect(primary.profiler.snapshot([]).sampleCount).toBe(samplesBefore);
     expect(primary.setProfilingEnabled).toHaveBeenCalledWith(true);
     expect(primary.setProfilingEnabled).not.toHaveBeenCalledWith(false);
+  });
+});
+
+/** A snapshot that only knows whether it was released, and an engine that resolves it on demand. */
+function stubSnapshot(): { released: boolean; release(): void } {
+  return {
+    released: false,
+    release() {
+      this.released = true;
+    },
+  };
+}
+
+function capturingEngine() {
+  const snapshots: ReturnType<typeof stubSnapshot>[] = [];
+  const pending: ((snapshot: ReturnType<typeof stubSnapshot>) => void)[] = [];
+  const engine = Object.assign(stubEngine(), {
+    retained: null as ReturnType<typeof stubSnapshot> | null,
+    onCaptureInvalidated: null as (() => void) | null,
+    captureFrame: vi.fn(
+      () => new Promise<ReturnType<typeof stubSnapshot>>((resolve) => pending.push(resolve)),
+    ),
+    releaseCapture() {
+      this.retained?.release();
+      this.retained = null;
+    },
+  });
+  // Object.assign would evaluate a getter once; the handle must see the live value.
+  Object.defineProperty(engine, 'capturedFrame', { get: () => engine.retained });
+  /** The engine's frame finishes: the snapshot is retained and the promise settles. */
+  const finish = () => {
+    const snapshot = stubSnapshot();
+    snapshots.push(snapshot);
+    engine.retained = snapshot;
+    pending.shift()!(snapshot);
+    return snapshot;
+  };
+  return { engine, finish };
+}
+
+describe('RendererHandle capture publication', () => {
+  let handle: RendererHandle;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        RendererHandle,
+        { provide: DesktopPlatform, useValue: { available: false } },
+      ],
+    });
+    handle = TestBed.inject(RendererHandle);
+  });
+
+  afterEach(() => {
+    TestBed.resetTestingModule();
+  });
+
+  async function outcome(request: Promise<unknown>): Promise<string> {
+    try {
+      await request;
+    } catch (error) {
+      return (error as { code?: string }).code ?? 'other';
+    }
+    return 'resolved';
+  }
+
+  it('publishes the capture the engine still retains', async () => {
+    const { engine, finish } = capturingEngine();
+    handle.register('preview', engine as unknown as ShaderEngine);
+
+    const request = handle.captureFrame();
+    const snapshot = finish();
+
+    expect(await request).toBe(snapshot);
+    expect(handle.capturedFrame()).toBe(snapshot);
+  });
+
+  it.each([
+    ['released by the handle', (h: RendererHandle) => h.releaseCapture()],
+    ['unregistered', (h: RendererHandle) => h.unregister('preview')],
+    [
+      'invalidated by the engine',
+      (_h: RendererHandle, engine: ReturnType<typeof capturingEngine>['engine']) =>
+        engine.releaseCapture(),
+    ],
+  ])('ends honestly when the capture is %s before the handle continues', async (_name, end) => {
+    const { engine, finish } = capturingEngine();
+    handle.register('preview', engine as unknown as ShaderEngine);
+
+    const request = handle.captureFrame();
+    const snapshot = finish();
+    end(handle, engine);
+
+    expect(await outcome(request)).toBe('released');
+    expect(snapshot.released).toBe(true);
+    expect(handle.capturedFrame()).toBeNull();
+    expect(engine.retained).toBeNull();
+  });
+
+  it('does not publish a capture of an engine that stopped being active', async () => {
+    const first = capturingEngine();
+    const second = capturingEngine();
+    handle.register('preview', first.engine as unknown as ShaderEngine);
+    handle.register('output', second.engine as unknown as ShaderEngine);
+
+    const request = handle.captureFrame();
+    const snapshot = first.finish();
+    handle.setActive('output');
+
+    expect(await outcome(request)).toBe('released');
+    expect(snapshot.released).toBe(true);
+    expect(handle.capturedFrame()).toBeNull();
+  });
+
+  it('never lets a stale request overwrite or release a newer retained capture', async () => {
+    const { engine, finish } = capturingEngine();
+    handle.register('preview', engine as unknown as ShaderEngine);
+
+    const stale = handle.captureFrame();
+    const old = finish();
+    handle.releaseCapture();
+    const newer = handle.captureFrame();
+    const current = finish();
+
+    expect(await outcome(stale)).toBe('released');
+    expect(await newer).toBe(current);
+    expect(old.released).toBe(true);
+    expect(current.released).toBe(false);
+    expect(handle.capturedFrame()).toBe(current);
+    expect(engine.retained).toBe(current);
   });
 });
