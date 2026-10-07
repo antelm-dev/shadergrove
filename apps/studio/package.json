@@ -95,6 +95,11 @@
   },
   "nx": {
     "targets": {
+      "build:analysis": {
+        "dependsOn": [
+          "^build:wasm"
+        ]
+      },
       "build": {
         "outputs": [
           "{workspaceRoot}/dist/shadergrove"
