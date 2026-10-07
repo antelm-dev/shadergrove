@@ -299,3 +299,92 @@ void main() {
   expect(actual[3]).toBeCloseTo(2.5 / size.height, 3);
   await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
 });
+
+test('a newer real vec2 measurement survives the old failure and same-texel re-emission', async ({
+  page,
+}) => {
+  const { panel, section } = await open(
+    page,
+    'Review vec2 overlapping ownership',
+    `precision highp float;
+void main() {
+  vec2 first = vec2(-2.5, 6.25);
+  vec2 second = first * 2.0;
+  gl_FragColor = vec4(second * 0.01, 0.0, 1.0);
+}`,
+  );
+  await choose(section, 'first');
+  // Both jobs really draw. Hold only publication so the old catch/finally runs
+  // while the newer UI request still owns its controller and measuring state.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).ng.getComponent(document.querySelector('app-shader-canvas')).engine()
+            .pendingFrames,
+      ),
+    )
+    .toBe(0);
+  const state = () =>
+    page.evaluate(() => {
+      const engine = (window as any).ng
+        .getComponent(document.querySelector('app-shader-canvas'))
+        .engine();
+      return {
+        index: engine.framesDrawn as number,
+        time: engine.time as number,
+        uniforms: ['iTime', 'iResolution', 'u_timeScale'].map((name) =>
+          engine.registry.value(name),
+        ),
+      };
+    });
+  const before = await state();
+  // Independent no-observation control: two scheduled frames in this settled
+  // paused view do not draw or alter the live uniforms.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  expect(await state()).toEqual(before);
+  await page.evaluate(() => {
+    const engine = (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine();
+    const original = engine.observePoint.bind(engine);
+    let calls = 0;
+    (window as any).overlapReady = [];
+    (window as any).overlapFinish = [];
+    engine.observePoint = async (...args: any[]) => {
+      const call = calls++;
+      const result = await original(...args);
+      (window as any).overlapReady[call] = true;
+      await new Promise<void>((resolve) => ((window as any).overlapFinish[call] = resolve));
+      if (call === 0) throw new Error('old failure while a new result is pending');
+      return result;
+    };
+  });
+  await section.locator('.measure').click();
+  await expect.poll(() => page.evaluate(() => (window as any).overlapReady[0])).toBe(true);
+  await choose(section, 'second');
+  await section.locator('.measure').click();
+  await expect.poll(() => page.evaluate(() => (window as any).overlapReady[1])).toBe(true);
+  // Re-emitting an unchanged drawing-buffer coordinate must not supersede it.
+  await panel.locator('.pixel-x').fill('2');
+  await panel.locator('.pixel-x').dispatchEvent('change');
+  await page.evaluate(() => (window as any).overlapFinish[0]());
+  await expect(section.locator('.cancel-measure')).toHaveCount(1);
+  await expect(section.locator('.status')).toHaveText('Measuring on the GPU…');
+  await expect(section.locator('.result')).toHaveCount(0);
+  await page.evaluate(() => (window as any).overlapFinish[1]());
+  await expect(section.locator('.result')).toBeVisible();
+  expect(await section.locator('.raw-value').allTextContents()).toEqual(['-5', '12.5']);
+  await expect(section.locator('.facts')).toContainText('vec2');
+  await expect(section.locator('.facts')).toContainText('visit 1, pixel 2, 2');
+  await expect(section.locator('.source-identity')).toHaveText('Image:4:8');
+  await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
+  // Unlike normalization by an observed frame index, this rejects any extra
+  // live frame induced by either observation, as well as uniform/time changes.
+  expect(await state()).toEqual(before);
+});
