@@ -41,6 +41,12 @@ async function expectShowing(shell: Locator, docId?: string): Promise<void> {
   if (docId) await expect(selected).toHaveAttribute('data-doc-id', docId);
 }
 
+/** The Config opens in the controls builder; these checks are about the JSON editor. */
+async function openConfigJson(shell: Locator): Promise<void> {
+  await explorerRow(shell, '@config').click();
+  await shell.locator('.view-json').click();
+}
+
 function explorerRow(shell: Locator, docId: string): Locator {
   return shell.locator(`[role="treeitem"][data-node-id="${docId}"]`);
 }
@@ -57,7 +63,7 @@ test('the default editor follows startup, tab, explorer, shader switch and deep 
   await expect(shell).toHaveAttribute('aria-label', 'Source editor');
 
   // Explorer → a document with no tab yet opens it in the default group.
-  await explorerRow(shell, '@config').click();
+  await openConfigJson(shell);
   await expectShowing(shell, '@config');
   await expect(shell.locator('[data-mode-id]')).toHaveAttribute('data-mode-id', /^json/);
 
@@ -86,7 +92,7 @@ test('a document moved to a new group stays reachable in the single default edit
 }) => {
   const shell = await openStudio(page);
 
-  await explorerRow(shell, '@config').click();
+  await openConfigJson(shell);
   await expectShowing(shell, '@config');
 
   await shell.locator('app-editor-tabs [role="tab"][data-doc-id="@config"]').click({
@@ -102,7 +108,7 @@ test('a document moved to a new group stays reachable in the single default edit
   // The moved document must still be openable from the explorer.
   const firstTab = shell.locator('app-editor-tabs [role="tab"]').first();
   await firstTab.click();
-  await explorerRow(shell, '@config').click();
+  await openConfigJson(shell);
   await expect(shell.locator('.monaco-editor')).toBeVisible();
   await expect(shell.locator('[data-mode-id]')).toHaveAttribute('data-mode-id', /^json/);
 });
