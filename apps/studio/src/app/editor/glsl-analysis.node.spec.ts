@@ -248,6 +248,19 @@ describe('real front end through the facade', () => {
     expect(offered.map((symbol) => symbol.parameters[0].type.base)).toEqual(['float']);
   });
 
+  it('keeps a user array overload whose base type matches a generated scalar helper parameter', async () => {
+    const next = project(
+      'float luminance(vec3 values[1]) { return values[0].x; } void main() { vec3 values[1]; values[0] = vec3(0.2); gl_FragColor = vec4(luminance(values)); }',
+    );
+    const analysis = await analyse(next);
+    expect(analysis.diagnosticsFor(next.passes[0].id)).toEqual([]);
+    const overloads = analysis
+      .symbolsFor(next.passes[0].id)!
+      .functions.filter((symbol) => symbol.name === 'luminance');
+    expect(overloads).toHaveLength(1);
+    expect(overloads[0].parameters[0].type.arraySizes).toEqual([1]);
+  });
+
   it('serves nothing between an edit and its accepted result', async () => {
     const next = project();
     const analysis = await analyse(next);
@@ -341,7 +354,7 @@ describe('real front end through the facade', () => {
 });
 
 describe('source mapping', () => {
-  const lib = 'float f() { /* Ã©âœ“ */ return undeclared_x; }';
+  const lib = 'float f() { /* ÃƒÂ©Ã¢Å“â€œ */ return undeclared_x; }';
 
   function withInclude(): ShaderProject {
     const base = project(`#include "lib.glsl"\nvoid main() { gl_FragColor = vec4(f()); }`);
