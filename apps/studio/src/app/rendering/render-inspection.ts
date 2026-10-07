@@ -60,7 +60,11 @@ export type CaptureErrorCode =
   | 'readback'
   | 'precision'
   | 'replay-mismatch'
-  | 'no-renderer';
+  | 'no-renderer'
+  /** A point observation: the instrumented program the driver would not compile. */
+  | 'compile'
+  /** A point observation: the source that would be measured is not the accepted one. */
+  | 'source';
 
 export class FrameCaptureError extends Error {
   constructor(
@@ -98,9 +102,9 @@ const BYTES_PER_TEXEL: Record<TexelFormat, number> = { rgba8: 4, rgba16f: 8, rgb
 const FLOAT_TEXEL_BYTES = 16;
 
 /** A half float rounds to within 2^-11 of its value, and to 2^-25 of zero; this allows twice that. */
-const HALF_MAX = 65504;
-const HALF_RELATIVE = 2 ** -10;
-const HALF_ABSOLUTE = 2 ** -24;
+export const HALF_MAX = 65504;
+export const HALF_RELATIVE = 2 ** -10;
+export const HALF_ABSOLUTE = 2 ** -24;
 
 export type UniformValue = number | boolean | string | readonly UniformValue[];
 
@@ -216,6 +220,59 @@ type StoredData = Uint8Array | Uint16Array | Float32Array;
 interface Stored {
   readonly meta: CapturedImage;
   readonly data: StoredData;
+}
+
+/**
+ * What a point observation replays besides the retained texels: the full-screen
+ * geometry and camera as drawn, and each pass's typed uniform values. Cloned at
+ * the draw boundary and owned by one snapshot, so a later observation never
+ * reads the live renderer.
+ */
+export interface FrozenFrame {
+  readonly geometry: THREE.BufferGeometry;
+  readonly camera: THREE.Camera;
+  readonly uniforms: ReadonlyMap<number, Readonly<Record<string, unknown>>>;
+}
+
+/** One pass's frozen inputs, as handed to a replay. Uniforms and camera are fresh clones; texel arrays are read-only views. */
+export interface ReplayInputs {
+  readonly geometry: THREE.BufferGeometry;
+  readonly camera: THREE.Camera;
+  readonly uniforms: Record<string, unknown>;
+  readonly textures: readonly {
+    readonly channel: number;
+    readonly meta: CapturedImage | null;
+    readonly data: StoredData | null;
+    readonly sampling: CapturedSampling;
+  }[];
+}
+
+/** A texture of one captured input, exactly as the Image replay and every observation upload it. */
+export function replayTexture(
+  context: GlContext,
+  meta: CapturedImage | null,
+  data: StoredData | null,
+  sampling: CapturedSampling,
+): THREE.DataTexture {
+  const T = context.three;
+  const texture =
+    meta && data
+      ? new T.DataTexture(
+          data as Uint8Array | Uint16Array,
+          meta.width,
+          meta.height,
+          T.RGBAFormat,
+          meta.format === 'rgba16f' ? T.HalfFloatType : T.UnsignedByteType,
+        )
+      : new T.DataTexture(new Uint8Array(4), 1, 1, T.RGBAFormat);
+  context.own(texture);
+  texture.wrapS = sampling.wrapS as THREE.Wrapping;
+  texture.wrapT = sampling.wrapT as THREE.Wrapping;
+  texture.magFilter = sampling.magFilter as THREE.MagnificationTextureFilter;
+  texture.minFilter = sampling.minFilter as THREE.MinificationTextureFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 // -----------------------------------------------------------------------------
@@ -669,18 +726,18 @@ const COPY_VERTEX = 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }'
 const COPY_FRAGMENT = `uniform sampler2D tSource;
 void main() { gl_FragColor = texelFetch(tSource, ivec2(gl_FragCoord.xy), 0); }`;
 
-type Gl = WebGL2RenderingContext;
+export type Gl = WebGL2RenderingContext;
 
-function glOf(renderer: THREE.WebGLRenderer): Gl {
+export function glOf(renderer: THREE.WebGLRenderer): Gl {
   return renderer.getContext() as Gl;
 }
 
-function drainGlErrors(gl: Gl): void {
+export function drainGlErrors(gl: Gl): void {
   for (let count = 0; count < 8 && gl.getError() !== gl.NO_ERROR; count++);
 }
 
 /** Fail a complete-framebuffer assumption loudly: three does not report one, it just skips the read. */
-function assertComplete(gl: Gl, what: string): void {
+export function assertComplete(gl: Gl, what: string): void {
   if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
     throw new FrameCaptureError(
       'unsupported',
@@ -799,6 +856,7 @@ export class FrameSnapshot {
     readonly passes: readonly CapturedPass[],
     store: Map<string, Stored>,
     private readonly onRelease: (snapshot: FrameSnapshot) => void,
+    private frozen: FrozenFrame | null = null,
   ) {
     // The session keys images by what they hold (for de-duplication); readers ask by id.
     this.store = new Map([...store.values()].map((stored) => [stored.meta.id, stored]));
@@ -860,11 +918,43 @@ export class FrameSnapshot {
     return Array.from(this.read(id, { x, y, width: 1, height: 1 }).data);
   }
 
+  /**
+   * What a replay of one pass needs, all frozen at capture: fresh uniform clones
+   * (the stored ones stay untouched), the camera and geometry as drawn, and each
+   * channel's texels. Textures are built by the caller with `replayTexture`.
+   */
+  replayInputs(passIndex: number): ReplayInputs {
+    const frozen = this.frozen;
+    const pass = this.passes.find((candidate) => candidate.index === passIndex);
+    const stored = frozen?.uniforms.get(passIndex);
+    if (this.done || !this.store || !frozen || !pass || !stored) {
+      throw new FrameCaptureError('released', 'This frame capture was released.');
+    }
+    const uniforms: Record<string, unknown> = {};
+    for (const [name, value] of Object.entries(stored)) uniforms[name] = cloneUniform(value, name);
+    return {
+      geometry: frozen.geometry,
+      camera: frozen.camera.clone(),
+      uniforms,
+      textures: pass.inputs.map((input) => {
+        const held = input.imageId ? this.store!.get(input.imageId) : undefined;
+        return {
+          channel: input.channel,
+          meta: held?.meta ?? null,
+          data: held?.data ?? null,
+          sampling: input.sampling,
+        };
+      }),
+    };
+  }
+
   /** Drops every retained array. Idempotent. */
   release(): void {
     if (this.done) return;
     this.done = true;
     this.store = null;
+    this.frozen?.geometry.dispose();
+    this.frozen = null;
     this.onRelease(this);
   }
 
@@ -906,6 +996,9 @@ export class CaptureSession {
   private nextImage = 0;
   /** The Image pass's own output behind post-processing, as drawn: what the replay is held to. */
   private reference: Float32Array | null = null;
+  private readonly frozenUniforms = new Map<number, Record<string, unknown>>();
+  private frozenGeometry: THREE.BufferGeometry | null = null;
+  private frozenCamera: THREE.Camera | null = null;
 
   /** @internal Use `FrameInspector`. */
   constructor(
@@ -971,6 +1064,9 @@ export class CaptureSession {
         clones[name] = cloneUniform(uniform.value, name);
         uniforms[name] = serializeUniform(clones[name], name);
       }
+      this.frozenUniforms.set(index, clones);
+      this.frozenGeometry ??= this.src.geometry.clone();
+      this.frozenCamera ??= this.src.camera.clone();
       Object.assign(uniforms, rendererUniforms(this.src, pass.vertex, pass.fragment));
 
       const accepted = pass.accepted;
@@ -1076,6 +1172,22 @@ export class CaptureSession {
     this.reader?.dispose();
     this.reader = null;
     this.reference = null;
+    this.frozenGeometry?.dispose();
+    this.frozenGeometry = null;
+  }
+
+  /** Hands the frozen replay inputs to the snapshot, which then owns (and disposes) the geometry. */
+  takeFrozen(): FrozenFrame {
+    if (!this.frozenGeometry || !this.frozenCamera) {
+      throw new FrameCaptureError('unsupported', 'No pass was drawn, so nothing was frozen.');
+    }
+    const frozen: FrozenFrame = {
+      geometry: this.frozenGeometry,
+      camera: this.frozenCamera,
+      uniforms: this.frozenUniforms,
+    };
+    this.frozenGeometry = null;
+    return frozen;
   }
 
   get active(): boolean {
@@ -1246,23 +1358,13 @@ export class CaptureSession {
         const stored = input.imageId
           ? [...this.store.values()].find((s) => s.meta.id === input.imageId)
           : null;
-        const texture = stored
-          ? new T.DataTexture(
-              stored.data as Uint8Array | Uint16Array,
-              stored.meta.width,
-              stored.meta.height,
-              T.RGBAFormat,
-              stored.meta.format === 'rgba16f' ? T.HalfFloatType : T.UnsignedByteType,
-            )
-          : new T.DataTexture(new Uint8Array(4), 1, 1, T.RGBAFormat);
-        this.context.own(texture);
+        const texture = replayTexture(
+          this.context,
+          stored?.meta ?? null,
+          stored?.data ?? null,
+          input.sampling,
+        );
         owned.push(texture);
-        texture.wrapS = input.sampling.wrapS as THREE.Wrapping;
-        texture.wrapT = input.sampling.wrapT as THREE.Wrapping;
-        texture.magFilter = input.sampling.magFilter as THREE.MagnificationTextureFilter;
-        texture.minFilter = input.sampling.minFilter as THREE.MinificationTextureFilter;
-        texture.generateMipmaps = false;
-        texture.needsUpdate = true;
         uniforms[CHANNEL_UNIFORMS[input.channel]] = { value: texture };
       }
 
@@ -1443,6 +1545,7 @@ export interface InspectorHost {
 export class FrameInspector {
   private retained: FrameSnapshot | null = null;
   private pending: Pending | null = null;
+  private observing: { snapshot: FrameSnapshot; controller: AbortController } | null = null;
   private nextId = 1;
   private disposed = false;
 
@@ -1537,15 +1640,84 @@ export class FrameInspector {
     }
   }
 
+  get hasObservation(): boolean {
+    return this.observing !== null;
+  }
+
+  /**
+   * Runs one cancellable job against the retained snapshot, the only one at a
+   * time. The job's signal aborts — with a `FrameCaptureError` as its reason —
+   * on the caller's signal, the timeout, a release, an invalidation or disposal.
+   * Whatever the job returns after that is dropped, never published.
+   */
+  async observe<T>(
+    options: CaptureOptions,
+    job: (snapshot: FrameSnapshot, signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    if (this.disposed) throw new FrameCaptureError('disposed', 'The renderer was disposed.');
+    if (this.context.status() !== 'live') {
+      throw new FrameCaptureError('context', 'The WebGL context is not live.');
+    }
+    if (options.signal?.aborted) {
+      throw new FrameCaptureError('aborted', 'The observation was aborted before it started.');
+    }
+    if (this.observing) throw new FrameCaptureError('busy', 'An observation is already pending.');
+    const snapshot = this.retained;
+    if (!snapshot || snapshot.released) {
+      throw new FrameCaptureError('released', 'There is no retained capture to observe.');
+    }
+
+    const controller = new AbortController();
+    const timeoutMs =
+      options.timeoutMs !== undefined && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+        ? options.timeoutMs
+        : CAPTURE_TIMEOUT_MS;
+    const onAbort = () =>
+      controller.abort(new FrameCaptureError('aborted', 'The observation was aborted.'));
+    const timer = setTimeout(
+      () =>
+        controller.abort(
+          new FrameCaptureError(
+            'timeout',
+            `The observation did not finish within ${timeoutMs} ms.`,
+          ),
+        ),
+      timeoutMs,
+    );
+    options.signal?.addEventListener('abort', onAbort, { once: true });
+    this.observing = { snapshot, controller };
+    try {
+      const result = await job(snapshot, controller.signal);
+      if (controller.signal.aborted) throw controller.signal.reason;
+      return result;
+    } catch (error) {
+      // A cancellation reports why it was cancelled, whatever the job threw on the way out.
+      if (controller.signal.aborted) throw controller.signal.reason;
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      options.signal?.removeEventListener('abort', onAbort);
+      if (this.observing?.controller === controller) this.observing = null;
+    }
+  }
+
+  private cancelObservation(error: FrameCaptureError): void {
+    this.observing?.controller.abort(error);
+  }
+
   /** Ends the retained snapshot and cancels any pending request. Idempotent. */
   release(): void {
-    this.settlePending(new FrameCaptureError('released', 'The capture was released.'));
+    const released = new FrameCaptureError('released', 'The capture was released.');
+    this.settlePending(released);
+    this.cancelObservation(released);
     this.retained?.release();
   }
 
   invalidate(reason: InvalidationReason): void {
-    const had = this.pending !== null || this.retained !== null;
-    this.settlePending(new FrameCaptureError('invalidated', `The capture ended: ${reason}.`));
+    const had = this.pending !== null || this.retained !== null || this.observing !== null;
+    const ended = new FrameCaptureError('invalidated', `The capture ended: ${reason}.`);
+    this.settlePending(ended);
+    this.cancelObservation(ended);
     this.retained?.release();
     if (had) this.host.invalidated(reason);
   }
@@ -1570,7 +1742,11 @@ export class FrameInspector {
       store,
       (released) => {
         if (this.retained === released) this.retained = null;
+        if (this.observing?.snapshot === released) {
+          this.cancelObservation(new FrameCaptureError('released', 'The capture was released.'));
+        }
       },
+      session.takeFrozen(),
     );
     this.retained = snapshot;
     this.clearPending(pending);

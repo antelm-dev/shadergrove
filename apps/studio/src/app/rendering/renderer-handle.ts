@@ -8,6 +8,7 @@ import {
   type FrameSnapshot,
   type InvalidationReason,
 } from './render-inspection';
+import type { ObservationRequest, ObservationResult } from './render-observation';
 import type { ShaderEngine } from './shader-engine';
 import type { ProfilerSnapshot } from './performance-profiler';
 import { encodeThumbnail } from './thumbnail';
@@ -168,6 +169,24 @@ export class RendererHandle {
     }
     this.capturedFrame.set(snapshot);
     return snapshot;
+  }
+
+  /**
+   * One frozen GPU variable measurement against the retained capture of the active
+   * engine. A result is returned only while that capture is still the retained one.
+   */
+  async observePoint(
+    request: ObservationRequest,
+    options?: CaptureOptions,
+  ): Promise<ObservationResult> {
+    const engine = this.engine();
+    if (!engine) throw new FrameCaptureError('no-renderer', 'There is no active renderer.');
+    const frame = this.capturedFrame();
+    const result = await engine.observePoint(request, options);
+    if (!frame || frame.released || this.engine() !== engine || this.capturedFrame() !== frame) {
+      throw new FrameCaptureError('released', 'The capture ended before the result was published.');
+    }
+    return result;
   }
 
   releaseCapture(): void {

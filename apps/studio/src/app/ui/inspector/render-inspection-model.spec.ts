@@ -9,6 +9,7 @@ import {
   fragCoord,
   linearToSrgb,
   parseCoordinate,
+  parseVisit,
   pickTexel,
   stepTexel,
   stepZoom,
@@ -17,6 +18,16 @@ import {
 } from './render-inspection-model';
 
 const SIZE = { width: 8, height: 4 };
+
+describe('parseVisit', () => {
+  it('accepts whole visits from 1 to the maximum only', () => {
+    expect(parseVisit('1', 128)).toBe(1);
+    expect(parseVisit(' 128 ', 128)).toBe(128);
+    for (const bad of ['', '0', '129', '-1', '1.5', '1e2', '0x10', 'a', '١']) {
+      expect(parseVisit(bad, 128), bad).toBeNull();
+    }
+  });
+});
 
 describe('pickTexel', () => {
   it('maps the top-left screen corner to the top row, with y counted from the bottom', () => {
