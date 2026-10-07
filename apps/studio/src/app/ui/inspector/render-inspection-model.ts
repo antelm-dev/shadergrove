@@ -53,6 +53,14 @@ export function parseCoordinate(text: string, size: number): number | null {
   return Number.isSafeInteger(value) && value < size ? value : null;
 }
 
+/** A visit of a point: a whole number from 1 to `max`, written in digits only; anything else is refused, never clamped. */
+export function parseVisit(text: string, max: number): number | null {
+  const trimmed = text.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const value = Number(trimmed);
+  return Number.isSafeInteger(value) && value >= 1 && value <= max ? value : null;
+}
+
 /** One keyboard step, kept on the image: arrow keys move, the edge stops. */
 export function stepTexel(texel: Texel, dx: number, dy: number, size: TexelSize): Texel {
   return {

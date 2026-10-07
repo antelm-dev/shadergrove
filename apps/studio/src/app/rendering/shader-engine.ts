@@ -27,6 +27,7 @@ import {
   type FrameSource,
   type InvalidationReason,
 } from './render-inspection';
+import type { ObservationRequest, ObservationResult } from './render-observation';
 import {
   IMAGE_PASS_ID,
   POST_PASS_ID,
@@ -1212,6 +1213,33 @@ export class ShaderEngine {
   /** Releases the retained capture and cancels a pending one. Idempotent. */
   releaseCapture(): void {
     this.inspector?.release();
+  }
+
+  /**
+   * One frozen GPU variable measurement against the retained capture. At most one
+   * is pending; any release or invalidation of the capture cancels it. See `render-observation.ts`.
+   */
+  observePoint(
+    request: ObservationRequest,
+    options: CaptureOptions = {},
+  ): Promise<ObservationResult> {
+    if (!this.inspector || this.disposed || this.offline) {
+      return Promise.reject(
+        new FrameCaptureError('released', 'There is no retained capture to observe.'),
+      );
+    }
+    // The observer is only needed once someone measures a point, so it loads on demand and stays
+    // out of the initial bundle. The import runs inside the job, after the pending-observation slot
+    // is taken, so cancellation, the `observing` flag and the error mapping behave as before.
+    return this.inspector.observe(options, async (snapshot, signal) => {
+      const { observeFrozenPoint } = await import('./render-observation');
+      return observeFrozenPoint(this.context, snapshot, request, { signal });
+    });
+  }
+
+  /** Whether a point observation is pending. */
+  get observing(): boolean {
+    return this.inspector?.hasObservation ?? false;
   }
 
   private drawFrameWithPassSample(samplePassId: string | null, usesComposer: boolean): void {

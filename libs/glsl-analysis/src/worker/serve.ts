@@ -29,7 +29,8 @@ function isJob(value: unknown): value is AnalysisJob {
     typeof job.requestId === 'string' &&
     (job.stage === 'vertex' || job.stage === 'fragment') &&
     (job.version === 100 || job.version === 300) &&
-    typeof job.source === 'string'
+    typeof job.source === 'string' &&
+    (job.observe === undefined || typeof job.observe === 'boolean')
   );
 }
 

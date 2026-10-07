@@ -204,7 +204,10 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler', 'insp
         aria-labelledby="bottom-panel-tab-inspection"
         [hidden]="tab() !== 'inspection'"
       >
-        <app-render-inspection-panel />
+        <!-- Loaded right after first render so the inspector stays out of the initial bundle. -->
+        @defer (on immediate) {
+          <app-render-inspection-panel />
+        }
       </div>
     </div>
   `,

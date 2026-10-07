@@ -158,12 +158,13 @@ test('Grove Amber is installed, worn by the app and the editor, kept, and remove
     AMBER_DARK.menu,
   );
   // From the keyboard alone: back out to the Theme row, into the submenu again,
-  // past the official Light, Dark and System, onto the light variant.
+  // past the official Light, Dark and System, onto Grove Amber's pair, which lists
+  // its light variant first.
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menuitem', { name: /Theme$/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByTestId(`theme-option-${OFFICIAL_LIGHT}`)).toBeFocused();
-  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowDown');
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown');
   await expect(page.getByTestId(`theme-option-${LIGHT}`)).toBeFocused();
   await page.keyboard.press('Enter');
 

@@ -4,6 +4,7 @@ export interface GlslangModule {
   _free(pointer: number): void;
   _gla_init(): number;
   _gla_analyze(source: number, length: number, stage: number): number;
+  _gla_observe(source: number, length: number, stage: number): number;
   _gla_free(reply: number): void;
   _gla_heap_used(): number;
 }

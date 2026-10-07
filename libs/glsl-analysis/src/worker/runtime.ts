@@ -166,7 +166,11 @@ export async function createGlslangRuntime(
         const view = heap();
         view.set(bytes, source);
         view[source + bytes.length] = 0;
-        reply = module._gla_analyze(source, bytes.length, STAGE_CODE[job.stage]);
+        reply = (job.observe ? module._gla_observe : module._gla_analyze)(
+          source,
+          bytes.length,
+          STAGE_CODE[job.stage],
+        );
         if (!reply) throw new RuntimeFatalError('memory-limit', 'Could not allocate the reply');
         return interpretNativeReply(JSON.parse(readReply(reply)) as NativeReply, job);
       } catch (error) {
