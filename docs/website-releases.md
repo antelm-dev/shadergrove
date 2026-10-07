@@ -52,21 +52,29 @@ images are disabled by the website's Markdown renderer.
 ## Publication pipeline
 
 Every push to `develop` starts `.github/workflows/prerelease.yml`. The upcoming
-stable version is explicitly configured in `.github/beta-release.json` (initially
-`2.0.0`); the beta version is `<base>-beta.<workflow run number>`, for example
-`2.0.0-beta.42`. Rerunning a workflow keeps its original number. Versions are
+stable version is explicitly configured in `.github/beta-release.json` (currently
+`2.2.0`); the beta version is `<base>-beta.<workflow run number>`, for example
+`2.2.0-beta.42`. Rerunning a workflow keeps its original number. Versions are
 written to `package.json` and `APP_VERSION` only in the build checkout, without
-committing version bumps back to `develop`. Update the base to the next intended
-stable version when starting a new release cycle; it must be newer than the last
-published stable release. A new beta using an already published stable base is
-refused with an instruction to update the configuration.
+committing version bumps back to `develop`. A new beta's base must be strictly
+newer (by semver) than the highest published stable release, for automatic and
+manual versions alike; otherwise the workflow fails and asks for a new base. Drafts
+and prereleases do not count as published stable releases.
 
 Manual dispatch on `develop` can omit `version` to use automatic numbering or
 provide an explicit `-beta.N` version. To recover a failed draft, rerun the original
 workflow so its version and commit remain identical. A matching published beta is
-skipped; a draft is resumed only at its original commit. Reusing a beta version for
-another commit fails. Published betas use `prerelease=true`, `latest=false`, and
-the `beta` updater manifest.
+skipped; a draft is resumed only at its original commit, even if a stable release
+has since overtaken its base. A bare tag without a release gets no such exemption.
+Reusing a beta version for another commit fails. Published betas use
+`prerelease=true`, `latest=false`, and the `beta` updater manifest.
+
+Release decisions read the complete paginated release list (drafts are visible
+because the resolving job has `contents: write`). An unreadable page, a malformed
+entry, a published non-prerelease release whose tag is not `vX.Y.Z`, or more than
+10,000 releases stop the workflow rather than deciding on partial data. Several
+releases sharing the specific tag being looked up (the beta being resolved, or
+the stable predecessor) also stop it.
 
 Every push to `master` starts `.github/workflows/release.yml`. Release Please
 creates or updates its release PR from Conventional Commits. The workflow checks
@@ -79,6 +87,18 @@ draft/tag in the same run. This does not require GitHub's auto-merge setting or 
 personal token to trigger another workflow. Branch protection and required reviews
 still apply; the workflow does not bypass them. A failed pre-merge check leaves the
 PR open. Only release-worthy Conventional Commits produce a new release PR.
+
+Before merging, the workflow also requires the version committed on `master`
+(`.release-please-manifest.json` at the PR base) to be the newest published stable
+release. If that release is still a draft (for example, because a desktop build or
+asset verification failed), is missing, or a newer stable release already exists,
+the workflow fails and the release PR stays open. The check runs when the PR is
+selected and again, against the pinned base and a fresh release list, immediately
+before the merge. Publish the pending release with
+the recovery command below, then rerun the workflow. This is what stops a feature
+merge from promoting 2.1.0 while 2.0.0 still awaits recovery. The check relies on
+the desktop publisher only publishing after asset verification; it does not
+re-verify the assets of releases published by hand.
 
 Stable and beta workflows call `.github/workflows/desktop-release.yml` after validation
 of the exact commit. That workflow validates the draft and its target, builds all
@@ -98,6 +118,22 @@ gh workflow run release.yml --ref master -f tag=v2.0.0
 
 This validates and publishes the tagged commit; it does not create or merge a new
 release PR. No automatic workflow publishes assets when validation fails.
+
+Stable publication sets GitHub's Latest flag explicitly, never using GitHub's
+date-based default: `--latest=true` only when the release is newer (by semver)
+than every other published stable release, otherwise `--latest=false`. Recovering
+`v2.0.0` after `v2.1.0` was published therefore leaves `v2.1.0` as Latest. The
+flag is not re-evaluated afterwards; correct an already wrong designation by hand
+with `gh release edit <newest tag> --latest`.
+
+After each stable publication, synchronize the branches before the next cycle:
+
+1. Merge `master` into `develop`, so that `develop` carries the published version
+   in `package.json`, `APP_VERSION`, `.release-please-manifest.json` and
+   `CHANGELOG.md`. Never let an older manifest from `develop` overwrite `master`;
+   the pre-merge check above refuses to promote from a regressed manifest.
+2. Set `.github/beta-release.json` on `develop` to the next intended stable version
+   (strictly newer than the published release). Until then, new betas fail.
 
 Windows x64 remains enabled by default and retains installer identity and filenames.
 Linux and macOS are prepared but opt in through repository Actions variables:

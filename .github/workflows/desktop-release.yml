@@ -212,5 +212,7 @@ jobs:
           if [ "$CHANNEL" = beta ]; then
             gh release edit "$TAG" --draft=false --prerelease --latest=false
           else
-            gh release edit "$TAG" --draft=false
+            # Recovering an older draft must not take Latest from a newer stable release.
+            latest="$(node .github/scripts/releases.mjs latest "$TAG")"
+            gh release edit "$TAG" --draft=false --latest="$latest"
           fi
