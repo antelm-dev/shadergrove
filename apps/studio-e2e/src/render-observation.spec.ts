@@ -7,10 +7,12 @@ import {
   addBuffer,
   addFile,
   bufferPasses,
+  commonPass,
   createProject,
   imagePass,
   setChannelBinding,
   setFileSource,
+  setPassResolution,
   setPassSource,
   type ShaderProject,
 } from '@shadergrove/shared/project';
@@ -276,7 +278,21 @@ void main() {
   });
   await open(page, 'Observe feedback', project, 2);
 
-  // The control: with no observation, each captured frame advances the buffer by exactly one step.
+  // A paused preview still draws the frames it owes after a layout change, and opening the panel is
+  // one. Let those finish first, so that only captures advance the buffer from here on.
+  const panel = await openInspection(page);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).ng.getComponent(document.querySelector('app-shader-canvas')).engine()
+            .pendingFrames,
+      ),
+    )
+    .toBe(0);
+
+  // The control: with no observation, each live frame drawn advances the buffer by exactly one
+  // step. The frame index counts those frames, so a redraw the paused preview owes cannot skew it.
   const control = await page.evaluate(async () => {
     const engine = (window as any).ng
       .getComponent(document.querySelector('app-shader-canvas'))
@@ -284,20 +300,31 @@ void main() {
     const read = async () => {
       const snapshot = await engine.captureFrame();
       const value = snapshot.pixel(snapshot.passes[0].output.rawImageId, 0, 0)[0] as number;
+      const index = snapshot.frame.index as number;
       snapshot.release();
-      return value;
+      return { value, index };
     };
     const first = await read();
     return { first, second: await read() };
   });
-  expect(control.second - control.first).toBe(1.5);
+  expect(control.second.index).toBeGreaterThan(control.first.index);
+  const step =
+    (control.second.value - control.first.value) / (control.second.index - control.first.index);
+  expect(step).toBe(1.5);
 
-  const { panel, section } = await captureAndFind(page);
+  await panel.locator('.capture').click();
+  await expect(panel.locator('.badge').first()).toBeVisible();
+  const section = panel.locator('app-render-observation');
+  await section.locator('.find').click();
+  await expect(section.locator('.point-select')).toBeVisible();
   const before = await page.evaluate(() => {
     const snapshot = (window as any).ng
       .getComponent(document.querySelector('app-shader-canvas'))
       .engine().capturedFrame;
-    return snapshot.pixel(snapshot.passes[0].output.rawImageId, 0, 0)[0] as number;
+    return {
+      value: snapshot.pixel(snapshot.passes[0].output.rawImageId, 0, 0)[0] as number,
+      index: snapshot.frame.index as number,
+    };
   });
   // `seen` is in the Image pass (the second), and is twice the captured buffer value.
   await panel.locator('.pass-select').selectOption({ index: 1 });
@@ -305,7 +332,7 @@ void main() {
   await section.locator('.find').click();
   await choose(section, 'seen');
   await measure(section);
-  expect(await values(section)).toEqual([before * 2]);
+  expect(await values(section)).toEqual([before.value * 2]);
   await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
 
   await panel.locator('.release').click();
@@ -315,11 +342,14 @@ void main() {
       .engine();
     const snapshot = await engine.captureFrame();
     const value = snapshot.pixel(snapshot.passes[0].output.rawImageId, 0, 0)[0] as number;
+    const index = snapshot.frame.index as number;
     snapshot.release();
-    return value;
+    return { value, index };
   });
-  // Observing neither advanced, replaced nor re-ran the live buffer.
-  expect(after - before).toBe(control.second - control.first);
+  // Observing neither advanced, replaced nor re-ran the live buffer: it moved one step per live
+  // frame drawn, exactly as in the control.
+  expect(after.index).toBeGreaterThan(before.index);
+  expect(after.value - before.value).toBe(step * (after.index - before.index));
 });
 
 test('cancels when the capture is released or the panel is hidden, and starts no inactive work', async ({
@@ -367,6 +397,296 @@ test('refuses, rather than quantizes, on a GPU that cannot read floats back', as
   await section.locator('.measure').click();
   await expect(section.locator('.status')).toContainText('The measurement was refused');
   await expect(section.locator('.result')).toHaveCount(0);
+});
+
+test('measures the accepted program, not the broken draft, after a failed edit', async ({
+  page,
+}) => {
+  await open(page, 'Observe failed edit', single(), 1);
+  await page.locator('.monaco-editor').first().click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.insertText('\nvoid broken( {');
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const snapshot = await (window as any).ng
+          .getComponent(document.querySelector('app-shader-canvas'))
+          .engine()
+          .captureFrame();
+        const stale = snapshot.passes[0].accepted.stale as boolean;
+        snapshot.release();
+        return stale;
+      }),
+    )
+    .toBe(true);
+
+  const { panel, section } = await captureAndFind(page);
+  expect(
+    await page.evaluate(`${engineOf}.capturedFrame.passes[0].accepted.fragment.includes('broken')`),
+  ).toBe(false);
+  await pick(panel, 4, 4);
+  await choose(section, 'once');
+  await measure(section);
+  expect(await values(section)).toEqual([1]);
+  await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
+});
+
+/** Common includes outer.glsl, which includes inner.glsl: three documents plus the pass itself. */
+function documentsProject(): ShaderProject {
+  let project = addFile(addFile(single(), 'outer.glsl'), 'inner.glsl');
+  const [outer, inner] = project.files;
+  project = setFileSource(
+    project,
+    inner.id,
+    'float fromInner(float x) {\n  float inInner = x * 2.0;\n  return inInner;\n}\n',
+  );
+  project = setFileSource(
+    project,
+    outer.id,
+    '#include "inner.glsl"\nfloat fromOuter(float x) {\n  float inOuter = fromInner(x) + 1.0;\n  return inOuter;\n}\n',
+  );
+  project = setPassSource(
+    project,
+    commonPass(project)!.id,
+    '#include "outer.glsl"\n#define GAIN 3.0\nfloat fromCommon(float x) {\n  float inCommon = fromOuter(x) + 3.0;\n  return inCommon;\n}\n',
+  );
+  return setPassSource(
+    project,
+    imagePass(project).id,
+    `precision highp float;
+uniform vec2 iResolution;
+void main() {
+  float viaImage = fromCommon(iResolution.x);
+  float gained = GAIN * 2.0;
+  float level = 2.0;
+  {
+    float level = 9.0;
+    viaImage += level;
+  }
+  gl_FragColor = vec4((viaImage + gained + level) * 0.0001, 0.0, 0.0, 1.0);
+}`,
+  );
+}
+
+test('maps points in the pass, Common and nested includes, and does not offer a macro-rewritten line', async ({
+  page,
+}) => {
+  await open(page, 'Observe documents', documentsProject(), 1);
+  const { panel, section } = await captureAndFind(page);
+  await pick(panel, 1, 1);
+  const { width } = await drawingBuffer(page);
+  // `gained` sits on a line a #define rewrote: refused at the caller, never offered or measured.
+  await expect(section.locator('.point-select option', { hasText: /^\s*gained ·/ })).toHaveCount(0);
+  await expect(section.locator('.status')).toContainText('candidate(s) not offered');
+
+  const expected: Record<string, { place: string; value: number }> = {
+    inInner: { place: 'inner.glsl:2:9', value: width * 2 },
+    inOuter: { place: 'outer.glsl:3:9', value: width * 2 + 1 },
+    inCommon: { place: 'Common:4:9', value: width * 2 + 4 },
+    viaImage: { place: 'Image:4:9', value: width * 2 + 4 },
+  };
+  for (const [name, { place, value }] of Object.entries(expected)) {
+    await choose(section, name);
+    await measure(section);
+    await expect(section.locator('.source-identity')).toHaveText(place);
+    expect(await values(section)).toEqual([value]);
+    await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
+  }
+});
+
+test('offers a shadowing variable only at its own place, with its own value', async ({ page }) => {
+  await open(page, 'Observe shadowing', documentsProject(), 1);
+  const { panel, section } = await captureAndFind(page);
+  await pick(panel, 1, 1);
+  const options = section.locator('.point-select option', { hasText: /^\s*level ·/ });
+  // Either both declarations are refused or each is measured as itself; never one as the other.
+  const offered = await options.count();
+  expect([0, 2]).toContain(offered);
+  for (let index = 0; index < offered; index++) {
+    const option = options.nth(index);
+    const place = /(Image:\d+:\d+)/.exec((await option.textContent()) ?? '')![1];
+    await section.locator('.point-select').selectOption((await option.getAttribute('value'))!);
+    await measure(section);
+    await expect(section.locator('.source-identity')).toHaveText(place);
+    expect(await values(section)).toEqual([place === 'Image:6:9' ? 2 : 9]);
+  }
+});
+
+test('observes a scaled pass at its own pixel coordinates from the frozen current and previous inputs', async ({
+  page,
+}) => {
+  let project = addBuffer(addBuffer(single()));
+  const [a, b] = bufferPasses(project);
+  project = setPassSource(
+    project,
+    a.id,
+    `precision highp float;
+uniform vec2 iResolution;
+uniform sampler2D iChannel0;
+void main() {
+  vec4 previous = texture(iChannel0, gl_FragCoord.xy / iResolution.xy);
+  gl_FragColor = vec4(previous.r + 1.5, 0.0, 0.0, 1.0);
+}`,
+  );
+  project = setPassSource(
+    project,
+    b.id,
+    `precision highp float;
+uniform vec2 iResolution;
+uniform sampler2D iChannel0;
+uniform sampler2D iChannel1;
+void main() {
+  vec2 uv = gl_FragCoord.xy / iResolution.xy;
+  vec3 probe = vec3(gl_FragCoord.x, texture(iChannel0, uv).r, texture(iChannel1, uv).r);
+  gl_FragColor = vec4(probe.x, probe.y, probe.z + 1.0, 1.0);
+}`,
+  );
+  project = setChannelBinding(project, a.id, 0, { kind: 'buffer', passId: a.id, feedback: true });
+  project = setChannelBinding(project, b.id, 0, { kind: 'buffer', passId: a.id, feedback: false });
+  project = setChannelBinding(project, b.id, 1, { kind: 'buffer', passId: b.id, feedback: true });
+  project = setPassResolution(project, b.id, { mode: 'scaled', scale: 0.5 });
+  await open(page, 'Observe scaled', project, 3);
+
+  const { panel, section } = await captureAndFind(page);
+  // Passes run A, B, Image: B is the second.
+  await panel.locator('.pass-select').selectOption({ index: 1 });
+  const frozen = await page.evaluate(() => {
+    const snapshot = (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine().capturedFrame;
+    const pass = snapshot.passes[1];
+    const size = snapshot.image(pass.output.rawImageId) as { width: number; height: number };
+    return {
+      size,
+      current: snapshot.pixel(pass.inputs[0].imageId, 0, 0)[0] as number,
+    };
+  });
+  const frozenPrevious = (x: number, y: number) =>
+    page.evaluate(
+      ([px, py]) => {
+        const snapshot = (window as any).ng
+          .getComponent(document.querySelector('app-shader-canvas'))
+          .engine().capturedFrame;
+        return snapshot.pixel(snapshot.passes[1].inputs[1].imageId, px, py)[0] as number;
+      },
+      [x, y],
+    );
+  const full = await drawingBuffer(page);
+  expect(frozen.size.width).toBe(Math.floor(full.width * 0.5));
+  await section.locator('.find').click();
+  await choose(section, 'probe');
+
+  for (const [x, y] of [
+    [3, 2],
+    [frozen.size.width - 1, frozen.size.height - 1],
+  ]) {
+    await pick(panel, x, y);
+    await measure(section);
+    // gl_FragCoord is the scaled target's own centre; the inputs are the captured frame's, not live ones.
+    expect(await values(section)).toEqual([x + 0.5, frozen.current, await frozenPrevious(x, y)]);
+    await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
+  }
+});
+
+test('does not trust a value when the preserved output differs numerically from its reference', async ({
+  page,
+}) => {
+  await open(page, 'Observe mismatch', single(), 1);
+  const { panel, section } = await captureAndFind(page);
+  await pick(panel, 4, 4);
+  await choose(section, 'once');
+  // Corrupt the frozen reference with a finite offset; the real instrumented draw is unchanged.
+  await page.evaluate(() => {
+    const snapshot = (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine().capturedFrame;
+    const read = snapshot.read.bind(snapshot);
+    snapshot.read = (id: string, region: unknown) => {
+      const out = read(id, region);
+      return { ...out, data: out.data.map((value: number) => value + 0.5) };
+    };
+  });
+  await measure(section);
+  expect(await values(section)).toEqual([1]);
+  await expect(section.locator('.label .badge').nth(1)).toHaveText('Not verified');
+  await expect(section.locator('.fidelity')).toContainText('Do not trust');
+  await expect(section.locator('.fidelity')).toContainText('texel(s) differently');
+  await expect(section.locator('.result')).toHaveClass(/distrusted/);
+});
+
+/**
+ * A buffer side whose capture fits in 128 MiB on its own. The Image pass then reads that buffer
+ * through four channels, so the observer's float target, input textures and band readbacks
+ * together push the combined footprint over the limit.
+ */
+const BUDGET_SIDE = 1560;
+
+test('refuses an observation that would exceed the combined capture and observer budget, and cleans up', async ({
+  page,
+}) => {
+  let project = addBuffer(single());
+  const [a] = bufferPasses(project);
+  project = setPassSource(
+    project,
+    a.id,
+    `precision highp float;
+void main() {
+  gl_FragColor = vec4(gl_FragCoord.xy * 0.001, 0.5, 1.0);
+}`,
+  );
+  project = setPassResolution(project, a.id, {
+    mode: 'fixed',
+    width: BUDGET_SIDE,
+    height: BUDGET_SIDE,
+  });
+  const image = imagePass(project);
+  project = setPassSource(
+    project,
+    image.id,
+    `precision highp float;
+uniform sampler2D iChannel0;
+uniform sampler2D iChannel1;
+uniform sampler2D iChannel2;
+uniform sampler2D iChannel3;
+void main() {
+  vec2 uv = gl_FragCoord.xy / vec2(1280.0, 720.0);
+  vec4 blend = texture(iChannel0, uv) + texture(iChannel1, uv) + texture(iChannel2, uv) + texture(iChannel3, uv);
+  gl_FragColor = vec4(blend.rgb * 0.25, 1.0);
+}`,
+  );
+  for (const slot of [0, 1, 2, 3] as const) {
+    project = setChannelBinding(project, image.id, slot, {
+      kind: 'buffer',
+      passId: a.id,
+      feedback: false,
+    });
+  }
+  await open(page, 'Observe budget', project, 2);
+
+  const { panel, section } = await captureAndFind(page);
+  // The capture fit the budget on its own; the observer does not fit beside it.
+  const retained = (await page.evaluate(`${engineOf}.capturedFrame.bytes`)) as number;
+  expect(retained).toBeLessThanOrEqual(128 * 1024 * 1024);
+  await pick(panel, 5, 5);
+  await choose(section, 'blend');
+  const memory = () =>
+    page.evaluate(() => {
+      const info = (window as any).ng
+        .getComponent(document.querySelector('app-shader-canvas'))
+        .engine().context.renderer.info.memory;
+      return { textures: info.textures as number, geometries: info.geometries as number };
+    });
+  const before = await memory();
+  await section.locator('.visit').fill('1');
+  await section.locator('.measure').click();
+  await expect(section.locator('.status')).toContainText('The measurement was refused');
+  await expect(section.locator('.status')).toContainText('downsampl');
+  await expect(section.locator('.result')).toHaveCount(0);
+  await expect(section.locator('.measure')).toBeVisible();
+  expect(await page.evaluate(`${engineOf}.observing`)).toBe(false);
+  expect(await memory()).toEqual(before);
+  // The capture itself is untouched and still measurable on a pass that fits.
+  expect(await page.evaluate(`${engineOf}.capturedFrame !== null`)).toBe(true);
 });
 
 test('ends the measurement when the drawing buffer is resized', async ({ page }) => {

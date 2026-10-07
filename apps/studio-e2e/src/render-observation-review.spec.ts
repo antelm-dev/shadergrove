@@ -115,6 +115,101 @@ void main() {
   await expect(section.locator('.result')).toHaveCount(0);
 });
 
+/**
+ * Holds publication of the next real measurement after its GPU work has finished, and can make
+ * it fail late instead; the measurement itself is never replaced by a stub value.
+ */
+async function holdNextPublication(page: Page, failLate = false) {
+  await page.evaluate((fail) => {
+    const engine = (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine();
+    const original = engine.observePoint.bind(engine);
+    (window as any).reviewObservationReady = false;
+    engine.observePoint = async (...args: any[]) => {
+      engine.observePoint = original;
+      const result = await original(...args);
+      (window as any).reviewObservationReady = true;
+      await new Promise<void>((resolve) => ((window as any).reviewObservationFinish = resolve));
+      if (fail) throw new Error('late failure after supersession');
+      return result;
+    };
+  }, failLate);
+}
+
+const releaseHeld = (page: Page) => page.evaluate(() => (window as any).reviewObservationFinish());
+const heldReady = (page: Page) => page.evaluate(() => (window as any).reviewObservationReady);
+
+const LOOP = `precision highp float;
+void main() {
+  float acc = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float inc = float(i) * 0.5;
+    acc += inc;
+  }
+  gl_FragColor = vec4(acc * 0.1, 0.0, 0.0, 1.0);
+}`;
+
+test('changing the visit or the pixel while a measurement finishes cannot publish its old result', async ({
+  page,
+}) => {
+  const { panel, section } = await open(page, 'Review visit and pixel supersession', LOOP);
+  await choose(section, 'inc');
+  for (const change of [
+    () => section.locator('.visit').fill('3'),
+    async () => {
+      await panel.locator('.pixel-x').fill('3');
+      await panel.locator('.pixel-x').dispatchEvent('change');
+    },
+  ]) {
+    await holdNextPublication(page);
+    await section.locator('.measure').click();
+    await expect.poll(() => heldReady(page)).toBe(true);
+    await change();
+    await releaseHeld(page);
+    await expect(section.locator('.cancel-measure')).toHaveCount(0);
+    await expect(section.locator('.result')).toHaveCount(0);
+    await expect(section.locator('.status')).toHaveText('');
+  }
+  // The next measurement is the current selection, published with its own place and values.
+  await section.locator('.measure').click();
+  await expect(section.locator('.result')).toBeVisible();
+  await expect(section.locator('.facts')).toContainText('visit 3, pixel 3, 2');
+  expect(await section.locator('.raw-value').allTextContents()).toEqual(['1']);
+});
+
+test('a late failure of a superseded measurement writes neither an error nor an old result', async ({
+  page,
+}) => {
+  const { section } = await open(
+    page,
+    'Review late failure supersession',
+    `precision highp float;
+void main() {
+  float first = 3.0;
+  vec3 second = vec3(7.0, 8.0, 9.0);
+  gl_FragColor = vec4(first * 0.1, second.y * 0.01, 0.0, 1.0);
+}`,
+  );
+  await choose(section, 'first');
+  await holdNextPublication(page, true);
+  await section.locator('.measure').click();
+  await expect.poll(() => heldReady(page)).toBe(true);
+  await choose(section, 'second');
+  await releaseHeld(page);
+  await expect(section.locator('.cancel-measure')).toHaveCount(0);
+  await expect(section.locator('.status')).toHaveText('');
+  await expect(section.locator('.result')).toHaveCount(0);
+
+  // The slot was not left owned by the old run, and the new result carries its own point's place.
+  await section.locator('.measure').click();
+  await expect(section.locator('.result')).toBeVisible();
+  expect(await section.locator('.raw-value').allTextContents()).toEqual(['7', '8', '9']);
+  const option = section.locator('.point-select option:checked');
+  const place = /(Image:\d+:\d+)/.exec((await option.textContent()) ?? '')![1];
+  await expect(section.locator('.source-identity')).toHaveText(place);
+});
+
 test('a skipped nonfinite output comparison must stay unverified instead of certifying output', async ({
   page,
 }) => {
