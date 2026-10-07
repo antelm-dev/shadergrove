@@ -168,13 +168,23 @@ const GENERATED_FUNCTIONS: Readonly<
 /** Whether `symbol` is a function three.js's prefix defines for `stage`. */
 export function isGeneratedFunction(
   stage: GlslStage,
-  symbol: { readonly name: string; readonly parameters: readonly { type: { base: string } }[] },
+  symbol: {
+    readonly name: string;
+    readonly parameters: readonly {
+      type: { base: string; arraySizes: readonly (number | null)[] };
+    }[];
+  },
 ): boolean {
   const known = GENERATED_FUNCTIONS[stage][symbol.name];
   return (
     !!known &&
     known.length === symbol.parameters.length &&
-    known.every((base, index) => symbol.parameters[index].type.base === base)
+    // Every generated helper parameter is a plain scalar/vector, never an array.
+    known.every(
+      (base, index) =>
+        symbol.parameters[index].type.base === base &&
+        symbol.parameters[index].type.arraySizes.length === 0,
+    )
   );
 }
 
