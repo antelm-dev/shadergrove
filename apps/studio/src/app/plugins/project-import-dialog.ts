@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -276,6 +276,10 @@ export class ProjectImportDialog {
     )
       .pipe(takeUntilDestroyed())
       .subscribe(() => this.requestClose());
+    // Closed from outside (browser Back, closeAll): nobody can see or cancel the run any more.
+    inject(DestroyRef).onDestroy(() => {
+      if (this.working()) this.projects.cancel();
+    });
   }
 
   protected fieldValue(field: ProviderField): string {

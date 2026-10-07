@@ -395,4 +395,36 @@ describe('ProjectImportDialog', () => {
     expect(close).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledWith({ toEditor: false });
   });
+
+  describe('when destroyed', () => {
+    async function openWithKey(): Promise<ComponentFixture<ProjectImportDialog>> {
+      const installations = configure();
+      await settle();
+      const id = await install(installations, packageText(SHADERTOY));
+      const fixture = await open(installations, id);
+      await type(fixture, 'import-field-idOrUrl', 'ParFix');
+      return fixture;
+    }
+
+    it('cancels its own pending run once', async () => {
+      const fixture = await openWithKey();
+      runImport.mockReturnValue(deferred<ProjectActionOutcome>().promise);
+      await click(fixture, 'import-run');
+      fixture.destroy();
+      expect(cancel).toHaveBeenCalledOnce();
+    });
+
+    it('cancels nothing while idle', async () => {
+      const fixture = await openWithKey();
+      fixture.destroy();
+      expect(cancel).not.toHaveBeenCalled();
+    });
+
+    it('cancels nothing while another action is running', async () => {
+      const fixture = await openWithKey();
+      running.set({ pluginId: 'other', contributionId: 'export', step: 'writing' });
+      fixture.destroy();
+      expect(cancel).not.toHaveBeenCalled();
+    });
+  });
 });
