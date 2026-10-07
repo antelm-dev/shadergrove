@@ -3,6 +3,9 @@ import { resolve } from 'node:path';
 
 import { expect, test } from './fixtures';
 
+// The language journey spans a reload and a catalogue update: same budget as the other plugin workflows.
+test.describe.configure({ timeout: 300_000 });
+
 const FRENCH = 'dev.shadergrove.language-fr';
 // Exact shipped bytes from task02's immutable launch base, before inspection keys.
 const OLD_FRENCH = readFileSync(
