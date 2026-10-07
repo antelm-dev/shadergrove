@@ -39,6 +39,7 @@ import { EditorNavigation, type EditorLocationRequest } from '../../editor/edito
 import { CodeEditor, type EditorDoc } from '../../editor/code-editor';
 import { EditorSettings } from '../../editor/editor-settings';
 import { DocumentStatus } from './document-status';
+import { ControlsBuilder } from './controls-builder';
 import { EditorPanel } from './editor-panel';
 import { EditorTabs } from './editor-tabs';
 import { EditorWindowControls } from './editor-window-controls';
@@ -65,6 +66,13 @@ class CodeEditorStub {
   layoutCalls = 0;
   focusCalls = 0;
   revealCalls: Array<[string, number]> = [];
+  applied: Array<{ id: string; value: string }> = [];
+  applyResult = true;
+
+  applyEdit(id: string, value: string): boolean {
+    this.applied.push({ id, value });
+    return this.applyResult;
+  }
 
   layout(): void {
     this.layoutCalls += 1;
@@ -79,6 +87,25 @@ class CodeEditorStub {
   }
 
   async format(): Promise<void> {}
+}
+
+@Component({
+  selector: 'app-controls-builder',
+  standalone: true,
+  template: '',
+})
+class ControlsBuilderStub {
+  readonly commit = output<string>();
+  readonly repair = output<void>();
+
+  /** What `guard` should do with the action: run it now, or hold it as a pending form would. */
+  held: Array<() => void> = [];
+  holding = false;
+
+  guard(action: () => void): void {
+    if (this.holding) this.held.push(action);
+    else action();
+  }
 }
 
 @Component({
@@ -181,6 +208,7 @@ class FakeStore implements Partial<ShaderStore> {
   readonly dirty = signal(false) as ShaderStore['dirty'];
   readonly saving = signal(false) as ShaderStore['saving'];
   readonly draft = signal({}) as unknown as ShaderStore['draft'];
+  readonly configValid = signal(true);
   readonly compiling = signal<ReadonlySet<string>>(new Set()) as ShaderStore['compiling'];
   readonly canAddBuffer = signal(true) as unknown as ShaderStore['canAddBuffer'];
   readonly renderOrder = computed(() => this.renderOrderState()) as ShaderStore['renderOrder'];
@@ -203,7 +231,7 @@ class FakeStore implements Partial<ShaderStore> {
     return 0;
   }
 
-  setDocSource(): void {}
+  readonly setDocSource = vi.fn();
 
   setProject(project: ShaderProject | null): void {
     this.projectState.set(project);
@@ -248,6 +276,7 @@ describe('EditorPanel file explorer integration', () => {
   let navigation: ReturnType<typeof signal<EditorLocationRequest | null>>;
 
   beforeEach(() => {
+    navigation = signal<EditorLocationRequest | null>(null);
     resizeObserverCallback = null;
     requestAnimationFrameSpy = vi.fn((callback: FrameRequestCallback) => {
       callback(0);
@@ -281,10 +310,16 @@ describe('EditorPanel file explorer integration', () => {
     TestBed.resetTestingModule();
     TestBed.overrideComponent(EditorPanel, {
       remove: {
-        imports: [CodeEditor, EditorTabs, EditorWindowControls, PassConfigPanel],
+        imports: [CodeEditor, ControlsBuilder, EditorTabs, EditorWindowControls, PassConfigPanel],
       },
       add: {
-        imports: [CodeEditorStub, EditorTabsStub, EditorWindowControlsStub, PassConfigPanelStub],
+        imports: [
+          CodeEditorStub,
+          ControlsBuilderStub,
+          EditorTabsStub,
+          EditorWindowControlsStub,
+          PassConfigPanelStub,
+        ],
       },
     });
     TestBed.configureTestingModule({
@@ -552,6 +587,138 @@ describe('EditorPanel file explorer integration', () => {
       other.componentRef.setInput('surfaceId', editorSurfaceId(second));
       other.detectChanges();
       expect(controls.surfaceId()).toBe(editorSurfaceId(second));
+    });
+  });
+
+  describe('Config views', () => {
+    function builder(fixture: ReturnType<typeof mount>): ControlsBuilderStub {
+      return fixture.debugElement.query(By.directive(ControlsBuilderStub))
+        .componentInstance as ControlsBuilderStub;
+    }
+
+    function openConfig(fixture: ReturnType<typeof mount>): void {
+      store.selectDoc('@config');
+      fixture.detectChanges();
+    }
+
+    function editorHost(fixture: ReturnType<typeof mount>): HTMLElement {
+      return fixture.nativeElement.querySelector('app-code-editor') as HTMLElement;
+    }
+
+    function builderHost(fixture: ReturnType<typeof mount>): HTMLElement {
+      return fixture.nativeElement.querySelector('app-controls-builder') as HTMLElement;
+    }
+
+    it('shows the builder for a valid Config and keeps the editor alive behind it', () => {
+      const fixture = mount();
+      expect(fixture.nativeElement.querySelector('.view-bar')).toBeNull();
+
+      openConfig(fixture);
+
+      expect(fixture.nativeElement.querySelector('.view-bar')).not.toBeNull();
+      expect(builderHost(fixture).hidden).toBe(false);
+      expect(editorHost(fixture).hidden).toBe(true);
+      expect(codeEditor(fixture)).toBeDefined();
+    });
+
+    it('toggles to the JSON without rebuilding either view', () => {
+      const fixture = mount();
+      openConfig(fixture);
+      const editor = codeEditor(fixture);
+      const view = builder(fixture);
+
+      (fixture.nativeElement.querySelector('.view-json') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(editorHost(fixture).hidden).toBe(false);
+      expect(builderHost(fixture).hidden).toBe(true);
+      expect(codeEditor(fixture)).toBe(editor);
+      expect(builder(fixture)).toBe(view);
+    });
+
+    it('does not leave the builder while it holds an unapplied form', () => {
+      const fixture = mount();
+      openConfig(fixture);
+      const view = builder(fixture);
+      view.holding = true;
+
+      (fixture.nativeElement.querySelector('.view-json') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(builderHost(fixture).hidden).toBe(false);
+
+      view.held[0]();
+      fixture.detectChanges();
+      expect(builderHost(fixture).hidden).toBe(true);
+    });
+
+    it('opens an invalid Config in JSON and a newly selected valid one in the builder', () => {
+      store.configValid.set(false);
+      const fixture = mount();
+      openConfig(fixture);
+      expect(editorHost(fixture).hidden).toBe(false);
+      expect(builderHost(fixture).hidden).toBe(true);
+    });
+
+    it('opens JSON for a source line and the builder for a plain visit', () => {
+      const fixture = mount();
+      openConfig(fixture);
+      const component = fixture.componentInstance;
+      const request = (line: number): EditorLocationRequest => ({
+        docId: '@config',
+        line,
+        requestId: line + 1,
+      });
+
+      navigation.set(request(4));
+      fixture.detectChanges();
+      expect(component['configView']()).toBe('json');
+
+      navigation.set(request(0));
+      fixture.detectChanges();
+      expect(component['configView']()).toBe('builder');
+      expect(store.activeDoc()?.id).toBe('@config');
+    });
+
+    it('opens JSON on any visit to a Config the builder cannot read', () => {
+      const fixture = mount();
+      openConfig(fixture);
+      store.configValid.set(false);
+
+      navigation.set({ docId: '@config', line: 0, requestId: 1 });
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance['configView']()).toBe('json');
+    });
+
+    it('writes a builder commit through the Config model so it can be undone', () => {
+      const fixture = mount();
+      openConfig(fixture);
+
+      builder(fixture).commit.emit('[1]');
+
+      expect(codeEditor(fixture).applied).toEqual([{ id: '@config', value: '[1]' }]);
+      expect(store.setDocSource).not.toHaveBeenCalled();
+    });
+
+    it('writes the store directly when there is no Config model yet', () => {
+      const fixture = mount();
+      openConfig(fixture);
+      codeEditor(fixture).applyResult = false;
+
+      builder(fixture).commit.emit('[2]');
+
+      expect(store.setDocSource).toHaveBeenCalledOnce();
+      expect(store.setDocSource).toHaveBeenCalledWith('@config', '[2]');
+    });
+
+    it('scopes the Config document to the shader that owns it', () => {
+      const fixture = mount();
+      openConfig(fixture);
+
+      expect(codeEditor(fixture).doc().scope).toBe('waves');
+      store.selectDoc(store.documents()[0].id);
+      fixture.detectChanges();
+      expect(codeEditor(fixture).doc().scope).toBeUndefined();
     });
   });
 });
