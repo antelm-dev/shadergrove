@@ -35,6 +35,25 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
 
 COPY . .
 
+# Staging sets the Dokploy build arg VERSION_REF=develop so the About dialog shows
+# what is deployed (2.2.0-beta.15-1-g7593d1a) rather than the last stable version
+# committed in package.json. The build context has no Git history, so fetch the
+# ref's commits (no file contents) and `git describe` them. CI and local builds
+# leave it unset. ponytail: describes the ref's tip at build time, which can be a
+# newer push than the cloned source; pass the exact commit if that ever matters.
+ARG VERSION_REF
+RUN if [ -n "$VERSION_REF" ]; then \
+      git clone --quiet --bare --filter=tree:0 --single-branch --branch "$VERSION_REF" \
+        https://github.com/antelm-dev/shadergrove.git /tmp/history \
+      && version=$(git -C /tmp/history describe --tags --match 'v[0-9]*' "$VERSION_REF") \
+      && version=${version#v} \
+      && rm -rf /tmp/history \
+      && npm pkg set version="$version" \
+      && sed -i -E "s|'[^']*'(; // x-release-please-version)|'$version'\1|" libs/shared/src/version.ts \
+      && grep -q "'$version'; // x-release-please-version" libs/shared/src/version.ts \
+      && echo "Building $version"; \
+    fi
+
 # The web declarations consume the generated, typed Electron IPC contract even
 # though the runtime image does not contain Electron. Generate it in the build
 # stage, then produce the SSR bundle (which keeps `pg` and Swagger external; see

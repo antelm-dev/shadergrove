@@ -1,6 +1,8 @@
 # Stable installer identity so Shadergrove upgrades existing Shader Studio installations.
 appId: com.adelterki.shaderstudio
 productName: Shadergrove
+# Same mark as the website favicon (groveSvg, grove palette, 3 × 3), rendered at 1024 px.
+icon: apps/studio/icons/icon.png
 directories:
   output: release
   buildResources: public
