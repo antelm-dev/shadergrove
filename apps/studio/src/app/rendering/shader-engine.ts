@@ -27,11 +27,7 @@ import {
   type FrameSource,
   type InvalidationReason,
 } from './render-inspection';
-import {
-  observeFrozenPoint,
-  type ObservationRequest,
-  type ObservationResult,
-} from './render-observation';
+import type { ObservationRequest, ObservationResult } from './render-observation';
 import {
   IMAGE_PASS_ID,
   POST_PASS_ID,
@@ -1232,9 +1228,13 @@ export class ShaderEngine {
         new FrameCaptureError('released', 'There is no retained capture to observe.'),
       );
     }
-    return this.inspector.observe(options, (snapshot, signal) =>
-      observeFrozenPoint(this.context, snapshot, request, { signal }),
-    );
+    // The observer is only needed once someone measures a point, so it loads on demand and stays
+    // out of the initial bundle. The import runs inside the job, after the pending-observation slot
+    // is taken, so cancellation, the `observing` flag and the error mapping behave as before.
+    return this.inspector.observe(options, async (snapshot, signal) => {
+      const { observeFrozenPoint } = await import('./render-observation');
+      return observeFrozenPoint(this.context, snapshot, request, { signal });
+    });
   }
 
   /** Whether a point observation is pending. */
