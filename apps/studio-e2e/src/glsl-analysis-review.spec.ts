@@ -1,4 +1,6 @@
 /// <reference lib="dom" />
+// The page's Angular debug API (`window.ng`) and Monaco are untyped here.
+/* oxlint-disable typescript/no-explicit-any */
 import type { Page } from '@playwright/test';
 import { createProject, DEFAULT_VERTEX } from '@shadergrove/shared/project';
 import { expect, test } from './fixtures';
