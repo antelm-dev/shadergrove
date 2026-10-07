@@ -306,6 +306,48 @@ test('Shadertoy Import keeps the open draft: a declined replacement and a cancel
   expect(await shaderNames(page)).toEqual(before);
 });
 
+test('Shadertoy Import: leaving with browser Back while a fetch runs cancels it and imports nothing', async ({
+  page,
+}) => {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((done) => (release = done));
+  let answered = false;
+  await page.route('**/api/import/shadertoy/source', async (route) => {
+    await gate;
+    await route
+      .fulfill({ json: { sourceId: 'BackNav', source: fixture } })
+      .catch(() => undefined);
+    answered = true;
+  });
+  await openStudio(page);
+  await openPlugins(page);
+  if (await page.getByTestId(`install-available-${SHADERTOY}`).isVisible()) {
+    await installAvailable(page, SHADERTOY);
+  }
+  const toggle = page.getByTestId(`plugin-enable-${SHADERTOY}`).getByRole('switch');
+  if (!(await toggle.isChecked())) await setEnabled(page, SHADERTOY, true);
+  await backToEditor(page);
+  const before = await shaderNames(page);
+
+  const dialog = page.getByRole('dialog', { name: /Import from Shadertoy/ });
+  await menuItem(page, /Import from Shadertoy/);
+  await dialog.getByTestId('import-mode-provider').check();
+  await dialog.getByTestId('import-field-idOrUrl').fill('BackNav');
+  await dialog.getByTestId('import-field-apiKey').fill('e2e-key');
+  await dialog.getByTestId('import-run').click();
+  await expect(dialog.getByTestId('import-step')).toBeVisible();
+
+  // Browser Back closes every open dialog (MatDialog closeOnNavigation). Closing the
+  // dialog while it runs must cancel that run (AC-IMPORT-LIFECYCLE), as Cancel does.
+  await page.goBack();
+  await expect(dialog).toHaveCount(0);
+  release();
+  await expect.poll(() => answered).toBe(true);
+  // Give an un-cancelled run time to convert, adopt and save.
+  await page.waitForTimeout(5_000);
+  expect(await shaderNames(page)).toEqual(before);
+});
+
 test('Wallpaper Engine Export: offered only while on, exports the open draft as a ZIP', async ({
   page,
 }) => {
