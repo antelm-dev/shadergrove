@@ -19,6 +19,15 @@ import { PostProcessing } from './engine/post-processing';
 import { CHANNEL_COUNT, TextureManager, type ChannelSource } from './engine/texture-manager';
 import { UniformRegistry } from './engine/uniform-registry';
 import {
+  CaptureSession,
+  FrameCaptureError,
+  FrameInspector,
+  type CaptureOptions,
+  type FrameSnapshot,
+  type FrameSource,
+  type InvalidationReason,
+} from './render-inspection';
+import {
   IMAGE_PASS_ID,
   POST_PASS_ID,
   PerformanceProfiler,
@@ -168,6 +177,18 @@ export class ShaderEngine {
   private lastPointerTime = 0;
 
   private disposed = false;
+
+  /** Created by the first capture request; `null` means a frame costs nothing extra. */
+  private inspector: FrameInspector | null = null;
+  private framesDrawn = 0;
+  private projectId: string | null = null;
+  private projectGeneration = 0;
+  private contextGeneration = 0;
+  private requestedRevision: number | null = null;
+  private bufferSize = '';
+
+  /** Fired when a pending or retained frame capture ends without the caller asking. */
+  onCaptureInvalidated: ((reason: InvalidationReason) => void) | null = null;
 
   private readonly unsubscribe: (() => void)[] = [];
 
@@ -344,6 +365,17 @@ export class ShaderEngine {
    */
   setPasses(spec: MultiPassSpec, force = false): CompileDiagnostic[] {
     if (this.disposed) return [];
+
+    // A different project is a different subject: whatever was captured of the
+    // last one no longer describes anything on screen. A failed edit of the same
+    // project does not end a capture — its accepted programs are what it holds.
+    const projectId = spec.projectId ?? null;
+    if (projectId !== this.projectId) {
+      this.projectId = projectId;
+      this.projectGeneration++;
+      this.inspector?.invalidate('project');
+    }
+    this.requestedRevision = spec.revision ?? null;
 
     // Track requested project pass IDs for compile records (real IDs, not timing synthetics).
     this.profiler.setRequestedPasses(spec.passes.map((pass) => pass.id));
@@ -704,6 +736,12 @@ export class ShaderEngine {
       }
     }
 
+    const bufferSize = `${Math.floor(width * scale)}x${Math.floor(height * scale)}`;
+    if (bufferSize !== this.bufferSize) {
+      this.bufferSize = bufferSize;
+      this.inspector?.invalidate('resize');
+    }
+
     this.renderer.setPixelRatio(scale);
     // `false`: never touch the CSS size. On screen that keeps the canvas filling
     // its panel; during a capture it is what lets a 4K buffer sit behind an
@@ -765,6 +803,7 @@ export class ShaderEngine {
 
     cancelAnimationFrame(this.frame);
 
+    this.inspector?.invalidate('export');
     this.profiler.onCaptureStart();
     this.onProfilerLifecycle?.();
 
@@ -961,6 +1000,7 @@ export class ShaderEngine {
     if (this.disposed) return;
 
     cancelAnimationFrame(this.frame);
+    this.inspector?.invalidate('context-lost');
     this.post.invalidate();
     this.profiler.onContextLost();
     this.onProfilerLifecycle?.();
@@ -969,6 +1009,8 @@ export class ShaderEngine {
 
   private handleContextRestored(): void {
     if (this.disposed) return;
+
+    this.contextGeneration++;
 
     // three re-uploads a texture on the next draw, but only if it is told the
     // pixels it holds are new. Nothing survived on the GPU, so they all are.
@@ -1061,7 +1103,9 @@ export class ShaderEngine {
   private drawMeasured(): void {
     if (this.disposed || this.context.status() !== 'live') return;
 
-    if (!this.profiler.isEnabled || this.offline) {
+    // A capture frame is drawn plainly: timer queries around a capture's extra
+    // reads would be measuring the inspector, not the shader.
+    if (!this.profiler.isEnabled || this.offline || this.inspector?.hasPending) {
       this.drawFrame();
       return;
     }
@@ -1097,10 +1141,76 @@ export class ShaderEngine {
    */
   private drawFrame(): void {
     this.post.setTime(this.time);
-    this.drawBuffers();
-    const image = this.compiler.imagePass;
-    if (image) this.binder.bind(image.uniforms, image.channels);
-    this.post.render(this.scene, this.camera);
+    const session = this.offline ? null : (this.inspector?.begin(() => this.frameSource()) ?? null);
+    try {
+      this.drawBuffers(null, session);
+      const image = this.compiler.imagePass;
+      if (image) {
+        this.binder.bind(image.uniforms, image.channels);
+        const resolution = image.uniforms['iResolution']?.value as THREE.Vector2 | undefined;
+        session?.beforeDraw(image, this.compiler.passes.length - 1, {
+          width: resolution?.x ?? 0,
+          height: resolution?.y ?? 0,
+        });
+      }
+      this.post.render(this.scene, this.camera);
+      session?.finish();
+    } finally {
+      session?.dispose();
+      this.framesDrawn++;
+    }
+  }
+
+  /** Everything a capture reads from the live frame, assembled only when one is pending. */
+  private frameSource(): FrameSource {
+    return {
+      identity: {
+        contextId: this.context.id,
+        contextGeneration: this.contextGeneration,
+        projectId: this.projectId,
+        projectGeneration: this.projectGeneration,
+        requestedRevision: this.requestedRevision,
+      },
+      passes: this.compiler.passes,
+      targets: this.targets,
+      textures: this.textures,
+      frameIndex: this.framesDrawn,
+      time: this.time,
+      pointer: [this.pointer.x, this.pointer.y],
+      pointerVelocity: [this.pointerVelocity.x, this.pointerVelocity.y],
+      resolutionScale: this.resolutionScale,
+      usesComposer: this.post.usesComposer(),
+      geometry: this.mesh.geometry,
+      camera: this.camera,
+    };
+  }
+
+  /**
+   * Captures the next frame this engine actually draws — its real inputs, uniforms
+   * and accepted programs — as an immutable bounded snapshot. See `render-inspection.ts`.
+   * A paused preview is asked for one ordinary frame; nothing else about it changes.
+   */
+  captureFrame(options?: CaptureOptions): Promise<FrameSnapshot> {
+    if (this.disposed)
+      return Promise.reject(new FrameCaptureError('disposed', 'The renderer was disposed.'));
+    if (this.offline) {
+      return Promise.reject(new FrameCaptureError('offline', 'An export owns the renderer.'));
+    }
+    this.inspector ??= new FrameInspector(this.context, {
+      requestFrame: () => this.requestFrames(1),
+      invalidated: (reason) => this.onCaptureInvalidated?.(reason),
+    });
+    return this.inspector.request(options);
+  }
+
+  /** The retained capture, if any. */
+  get capturedFrame(): FrameSnapshot | null {
+    return this.inspector?.snapshot ?? null;
+  }
+
+  /** Releases the retained capture and cancels a pending one. Idempotent. */
+  releaseCapture(): void {
+    this.inspector?.release();
   }
 
   private drawFrameWithPassSample(samplePassId: string | null, usesComposer: boolean): void {
@@ -1125,7 +1235,10 @@ export class ShaderEngine {
     this.drawMeasured();
   }
 
-  private drawBuffers(samplePassId: string | null = null): void {
+  private drawBuffers(
+    samplePassId: string | null = null,
+    session: CaptureSession | null = null,
+  ): void {
     const buffers = this.compiler.bufferPasses;
     if (buffers.length === 0) return;
 
@@ -1150,6 +1263,7 @@ export class ShaderEngine {
       const size = this.targets.size(pass.id);
       const resolution = pass.uniforms['iResolution']?.value as THREE.Vector2 | undefined;
       if (size && resolution) resolution.set(size.width, size.height);
+      if (size) session?.beforeDraw(pass, buffers.indexOf(pass), size);
 
       const sample = samplePassId === pass.id;
       if (sample) this.profiler.beginGpu();
@@ -1159,6 +1273,8 @@ export class ShaderEngine {
       this.renderer.render(this.bufferScene, this.camera);
 
       if (sample) this.profiler.endGpu();
+
+      session?.afterDraw(pass, target);
 
       // What was just drawn becomes the buffer's current frame, and the target
       // holding the frame before it becomes the one we draw into next time.
@@ -1189,6 +1305,8 @@ export class ShaderEngine {
     this.disposed = true;
 
     cancelAnimationFrame(this.frame);
+
+    this.inspector?.dispose();
 
     for (const off of this.unsubscribe) off();
     this.unsubscribe.length = 0;
