@@ -48,6 +48,7 @@ import {
   type VisualTransform,
 } from './render-inspection-model';
 import { formatMilliseconds } from './profiler-recommendation';
+import { RenderObservationSection } from './render-observation-section';
 
 /** Browsers refuse canvases past this on a side; the image is then read by coordinates only. */
 const MAX_CANVAS_SIDE = 16_384;
@@ -157,7 +158,7 @@ interface Readout {
  */
 @Component({
   selector: 'app-render-inspection-panel',
-  imports: [MatButtonModule, TranslatePipe],
+  imports: [MatButtonModule, RenderObservationSection, TranslatePipe],
   template: `
     <section class="inspection">
       <div class="toolbar">
@@ -457,6 +458,13 @@ interface Readout {
             </section>
 
             @if (selected(); as pass) {
+              <app-render-observation
+                class="section"
+                [frame]="frame"
+                [pass]="pass"
+                [pixel]="observationPixel()"
+                [active]="active()"
+              />
               <section class="section identity">
                 <h3>{{ 'inspection.identity' | translate }}</h3>
                 <dl class="facts">
@@ -874,9 +882,28 @@ export class RenderInspectionPanel {
   private lastEngine: unknown = null;
 
   /** Whether the user can currently see this panel. */
-  private readonly active = computed(() => {
+  protected readonly active = computed(() => {
     const prefs = this.preferences.value();
     return prefs.bottomPanelOpen && prefs.bottomPanelTab === 'inspection';
+  });
+
+  /**
+   * The picked texel, but only while the viewed image is the selected pass's own
+   * output: a texel of an input or a differently sized image names another place.
+   */
+  protected readonly observationPixel = computed<Texel | null>(() => {
+    const frame = this.snapshot();
+    const pass = this.selected();
+    const texel = this.picked();
+    const view = this.view();
+    const rawId = pass?.output.rawImageId;
+    if (!frame || !texel || !view || !rawId) return null;
+    const raw = this.imageMeta(frame, rawId);
+    const shown = this.imageMeta(frame, view.imageId);
+    const isOutput = view.imageId === rawId || view.imageId === pass?.output.displayImageId;
+    return raw && shown && isOutput && raw.width === shown.width && raw.height === shown.height
+      ? texel
+      : null;
   });
 
   protected readonly selected = computed<CapturedPass | null>(() => {
