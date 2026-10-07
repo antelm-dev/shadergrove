@@ -50,9 +50,15 @@ void main() {
   gl_FragColor = vec4(hdr * 0.1 + vec3(acc * 0.0), once * 0.25 + g * 0.125);
 }`;
 
-async function open(page: Page, name: string, project: ShaderProject, passes: number) {
+async function open(
+  page: Page,
+  name: string,
+  project: ShaderProject,
+  passes: number,
+  render?: object,
+) {
   const response = await page.request.post('/api/shaders', {
-    data: { name, fragment: IMAGE, vertex: DEFAULT_VERTEX, project },
+    data: { name, fragment: IMAGE, vertex: DEFAULT_VERTEX, project, render },
   });
   expect(response.ok(), await response.text()).toBe(true);
   const { shader } = (await response.json()) as { shader: { id: string } };
@@ -770,34 +776,41 @@ test('ends the measurement when the drawing buffer is resized', async ({ page })
   await expect(section).toHaveCount(0);
 });
 
+const VIGNETTE = {
+  enabled: true,
+  effects: [
+    {
+      type: 'vignette',
+      instanceId: 'vignette',
+      enabled: true,
+      settings: { intensity: 1, softness: 0.5, roundness: 1 },
+    },
+  ],
+};
+
 for (const composer of [false, true]) {
   test(`live frames drawn at the observation's yields reach the canvas with live state${composer ? ' through the post-processing composer' : ''}`, async ({
     page,
   }) => {
-    await open(page, `Observe yields ${composer ? 'composer' : 'plain'}`, single(), 1);
+    // The vignette is part of the stored shader, so it outlives the draft being adopted again
+    // (the first-frame thumbnail upload does that) instead of being a one-off engine setting.
+    await open(
+      page,
+      `Observe yields ${composer ? 'composer' : 'plain'}`,
+      single(),
+      1,
+      composer ? { postProcessing: VIGNETTE } : undefined,
+    );
     if (composer) {
-      // The canvas applies the draft's settings once; these stay until the draft changes.
       await expect
         .poll(() =>
-          page.evaluate(() => {
-            const engine = (window as any).ng
-              .getComponent(document.querySelector('app-shader-canvas'))
-              .engine();
-            engine.setRenderSettings({
-              postProcessing: {
-                enabled: true,
-                effects: [
-                  {
-                    type: 'vignette',
-                    instanceId: 'vignette',
-                    enabled: true,
-                    settings: { intensity: 1, softness: 0.5, roundness: 1 },
-                  },
-                ],
-              },
-            });
-            return engine.post.usesComposer() as boolean;
-          }),
+          page.evaluate(
+            () =>
+              (window as any).ng
+                .getComponent(document.querySelector('app-shader-canvas'))
+                .engine()
+                .post.usesComposer() as boolean,
+          ),
         )
         .toBe(true);
     }
