@@ -445,6 +445,29 @@ describe('frame capture lifecycle', () => {
       });
     });
 
+    it.each([
+      ['a NaN replay of a finite live value', 0.5, NaN],
+      ['a finite replay of a NaN live value', NaN, 0.5],
+    ])('refuses %s instead of skipping it', async (_name, live, replay) => {
+      const { project } = feedbackProject();
+      engine.setPasses(toSpec(project));
+      behindEffects().returns(live, replay);
+
+      expect(await code(capture())).toBe('replay-mismatch');
+      expect(engine.capturedFrame).toBeNull();
+    });
+
+    it('counts paired NaN as skipped, never as numerically verified', async () => {
+      const { project } = feedbackProject();
+      engine.setPasses(toSpec(project));
+      behindEffects().returns(NaN, NaN);
+
+      const snapshot = await capture();
+
+      const { skippedNonFinite } = snapshot.passes[1].output.comparison!;
+      expect(skippedNonFinite).toBe(CANVAS.width * CANVAS.height * 4);
+    });
+
     it('refuses a replay that disagrees with the live output, and disposes every temporary', async () => {
       const { project } = feedbackProject();
       engine.setPasses(toSpec(project));

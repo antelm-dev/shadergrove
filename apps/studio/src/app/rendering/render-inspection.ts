@@ -1346,7 +1346,15 @@ export class CaptureSession {
     for (let index = 0; index < raw.length; index++) {
       const live = reference[index];
       const replayed = raw[index];
-      if (Number.isNaN(live) || Number.isNaN(replayed)) {
+      const liveNaN = Number.isNaN(live);
+      if (liveNaN !== Number.isNaN(replayed)) {
+        // A number on one side and NaN on the other is a real disagreement.
+        maxDelta = Infinity;
+        mismatch = true;
+        break;
+      }
+      if (liveNaN) {
+        // Paired NaN: no numeric equality exists to verify, so it is counted as skipped, not matched.
         skipped++;
         continue;
       }
