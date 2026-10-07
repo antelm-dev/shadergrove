@@ -1,5 +1,7 @@
 /**
- * Calls the importer/exporter contributions of a validated plugin package.
+ * Calls the Worker contributions of a validated plugin package: importers,
+ * exporters, project importers/exporters and the protocol-4 analyzers and asset
+ * tools (data-only `projectTemplate`s need no call).
  *
  * The host owns every decision: it checks sizes before anything crosses to the
  * Worker and again before it trusts anything that comes back, hands over only
@@ -15,13 +17,26 @@ import type { ShaderParams } from '@shadergrove/shared/model';
 import {
   PLUGIN_LIMITS,
   PROJECT_LIMITS,
+  TOOL_LIMITS,
+  analyzerMethod,
+  assetToolMethod,
   exporterMethod,
   importerMethod,
   projectExporterMethod,
   projectImporterMethod,
+  prepareAnalyzerInput,
+  prepareAssetToolInput,
   utf8Bytes,
+  validateAnalyzerReport,
+  validateAssetToolOutput,
   validateProjectCandidate,
   validateProjectExportEnvelope,
+  type AnalyzerContribution,
+  type AnalyzerReport,
+  type AnalyzerRequest,
+  type AssetToolContribution,
+  type AssetToolOutput,
+  type AssetToolRequest,
   type ExporterContribution,
   type ExporterInput,
   type ExporterResult,
@@ -35,6 +50,7 @@ import {
   type ProjectExporterContribution,
   type ProjectImportInput,
   type ProjectImporterContribution,
+  type ToolErrorCode,
 } from '@shadergrove/shared/plugin';
 import { sanitizeParams } from '@shadergrove/shared/validate';
 
@@ -230,13 +246,74 @@ export class PluginHost {
     return envelope.value;
   }
 
+  /**
+   * Run an `analyzer` on a copied snapshot of the draft, against a capability
+   * profile the host chose. The reply is validated against that very snapshot
+   * — profile, version, revision and every source location — and returned
+   * unapplied; nothing else of the project crosses.
+   */
+  async analyze(
+    contributionId: string,
+    request: AnalyzerRequest,
+    options: CallOptions = {},
+  ): Promise<AnalyzerReport> {
+    const contribution = this.contribution(contributionId, 'analyzer');
+    const prepared = prepareAnalyzerInput(contribution, request);
+    if (!prepared.ok) throw toolError(prepared);
+    const result = await this.run(
+      analyzerMethod(contributionId),
+      prepared.value,
+      [],
+      TOOL_LIMITS.analyzerOutputBytes,
+      options,
+    );
+    const report = validateAnalyzerReport(result, prepared.value);
+    if (!report.ok) throw toolError(report);
+    return report.value;
+  }
+
+  /**
+   * Run an `assetTool` on host-decoded RGBA planes. Every plane is copied
+   * before it is transferred, so the buffers the caller keeps are never
+   * detached; the reply is one of the output kinds the contribution declared,
+   * validated here and returned unapplied. Encoding, download and assignment
+   * are the caller's, in host code.
+   */
+  async runAssetTool(
+    contributionId: string,
+    request: AssetToolRequest,
+    options: CallOptions = {},
+  ): Promise<AssetToolOutput> {
+    const contribution = this.contribution(contributionId, 'assetTool');
+    const prepared = prepareAssetToolInput(contribution, request);
+    if (!prepared.ok) throw toolError(prepared);
+    const result = await this.run(
+      assetToolMethod(contributionId),
+      prepared.value.input,
+      prepared.value.transfer,
+      TOOL_LIMITS.outputBytes,
+      options,
+    );
+    const output = validateAssetToolOutput(result, contribution);
+    if (!output.ok) throw toolError(output);
+    return output.value;
+  }
+
   private contribution(id: string, kind: 'importer'): ImporterContribution;
   private contribution(id: string, kind: 'exporter'): ExporterContribution;
   private contribution(id: string, kind: 'projectImporter'): ProjectImporterContribution;
   private contribution(id: string, kind: 'projectExporter'): ProjectExporterContribution;
+  private contribution(id: string, kind: 'analyzer'): AnalyzerContribution;
+  private contribution(id: string, kind: 'assetTool'): AssetToolContribution;
   private contribution(
     id: string,
-    kind: 'importer' | 'exporter' | 'projectImporter' | 'projectExporter',
+    kind:
+      | 'importer'
+      | 'exporter'
+      | 'projectImporter'
+      | 'projectExporter'
+      | 'analyzer'
+      | 'assetTool',
   ) {
     const found = this.plugin.manifest.contributions.find((c) => c.id === id && c.kind === kind);
     if (!found || !this.plugin.code) {
@@ -283,6 +360,10 @@ export class PluginHost {
     }
   }
 }
+
+/** A shared verdict as the error a call raises. */
+const toolError = (failure: { code: ToolErrorCode; errors: string[] }): PluginCallError =>
+  new PluginCallError(failure.code, failure.errors[0] ?? 'Invalid tool call');
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);

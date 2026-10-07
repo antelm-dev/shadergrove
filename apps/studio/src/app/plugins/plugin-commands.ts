@@ -19,6 +19,7 @@ import {
   type InstalledPlugin,
   type PluginOperationContext,
 } from './plugin-installations';
+import { PluginTools } from './plugin-tools';
 import { ProjectPluginActions } from './project-actions';
 
 /** A menu command that a plugin contribution put there. */
@@ -42,6 +43,11 @@ export interface PluginCommand extends MenuCommand {
  * - `projectExporter` → Import & export and the shader's own menu: exports the
  *   open shader directly, dimmed when none is open.
  * - `effect` → the palette's Shader section: adds the effect to the open shader.
+ * - `analyzer` / `assetTool` → the palette's Plugins entries (`toolCommands`):
+ *   open the package's panel in Plugins. Only tools with a registered host
+ *   adapter are offered; a tool that works on the open draft is dimmed while
+ *   none is open. A `projectTemplate` is data and is offered by the New flow
+ *   from `PluginTools.templates`, not here.
  * - `theme` → the palette's Settings section (the Theme submenu lists them
  *   too), plus a System entry for each light/dark pair.
  * - `language` → the palette's Settings section (the Language submenu lists
@@ -58,6 +64,7 @@ export class PluginCommands {
   private readonly projects = inject(ProjectPluginActions);
   private readonly adapters = inject(HostAdapters);
   private readonly adoption = inject(EffectAdoption);
+  private readonly pluginTools = inject(PluginTools);
   private readonly themes = inject(AppThemes);
   private readonly store = inject(ShaderStore);
   private readonly router = inject(Router);
@@ -123,6 +130,24 @@ export class PluginCommands {
   );
 
   /**
+   * The registered tools of active packages. Like every list here it is computed
+   * from the current profile's active packages, so an entry disappears the
+   * moment its package is switched off, updated, removed or the account changes.
+   */
+  readonly toolCommands = computed<readonly PluginCommand[]>(() =>
+    distinguish(
+      this.pluginTools.tools().map(({ installed, contribution, adapter }) => ({
+        ref: `${installed.id}/${contribution.id}`,
+        package: packageName(installed),
+        icon: adapter.command.icon,
+        text: () => this.i18n.t(adapter.command.label),
+        ...(adapter.needsProject ? { disabled: this.noShader } : {}),
+        action: () => void this.openTool(installed.id, contribution.id),
+      })),
+    ),
+  );
+
+  /**
    * Every active theme, and System for every pair. Selecting revalidates
    * against the themes active then (`AppThemes.selectPlugin`/`selectSystem`), so
    * an entry kept by an open palette cannot bring back a theme that is gone.
@@ -180,6 +205,12 @@ export class PluginCommands {
 
   private openInPlugins(packageId: string): Promise<boolean> {
     return this.router.navigate(['/plugins'], { queryParams: { use: packageId } });
+  }
+
+  /** Opens the tool's panel, if it is still offered: a kept palette entry cannot bring back a removed one. */
+  private async openTool(packageId: string, contributionId: string): Promise<void> {
+    if (!this.pluginTools.find(packageId, contributionId)) return this.stale();
+    await this.openInPlugins(packageId);
   }
 
   /**
