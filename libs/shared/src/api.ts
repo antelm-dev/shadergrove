@@ -18,3 +18,14 @@ export interface UpdateShaderPatch {
    */
   expectedRevision?: number;
 }
+
+/** Body of `POST /shaders/:id/history/:revision/restore` and the `restore-history` IPC call. */
+export interface RestoreShaderHistoryRequest {
+  /** The head `revision` the client last read; a stale value is rejected with a `conflict`. */
+  expectedRevision: number;
+}
+
+/** Body of `PUT /shaders/:id/history/:revision/checkpoint`; `null` clears the name. */
+export interface SetShaderCheckpointRequest {
+  name: string | null;
+}

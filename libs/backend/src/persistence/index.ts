@@ -1,6 +1,8 @@
 export type {
   AssetKey,
   AssetMeta,
+  HistoryEntryRow,
+  HistoryRow,
   PresetRow,
   ShaderMutableFields,
   ShaderRepository,

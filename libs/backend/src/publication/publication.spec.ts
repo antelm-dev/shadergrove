@@ -61,6 +61,7 @@ describe('publication schema (sqlite)', () => {
 
     // Put the store back the way a version-3 install left it, then upgrade it.
     harness.exec(`
+      DROP TABLE shader_history;
       DROP TABLE moderation_audit; DROP TABLE publisher_restrictions; DROP TABLE publication_reports;
       DROP TABLE shader_origins; DROP TABLE publication_assets; DROP TABLE publications;
       PRAGMA user_version = 3;

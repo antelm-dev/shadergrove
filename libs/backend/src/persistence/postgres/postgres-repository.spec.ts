@@ -48,6 +48,24 @@ if (!url) {
     removeAssetRow: async (id: string, key: AssetKey) => {
       await sidePool.query('DELETE FROM assets WHERE shader_id = $1 AND asset_key = $2', [id, key]);
     },
+    clearHistory: async (id: string) => {
+      await sidePool.query('DELETE FROM shader_history WHERE shader_id = $1', [id]);
+    },
+    countHistory: async (id: string) => {
+      const result = await sidePool.query(
+        'SELECT COUNT(*)::int AS n FROM shader_history WHERE shader_id = $1',
+        [id],
+      );
+      return Number(result.rows[0].n);
+    },
+    corruptHistory: async (id: string, revision: number) => {
+      // jsonb cannot hold invalid JSON; a string is a valid value that is not a control list.
+      await sidePool.query(
+        `UPDATE shader_history SET controls_json = '"not controls"'::jsonb
+         WHERE shader_id = $1 AND revision = $2`,
+        [id, revision],
+      );
+    },
   });
 
   runShaderLibraryConformance('postgres', newHarness);
