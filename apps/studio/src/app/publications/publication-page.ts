@@ -21,6 +21,7 @@ import { I18n } from '../i18n/i18n';
 import type { TranslationKey } from '../i18n/keys';
 import { TranslatePipe } from '../i18n/translate.pipe';
 import { ShaderStore } from '../workspace/shader-store';
+import { ExploreBrowseState } from './explore-browse-state';
 import { PAGE_STYLES, serverState } from './page';
 import { PublicationApi } from './publication-api';
 import { PublicationPreview } from './publication-preview';
@@ -50,7 +51,7 @@ type State = 'loading' | 'ready' | 'missing' | 'error';
   ],
   template: `
     <header class="page-bar">
-      <a matButton routerLink="/explore">
+      <a matButton routerLink="/explore" [queryParams]="back()">
         <mat-icon>arrow_back</mat-icon>
         {{ 'explore.title' | translate }}
       </a>
@@ -265,6 +266,7 @@ export class PublicationPage {
   private readonly i18n = inject(I18n);
   private readonly document = inject(DOCUMENT);
   private readonly rendered = serverState<PublicationDetail>('publication');
+  private readonly browse = inject(ExploreBrowseState);
 
   protected readonly reasons = REPORT_REASONS;
   protected readonly reasonLabels: Record<ReportReason, TranslationKey> = {
@@ -284,6 +286,12 @@ export class PublicationPage {
   protected readonly updated = computed(() =>
     new Date(this.publication()?.updatedAt ?? 0).toLocaleDateString(this.i18n.locale()),
   );
+
+  /** The search this visit came from; opened directly there is none, and the link is plain `/explore`. */
+  protected readonly back = computed(() => {
+    const q = this.browse.returnQuery();
+    return q ? { q } : {};
+  });
 
   private id = '';
 
