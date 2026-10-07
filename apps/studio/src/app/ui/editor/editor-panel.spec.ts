@@ -438,7 +438,7 @@ describe('EditorPanel file explorer integration', () => {
 
     /** Default group shows the image pass; a second group owns the first buffer. */
     function mountTwoGroups() {
-      const primary = mountGroup();
+      const primary = mountGroup(DEFAULT_EDITOR_GROUP_ID);
       const groups = TestBed.inject(EditorGroups);
       const second = groups.createGroup()!;
       const buffer = store.documents().find((doc) => doc.passKind === 'buffer')!;
@@ -457,6 +457,41 @@ describe('EditorPanel file explorer integration', () => {
       expect(editor.doc().id).toBe(image.id);
       expect(strip.activeId()).toBe(image.id);
       expect(strip.groupId()).toBe(DEFAULT_EDITOR_GROUP_ID);
+    });
+
+    // Legacy single editor: no group is bound, so a document moved into a group
+    // nobody renders must stay visible and reachable, as before groups existed.
+    it('shows store.activeDoc() when no group is bound, even for a document another group owns', () => {
+      const fixture = mountGroup();
+      const groups = TestBed.inject(EditorGroups);
+      const second = groups.createGroup()!;
+      const buffer = store.documents().find((doc) => doc.passKind === 'buffer')!;
+      groups.activate(buffer.id, second);
+      fixture.detectChanges();
+
+      expect(groups.ownerGroupId(buffer.id)).toBe(second);
+      expect(docsOf(fixture).editor.doc().id).toBe(buffer.id);
+
+      const file = store.documents().find((doc) => doc.kind === 'file')!;
+      groups.activate(file.id, second);
+      fixture.detectChanges();
+      store.selectDoc(buffer.id);
+      fixture.detectChanges();
+      expect(docsOf(fixture).editor.doc().id).toBe(buffer.id);
+    });
+
+    it('accepts every navigation request when no group is bound', () => {
+      const fixture = mountGroup();
+      const groups = TestBed.inject(EditorGroups);
+      const second = groups.createGroup()!;
+      const buffer = store.documents().find((doc) => doc.passKind === 'buffer')!;
+      groups.activate(buffer.id, second);
+
+      navigation.set({ docId: buffer.id, line: 3, requestId: 1 });
+      fixture.detectChanges();
+
+      expect(docsOf(fixture).editor.revealCalls).toEqual([[buffer.id, 3]]);
+      expect(docsOf(fixture).editor.doc().id).toBe(buffer.id);
     });
 
     it('shows each group its own active document and tab strip identity', () => {

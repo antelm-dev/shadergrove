@@ -189,12 +189,14 @@ export class EditorShell {
 
   private readonly panel = viewChild.required(EditorPanel);
 
-  /** The editor group this shell shows. Absent means the default group. */
-  readonly groupId = input<EditorGroupId>(DEFAULT_EDITOR_GROUP_ID);
+  /** The editor group this shell shows. Absent means the legacy lone editor (default group, store-driven). */
+  readonly groupId = input<EditorGroupId | null>(null);
   /** The surface that frames it. Absent means the one derived from `groupId`. */
   readonly surfaceId = input<SurfaceId | null>(null);
 
-  protected readonly editorId = computed(() => this.surfaceId() ?? editorSurfaceId(this.groupId()));
+  protected readonly editorId = computed(
+    () => this.surfaceId() ?? editorSurfaceId(this.groupId() ?? DEFAULT_EDITOR_GROUP_ID),
+  );
   protected readonly gesture = new SurfaceGeometryGesture();
 
   private readonly surface = computed(
@@ -204,8 +206,10 @@ export class EditorShell {
 
   /** Unchanged for a lone group; numbered once several groups need telling apart. */
   protected readonly regionLabel = computed(() => {
+    const groupId = this.groupId();
+    if (groupId === null) return 'Source editor';
     const ids = this.groups.groupIds();
-    const index = ids.indexOf(this.groupId());
+    const index = ids.indexOf(groupId);
     return ids.length > 1 && index >= 0 ? `Source editor ${index + 1}` : 'Source editor';
   });
 
@@ -412,7 +416,8 @@ export class EditorShell {
   protected activate(): void {
     if (this.projected().stacked) this.layout.activate(this.editorId());
     const groupId = this.groupId();
-    if (this.groups.activeGroupId() !== groupId) this.groups.activateGroup(groupId);
+    if (groupId !== null && this.groups.activeGroupId() !== groupId)
+      this.groups.activateGroup(groupId);
   }
 
   protected dockResizeLabel(): string {

@@ -84,7 +84,7 @@ type EditorSurface = Pick<CodeEditor, 'focus' | 'format' | 'layout' | 'revealIn'
       <app-editor-tabs
         class="tabs"
         [activeId]="activeDoc()?.id ?? null"
-        [groupId]="groupId()"
+        [groupId]="ownGroupId()"
         (select)="selectDoc($event)"
         (closed)="onTabClosed($event)"
       />
@@ -469,8 +469,12 @@ export class EditorPanel {
   protected readonly groups = inject(EditorGroups);
   protected readonly fileExplorerLimits = FILE_EXPLORER_LIMITS;
 
-  /** The group whose tabs and active document this panel shows; default when absent. */
-  readonly groupId = input<EditorGroupId>(DEFAULT_EDITOR_GROUP_ID);
+  /**
+   * The group whose tabs and active document this panel shows. Absent means the
+   * legacy lone editor: the default group's tabs, `store.activeDoc()` and every
+   * navigation request, even for a document a group nobody renders owns.
+   */
+  readonly groupId = input<EditorGroupId | null>(null);
   /** The surface framing this panel, for its window controls; default when absent. */
   readonly surfaceId = input<SurfaceId>(editorSurfaceId(DEFAULT_EDITOR_GROUP_ID));
   readonly collapsed = input(false);
@@ -491,12 +495,14 @@ export class EditorPanel {
   private readonly liveExplorerWidth = signal<number | null>(null);
   private stopExplorerResize: (() => void) | null = null;
 
+  protected readonly ownGroupId = computed(() => this.groupId() ?? DEFAULT_EDITOR_GROUP_ID);
   /**
-   * This group's document, not `store.activeDoc()`: the store's is one global
-   * pick, and every panel would otherwise show the same file.
+   * With an explicit group, that group's document, not `store.activeDoc()`: the
+   * store's is one global pick, and every panel would otherwise show the same file.
    */
   protected readonly activeDoc = computed<EditorDocument | null>(() => {
-    const id = this.groups.activeDocumentId(this.groupId());
+    if (this.groupId() === null) return this.store.activeDoc();
+    const id = this.groups.activeDocumentId(this.groupId()!);
     return (id && this.store.documents().find((doc) => doc.id === id)) || null;
   });
   protected readonly explorerPreferredOpen = computed(
@@ -602,7 +608,7 @@ export class EditorPanel {
   }
 
   protected selectDoc(id: string): void {
-    this.groups.activate(id, this.groupId());
+    this.groups.activate(id, this.ownGroupId());
     queueMicrotask(() => this.relayout());
   }
 
@@ -734,7 +740,7 @@ export class EditorPanel {
     );
     if (!resolved || !this.ownsNavigation(resolved.docId)) return;
 
-    this.groups.activate(resolved.docId, this.groupId());
+    this.groups.activate(resolved.docId, this.ownGroupId());
 
     if (resolved.reveal) this.editor()?.revealIn(resolved.docId, resolved.line);
     else this.focusEditor();
@@ -743,11 +749,12 @@ export class EditorPanel {
   }
 
   /**
-   * Every mounted panel sees every navigation request; only the one whose group
+   * With explicit groups, every mounted panel sees every navigation request; only the one whose group
    * holds the document (or, for a document no group holds, the active group)
    * acts on it — the rest would pull the document's tab into their own strip.
    */
   private ownsNavigation(docId: string): boolean {
+    if (this.groupId() === null) return true;
     const owner = this.groups.ownerGroupId(docId);
     if (owner) return owner === this.groupId();
     return (this.groups.activeGroupId() ?? this.groups.primaryGroupId) === this.groupId();

@@ -22,7 +22,7 @@ const SECOND_SURFACE = editorSurfaceId(SECOND_GROUP);
 
 @Component({ selector: 'app-editor-panel', standalone: true, template: '' })
 class EditorPanelStub {
-  readonly groupId = input<EditorGroupId>(DEFAULT_EDITOR_GROUP_ID);
+  readonly groupId = input<EditorGroupId | null>(null);
   readonly surfaceId = input<string>('');
   readonly collapsed = input(false);
   readonly dragEnabled = input(false);
@@ -102,15 +102,16 @@ describe('EditorShell group identity', () => {
 
     expect(host.getAttribute('aria-label')).toBe('Source editor');
     expect(host.dataset['surfaceId']).toBe(DEFAULT_SURFACE);
-    expect(host.dataset['editorGroup']).toBe(DEFAULT_EDITOR_GROUP_ID);
-    expect(panel.groupId()).toBe(DEFAULT_EDITOR_GROUP_ID);
+    // No group is bound: the legacy lone editor, not a group-scoped one.
+    expect(host.dataset['editorGroup']).toBeUndefined();
+    expect(panel.groupId()).toBeNull();
     expect(panel.surfaceId()).toBe(DEFAULT_SURFACE);
     expect(host.classList.contains('docked')).toBe(true);
   });
 
   it('frames each group with its own surface geometry and labels', () => {
     groupIds.set([DEFAULT_EDITOR_GROUP_ID, SECOND_GROUP]);
-    const first = mount();
+    const first = mount(DEFAULT_EDITOR_GROUP_ID);
     const second = mount(SECOND_GROUP);
 
     expect(second.panel.groupId()).toBe(SECOND_GROUP);
@@ -134,8 +135,18 @@ describe('EditorShell group identity', () => {
     expect(groups.activateGroup).toHaveBeenCalledWith(SECOND_GROUP);
   });
 
-  it('does not re-activate a group that is already active', () => {
+  it('does not activate any group when none is bound', () => {
+    groupIds.set([DEFAULT_EDITOR_GROUP_ID, SECOND_GROUP]);
     const { host } = mount();
+
+    host.dispatchEvent(new Event('pointerdown'));
+
+    expect(groups.activateGroup).not.toHaveBeenCalled();
+    expect(host.getAttribute('aria-label')).toBe('Source editor');
+  });
+
+  it('does not re-activate a group that is already active', () => {
+    const { host } = mount(DEFAULT_EDITOR_GROUP_ID);
 
     host.dispatchEvent(new Event('pointerdown'));
 
