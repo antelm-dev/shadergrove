@@ -223,6 +223,19 @@ describe('real front end through the facade', () => {
     );
   });
 
+  it('keeps a legal generated-helper overload when user line directives remap its definition', async () => {
+    const next = project(
+      '#line 1\nfloat luminance(float x) { return x * 2.0; } void main() { gl_FragColor = vec4(luminance(0.2)); }',
+    );
+    const analysis = await analyse(next);
+    expect(analysis.diagnosticsFor(next.passes[0].id)).toEqual([]);
+    const offered = analysis
+      .symbolsFor(next.passes[0].id)!
+      .functions.filter((symbol) => symbol.name === 'luminance');
+    expect(offered).toHaveLength(1);
+    expect(offered[0].parameters[0].type.base).toBe('float');
+  });
+
   it('serves nothing between an edit and its accepted result', async () => {
     const next = project();
     const analysis = await analyse(next);
