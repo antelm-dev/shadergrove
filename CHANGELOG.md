@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.0](https://github.com/antelm-dev/shadergrove/compare/v2.3.0...v2.4.0) (2026-10-07)
+
+
+### Features
+
+* **studio:** make editor shell, panel and controls group-aware ([#204](https://github.com/antelm-dev/shadergrove/issues/204)) ([460de78](https://github.com/antelm-dev/shadergrove/commit/460de789eb8717ac6af76f17cf82730899c5c5af))
+
 ## [2.3.0](https://github.com/antelm-dev/shadergrove/compare/v2.2.0...v2.3.0) (2026-10-07)
 
 
