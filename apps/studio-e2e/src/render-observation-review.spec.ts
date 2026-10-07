@@ -303,6 +303,11 @@ void main() {
 test('a newer real vec2 measurement survives the old failure and same-texel re-emission', async ({
   page,
 }) => {
+  // Opening a shader that has no library preview photographs it once, which forces one real live
+  // frame unrelated to observation. Let it land before the no-observation baseline below.
+  const photographed = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.url().includes('/thumbnail'),
+  );
   const { panel, section } = await open(
     page,
     'Review vec2 overlapping ownership',
@@ -313,6 +318,7 @@ void main() {
   gl_FragColor = vec4(second * 0.01, 0.0, 1.0);
 }`,
   );
+  await photographed;
   await choose(section, 'first');
   // Both jobs really draw. Hold only publication so the old catch/finally runs
   // while the newer UI request still owns its controller and measuring state.
