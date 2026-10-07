@@ -119,24 +119,33 @@ function lineCount(text: string): number {
  * front end's globals but not the user's, so they are never offered as the
  * project's own symbols.
  */
-export const GENERATED_GLOBALS: ReadonlySet<string> = new Set([
-  'modelMatrix',
-  'modelViewMatrix',
-  'projectionMatrix',
-  'viewMatrix',
-  'normalMatrix',
-  'cameraPosition',
-  'isOrthographic',
-  'position',
-  'normal',
-  'uv',
-  'pc_fragColor',
-  'LinearTransferOETF',
-  'sRGBTransferEOTF',
-  'sRGBTransferOETF',
-  'linearToOutputTexel',
-  'luminance',
-]);
+export const GENERATED_GLOBALS: Readonly<Record<GlslStage, ReadonlySet<string>>> = {
+  // Per stage: `position`, `uv` and `modelMatrix` are three's in the vertex
+  // prefix but valid user uniforms in a fragment, and vice versa for the helpers.
+  vertex: new Set([
+    'modelMatrix',
+    'modelViewMatrix',
+    'projectionMatrix',
+    'viewMatrix',
+    'normalMatrix',
+    'cameraPosition',
+    'isOrthographic',
+    'position',
+    'normal',
+    'uv',
+  ]),
+  fragment: new Set([
+    'viewMatrix',
+    'cameraPosition',
+    'isOrthographic',
+    'pc_fragColor',
+    'LinearTransferOETF',
+    'sRGBTransferEOTF',
+    'sRGBTransferOETF',
+    'linearToOutputTexel',
+    'luminance',
+  ]),
+};
 
 /** One source the front end analyses: a render pass's fragment, or the vertex shader. */
 export interface AnalysisUnit {

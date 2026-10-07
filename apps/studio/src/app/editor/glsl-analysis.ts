@@ -107,7 +107,9 @@ export class ProjectAnalysis {
   private currentEpoch = -1;
   private projectId: string | null = null;
   /** Unchanged units keep their result; the compiler is only asked about what changed. */
-  private readonly reuse = new Map<string, { source: string; result: UnitResult }>();
+  private readonly reuse = new Map<string, { source: string; reply: AcceptedReply }>();
+  /** Units submitted to the client and not yet answered: they must be cancellable before any result. */
+  private readonly pending = new Set<string>();
 
   constructor(options: ProjectAnalysisOptions = {}) {
     this.debounceMs = options.debounceMs ?? 300;
@@ -184,11 +186,12 @@ export class ProjectAnalysis {
     for (const result of snapshot.units.values()) {
       if (!result.symbols || !result.unit.docIds.has(docId)) continue;
       any = true;
+      const generated = GENERATED_GLOBALS[result.unit.stage];
       for (const symbol of result.symbols.globals) {
-        if (symbol.name && !GENERATED_GLOBALS.has(symbol.name)) globals.set(symbol.name, symbol);
+        if (symbol.name && !generated.has(symbol.name)) globals.set(symbol.name, symbol);
       }
       for (const symbol of result.symbols.functions) {
-        if (!GENERATED_GLOBALS.has(symbol.name)) functions.set(symbol.signature, symbol);
+        if (!generated.has(symbol.name)) functions.set(symbol.signature, symbol);
       }
     }
     return any ? { globals: [...globals.values()], functions: [...functions.values()] } : null;
@@ -212,8 +215,9 @@ export class ProjectAnalysis {
   /** Departing a project: nothing of it may be answered, cached or left running. */
   private leaveProject(): void {
     const previous = this.projectId;
-    const keys = [...this.reuse.keys()];
+    const keys = new Set([...this.reuse.keys(), ...this.pending]);
     this.reuse.clear();
+    this.pending.clear();
     this.snapshot.set(null);
     if (previous === null) return;
     void this.client?.then((client) => {
@@ -228,9 +232,10 @@ export class ProjectAnalysis {
     // A document that is gone takes its analysis with it.
     const client = await this.ensureClient();
     if (!client || epoch !== this.epoch) return;
-    for (const key of [...this.reuse.keys()]) {
+    for (const key of new Set([...this.reuse.keys(), ...this.pending])) {
       if (live.has(key)) continue;
       this.reuse.delete(key);
+      this.pending.delete(key);
       client.cancel(sessionId(input.projectId, key));
     }
 
@@ -238,9 +243,11 @@ export class ProjectAnalysis {
     const results = await Promise.all(
       units.map(async (unit): Promise<UnitResult | null> => {
         const reused = this.reuse.get(unit.key);
-        if (reused?.source === unit.source) return { ...reused.result, unit };
+        // Same bytes, possibly different documents or names: map the raw reply afresh.
+        if (reused?.source === unit.source) return toResult(unit, reused.reply);
 
         const requestId = `a${++this.sequence}`;
+        this.pending.add(unit.key);
         const reply = await client.analyze({
           requestId,
           sessionId: sessionId(input.projectId, unit.key),
@@ -267,9 +274,8 @@ export class ProjectAnalysis {
           return null;
         }
 
-        const result = toResult(unit, reply);
-        this.reuse.set(unit.key, { source: unit.source, result });
-        return result;
+        this.reuse.set(unit.key, { source: unit.source, reply });
+        return toResult(unit, reply);
       }),
     );
     if (epoch !== this.epoch || this.disposed) return;
@@ -316,10 +322,9 @@ function sessionId(projectId: string, key: string): string {
   return `${projectId}\u0000${key}`;
 }
 
-function toResult(
-  unit: AnalysisUnit,
-  reply: Exclude<AnalysisReply, { status: 'unavailable' | 'cancelled' }>,
-): UnitResult {
+type AcceptedReply = Exclude<AnalysisReply, { status: 'unavailable' | 'cancelled' }>;
+
+function toResult(unit: AnalysisUnit, reply: AcceptedReply): UnitResult {
   const diagnostics = reply.diagnostics.map((diagnostic) => mapDiagnostic(unit, diagnostic));
   return {
     unit,

@@ -195,6 +195,18 @@ describe('real front end through the facade', () => {
     );
   });
 
+  it('keeps vertex user functions named like the fragment-stage helpers, still hiding the vertex prefix', async () => {
+    const next = {
+      ...project(),
+      vertex:
+        'float luminance(vec3 c) { return c.x; } void main() { gl_Position = vec4(position * luminance(vec3(1.0)), 1.0); }',
+    };
+    const analysis = await analyse(next);
+    const symbols = analysis.symbolsFor('@vertex')!;
+    expect(symbols.functions.map((symbol) => symbol.name)).toContain('luminance');
+    expect(symbols.globals.map((symbol) => symbol.name)).not.toContain('modelViewMatrix');
+  });
+
   it('serves nothing between an edit and its accepted result', async () => {
     const next = project();
     const analysis = await analyse(next);
