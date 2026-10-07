@@ -9,6 +9,8 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
 import type GUI from 'lil-gui';
 import type { Controller } from 'lil-gui';
 
@@ -16,6 +18,11 @@ import { Preferences } from '../../prefs/preferences';
 import { ShaderStore } from '../../workspace/shader-store';
 import { RendererHandle } from '../../rendering/renderer-handle';
 import type { ShaderControl } from '@shadergrove/shared/model';
+import { CONFIG_DOC } from '@shadergrove/shared/diagnostic';
+import { EditorNavigation } from '../../editor/editor-navigation';
+import { TranslatePipe } from '../../i18n/translate.pipe';
+import { SurfaceLayoutService } from '../../surfaces';
+import { DEFAULT_FOLDER } from '../editor/controls-builder-state';
 import { scrubValue } from './label-scrub';
 
 /**
@@ -29,21 +36,31 @@ import { scrubValue } from './label-scrub';
  * would throw during SSR.
  */
 
-/** Controls with no folder of their own are grouped under this one. */
-const DEFAULT_FOLDER = 'Parameters';
-
 @Component({
   selector: 'app-gui-panel',
+  imports: [MatButtonModule, MatIconModule, TranslatePipe],
   template: `
+    @if (store.record()) {
+      <!-- Always offered, even with nothing to tune yet: this is how a shader
+           gets its first control. -->
+      <button matButton="tonal" type="button" class="edit-controls" (click)="editControls()">
+        <mat-icon aria-hidden="true">edit_note</mat-icon>
+        {{ 'inspector.editControls' | translate }}
+      </button>
+    }
     <div #host class="gui-host" (pointerdown)="onNamePointerDown($event)"></div>
     @if (store.controls().length === 0 && store.record()) {
-      <p class="empty">This shader declares no controls. Add some in the Config tab.</p>
+      <p class="empty">{{ 'inspector.noControls' | translate }}</p>
     }
   `,
   styles: `
     :host {
       display: block;
       padding: 0 12px;
+    }
+
+    .edit-controls {
+      margin: 4px 0 8px;
     }
 
     .empty {
@@ -76,6 +93,8 @@ export class GuiPanel {
   private readonly preferences = inject(Preferences);
   private readonly renderer = inject(RendererHandle);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly layout = inject(SurfaceLayoutService);
+  private readonly navigation = inject(EditorNavigation);
 
   private readonly host = viewChild.required<ElementRef<HTMLDivElement>>('host');
 
@@ -145,6 +164,16 @@ export class GuiPanel {
     });
 
     this.destroyRef.onDestroy(() => this.gui?.destroy());
+  }
+
+  /**
+   * Open the editor on the Config, in the builder. Restoring a closed or
+   * minimized editor is the layout's job; picking the document and its view is
+   * the editor panel's, which hears it through the navigation request.
+   */
+  protected editControls(): void {
+    this.layout.openEditor();
+    this.navigation.reveal(CONFIG_DOC, 0);
   }
 
   private rebuild(GuiClass: typeof GUI, controls: readonly ShaderControl[]): void {
