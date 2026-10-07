@@ -283,6 +283,50 @@ expect(
   at(r, 'loadFailures', 'repeated', 'stats', 'workersStarted') === 3,
   'no Worker after the cap',
 );
+expect(
+  at(r, 'observation', 'ordinaryHasObservation') === false,
+  'ordinary analysis must not carry an observation',
+);
+expect(at(r, 'observation', 'optedStatus') === 'ok', 'opted-in analysis must succeed');
+expect(
+  JSON.stringify(at(r, 'observation', 'source')) ===
+    JSON.stringify(at(r, 'observation', 'expectedSource')),
+  'catalogue must bind to the exact prepared source',
+);
+expect(
+  JSON.stringify(at(r, 'observation', 'points')) ===
+    JSON.stringify(['x:initialized-declaration:float', 'p:initialized-declaration:vec2']),
+  `observation points were ${JSON.stringify(at(r, 'observation', 'points'))}`,
+);
+expect(
+  at(r, 'observation', 'spanText') === 'vec2 p = vec2(x, 2.0);',
+  'point span must delimit the exact statement',
+);
+expect(
+  ((at(r, 'observation', 'refusals') ?? []) as unknown[]).length >= 1,
+  'the macro-expanded statement must be refused, not offered',
+);
+expect(
+  JSON.stringify(at(r, 'observation', 'insertion', 'kinds')) ===
+    JSON.stringify(['declaration', 'capture']),
+  'insertion plan must be declaration and capture edits',
+);
+expect(at(r, 'observation', 'staleReason') === 'stale-source', 'a stale source must be refused');
+expect(
+  at(r, 'observation', 'invalid', 'status') === 'invalid-source' &&
+    at(r, 'observation', 'invalid', 'hasObservation') === false,
+  'invalid source must not yield a catalogue',
+);
+expect(
+  JSON.stringify(at(r, 'observation', 'latestWins')) ===
+    JSON.stringify(['cancelled:1', 'cancelled:2', 'ok:3']),
+  `observation latest-wins was ${JSON.stringify(at(r, 'observation', 'latestWins'))}`,
+);
+expect(
+  at(r, 'observation', 'recovery', 'status') === 'ok' &&
+    at(r, 'observation', 'recovery', 'points') === 2,
+  'observation must recover after refusals and cancellation',
+);
 expect(at(r, 'finalCheck', 'status') === 'ok', 'healthy client must be unaffected');
 
 const transfer = (path: string) =>

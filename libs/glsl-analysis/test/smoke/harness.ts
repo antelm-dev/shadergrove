@@ -2,6 +2,7 @@
 // scenario uses GlslAnalysisClient with real module Workers and the built WASM.
 import { resolveGlslAnalysisAssets } from '../../src/assets';
 import { GlslAnalysisClient } from '../../src/client';
+import { planObservationInsertion, sourceIdentity } from '../../src/observation';
 import type { AnalysisReply, AnalysisRequest, EsslVersion, GlslStage } from '../../src/contract';
 
 interface SmokeWindow {
@@ -306,6 +307,79 @@ async function run(): Promise<void> {
     repeated: { replies: repeatedReplies, state: repeated.state, stats: repeated.stats() },
   };
   repeated.dispose();
+
+  // Private opt-in observation catalogue through the real Worker and WASM.
+  const observed = ['#version 300 es', 'precision highp float;', 'out vec4 c;'];
+  const observedSource = [
+    ...observed,
+    '#define SET_X x = 1.0',
+    'void main() {',
+    '  float x = 0.0;',
+    '  SET_X;',
+    '  vec2 p = vec2(x, 2.0);',
+    '  c = vec4(p, x, 1.0);',
+    '}',
+  ].join('\n');
+  const plain = await client.analyze(request(observedSource, 'fragment', 300));
+  const opted = await client.analyze(request(observedSource, 'fragment', 300, { observe: true }));
+  const observation = opted.status === 'ok' ? opted.observation : undefined;
+  const observedPoint = observation?.points.find((point) => point.name === 'p');
+  const insertion =
+    observation && observedPoint
+      ? planObservationInsertion(observedSource, observation, observedPoint.id)
+      : null;
+  const invalidObserved = await client.analyze(
+    request('#version 300 es\nvoid main() {\n  float a = vec3(1.0);\n}', 'vertex', 300, {
+      observe: true,
+    }),
+  );
+  const observeRapid = await Promise.all(
+    [1, 2, 3].map((revision) =>
+      client.analyze(
+        request(observedSource, 'fragment', 300, {
+          sessionId: 'observe-rapid',
+          revision,
+          observe: true,
+        }),
+      ),
+    ),
+  );
+  const observeRecovery = await client.analyze(
+    request(observedSource, 'fragment', 300, { observe: true }),
+  );
+  results['observation'] = {
+    ordinaryHasObservation: plain.status === 'ok' && 'observation' in plain,
+    optedStatus: opted.status,
+    source: observation?.source ?? null,
+    expectedSource: sourceIdentity(observedSource),
+    points: observation?.points.map((point) => `${point.name}:${point.kind}:${point.type}`) ?? [],
+    refusals: observation?.refusals.map((refusal) => refusal.reason) ?? [],
+    spanText: observedPoint
+      ? observedSource.slice(observedPoint.span.statement.start, observedPoint.span.statement.end)
+      : null,
+    insertion: insertion
+      ? insertion.ok
+        ? { ok: true, kinds: insertion.insertion.edits.map((edit) => edit.kind) }
+        : { ok: false, reason: insertion.reason }
+      : null,
+    staleReason:
+      observation && observedPoint
+        ? (() => {
+            const stale = planObservationInsertion(
+              `${observedSource}\n`,
+              observation,
+              observedPoint.id,
+            );
+            return stale.ok ? null : stale.reason;
+          })()
+        : null,
+    invalid: { status: invalidObserved.status, hasObservation: 'observation' in invalidObserved },
+    latestWins: observeRapid.map((reply) => `${reply.status}:${reply.revision}`),
+    recovery: {
+      status: observeRecovery.status,
+      points: observeRecovery.status === 'ok' ? observeRecovery.observation?.points.length : null,
+    },
+  };
 
   // The healthy client is unaffected by all of the above.
   results['finalCheck'] = summary(await client.analyze(request(corpus[1]!.source, 'vertex', 100)));
