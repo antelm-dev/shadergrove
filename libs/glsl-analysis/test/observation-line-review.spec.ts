@@ -34,3 +34,29 @@ it.each([
     'user-line-directive',
   ]);
 });
+
+it('keeps an escaped-newline comment from becoming a real line directive', () => {
+  const source = [
+    '#version 300 es',
+    'precision highp float;',
+    'out vec4 color;',
+    'void main() {',
+    '// continued comment \\',
+    '#line 100',
+    '  float value = 1.0;',
+    '  color = vec4(value);',
+    '}',
+  ].join('\n');
+  const ordinary = frontend.analyze(job(source, 'fragment', 300));
+  expect(ordinary.status).toBe('ok');
+  const diagnostic = frontend.analyze(
+    job(source.replace('vec4(value)', 'vec4(missing)'), 'fragment', 300),
+  );
+  expect(diagnostic.status).toBe('invalid-source');
+  // Native diagnostic line 8 proves #line stayed inside the continued comment.
+  expect(diagnostic.diagnostics.some((entry) => entry.location?.line === 8)).toBe(true);
+  const result = frontend.analyze({ ...job(source, 'fragment', 300), observe: true });
+  if (result.status !== 'ok' || !result.observation) throw new Error('Expected valid catalogue');
+  expect.soft(new SourceLines(source).remapped).toBe(false);
+  expect(result.observation.points.map((point) => point.name)).toEqual(['value']);
+});
