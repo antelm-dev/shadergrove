@@ -207,6 +207,22 @@ describe('real front end through the facade', () => {
     expect(symbols.globals.map((symbol) => symbol.name)).not.toContain('modelViewMatrix');
   });
 
+  it('keeps a legal user overload of a generated fragment helper while hiding the generated definition', async () => {
+    const next = project(
+      'float luminance(float x) { return x * 2.0; } void main() { gl_FragColor = vec4(luminance(0.2)); }',
+    );
+    const analysis = await analyse(next);
+    expect(analysis.diagnosticsFor(next.passes[0].id)).toEqual([]);
+    const userOverloads = analysis
+      .symbolsFor(next.passes[0].id)!
+      .functions.filter((symbol) => symbol.name === 'luminance');
+    expect(userOverloads).toHaveLength(1);
+    expect(userOverloads[0].parameters[0].type.base).toBe('float');
+    expect(userOverloads[0].definition?.line).toBeGreaterThan(
+      prepareFragmentUnit(next, next.passes[0]).prefixLines,
+    );
+  });
+
   it('serves nothing between an edit and its accepted result', async () => {
     const next = project();
     const analysis = await analyse(next);
@@ -300,7 +316,7 @@ describe('real front end through the facade', () => {
 });
 
 describe('source mapping', () => {
-  const lib = 'float f() { /* é✓ */ return undeclared_x; }';
+  const lib = 'float f() { /* Ã©âœ“ */ return undeclared_x; }';
 
   function withInclude(): ShaderProject {
     const base = project(`#include "lib.glsl"\nvoid main() { gl_FragColor = vec4(f()); }`);

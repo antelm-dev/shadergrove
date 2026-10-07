@@ -55,6 +55,35 @@ async function placeCursor(page: Page, needle: string) {
   }, needle);
 }
 
+test('reverting external text and switching projects on Vertex keep analysis current', async ({
+  page,
+}) => {
+  const id = await fixture(page, 'Review external revision');
+  await page.locator('.monaco-editor').first().click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.insertText('\nvoid broken( {');
+  await expect(chip(page)).toHaveAttribute('data-analysis', 'problems');
+  await page.locator('.editor-toolbar').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: /Revert/ }).click();
+  await expect(page.locator('.view-lines')).not.toContainText('void broken');
+  await expect(chip(page)).toHaveAttribute('data-analysis', 'ready');
+  await page.getByRole('treeitem', { name: /Vertex/ }).click();
+  await expect(page.getByRole('tab', { name: /Vertex/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(chip(page)).toHaveAttribute('data-analysis', 'ready');
+  const response = await page.request.get('/api/shaders');
+  const { shaders } = (await response.json()) as { shaders: { id: string; name: string }[] };
+  const other = shaders.find((shader) => shader.id !== id && shader.name === 'Hex Pulse')!;
+  await page.locator('app-shader-browser .shader-row', { hasText: other.name }).click();
+  await expect(page).toHaveURL(`/shaders/${encodeURIComponent(other.id)}`);
+  await page.getByRole('treeitem', { name: /Vertex/ }).click();
+  await expect(chip(page)).toHaveAttribute('data-analysis', 'ready');
+  const state = await page.evaluate(() => {
+    const panel = (window as any).ng.getComponent(document.querySelector('app-editor-panel'));
+    return { current: panel.analysis.current, projectId: panel.analysis.snapshot()?.projectId };
+  });
+  expect(state).toEqual({ current: true, projectId: other.id });
+});
+
 test('nested includes expose declared completion and navigate to the original error', async ({
   page,
 }) => {
