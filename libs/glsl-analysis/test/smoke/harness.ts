@@ -347,7 +347,41 @@ async function run(): Promise<void> {
   const observeRecovery = await client.analyze(
     request(observedSource, 'fragment', 300, { observe: true }),
   );
+  const unbracedSource = [
+    ...observed,
+    'uniform float u;',
+    'void main() {',
+    '  float v = 0.0;',
+    '  if (u > 0.0) v = 4.0;',
+    '  c = vec4(v);',
+    '}',
+  ].join('\n');
+  const unbraced = await client.analyze(
+    request(unbracedSource, 'fragment', 300, { observe: true }),
+  );
+  const lineRemapped = await client.analyze(
+    request(
+      observedSource.replace('  float x = 0.0;', '/* c */ #line 100\n  float x = 0.0;'),
+      'fragment',
+      300,
+      { observe: true },
+    ),
+  );
   results['observation'] = {
+    unbraced:
+      unbraced.status === 'ok'
+        ? {
+            points: unbraced.observation?.points.map((point) => point.name),
+            refusalLines: unbraced.observation?.refusals.map((refusal) => refusal.line),
+          }
+        : null,
+    lineRemapped:
+      lineRemapped.status === 'ok'
+        ? {
+            points: lineRemapped.observation?.points.length,
+            reasons: lineRemapped.observation?.refusals.map((refusal) => refusal.reason),
+          }
+        : null,
     ordinaryHasObservation: plain.status === 'ok' && 'observation' in plain,
     optedStatus: opted.status,
     source: observation?.source ?? null,

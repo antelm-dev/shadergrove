@@ -327,6 +327,16 @@ expect(
     at(r, 'observation', 'recovery', 'points') === 2,
   'observation must recover after refusals and cancellation',
 );
+expect(
+  JSON.stringify(at(r, 'observation', 'unbraced')) ===
+    JSON.stringify({ points: ['v'], refusalLines: [7, 8] }),
+  `unbraced refusal was ${JSON.stringify(at(r, 'observation', 'unbraced'))}`,
+);
+expect(
+  JSON.stringify(at(r, 'observation', 'lineRemapped')) ===
+    JSON.stringify({ points: 0, reasons: ['user-line-directive'] }),
+  `comment-prefixed #line was ${JSON.stringify(at(r, 'observation', 'lineRemapped'))}`,
+);
 expect(at(r, 'finalCheck', 'status') === 'ok', 'healthy client must be unaffected');
 
 const transfer = (path: string) =>
