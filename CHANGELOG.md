@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.0](https://github.com/antelm-dev/shadergrove/compare/v2.2.0...v2.3.0) (2026-10-07)
+
+
+### Features
+
+* **shared:** versioned contained-editor split-tree layout contract ([#170](https://github.com/antelm-dev/shadergrove/issues/170)) ([ebc238a](https://github.com/antelm-dev/shadergrove/commit/ebc238a44b939589624ad5d8b589c70ab479d0a7))
+* **studio:** visual Controls builder for the Config document ([#202](https://github.com/antelm-dev/shadergrove/issues/202)) ([3dab184](https://github.com/antelm-dev/shadergrove/commit/3dab18447793eccc31e955259d49029b0e93694d))
+
 ## [2.2.0](https://github.com/antelm-dev/shadergrove/compare/v2.1.1...v2.2.0) (2026-10-07)
 
 
