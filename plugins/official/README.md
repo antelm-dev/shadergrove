@@ -4,15 +4,17 @@ Sources of the plugin packages that ship with each Shadergrove release and
 appear under **Plugins → Available**. They install and run like any other
 package: reviewed, installed switched off, enabled explicitly, and executed in
 the isolated plugin Worker. The app has no built-in fallback for what the
-Shadertoy and Wallpaper Engine packages do.
+Shadertoy, Wallpaper Engine and ISF packages do.
 
-| Folder              | Package id                         | Contributions                                          |
-| ------------------- | ---------------------------------- | ------------------------------------------------------ |
-| `default-themes/`   | `dev.shadergrove.default-themes`   | `theme` `light`, `dark` (pair `default`) — default     |
-| `language-en/`      | `dev.shadergrove.language-en`      | `language` `english` (`en`) — default                  |
-| `language-fr/`      | `dev.shadergrove.language-fr`      | `language` `french` (`fr`) — default                   |
-| `shadertoy/`        | `dev.shadergrove.shadertoy`        | `projectImporter` (paste, provider `shadertoy-api/v1`) |
-| `wallpaper-engine/` | `dev.shadergrove.wallpaper-engine` | `projectExporter` (runtime `wallpaper-web/v1`)         |
+| Folder              | Package id                         | Contributions                                               |
+| ------------------- | ---------------------------------- | ----------------------------------------------------------- |
+| `default-themes/`   | `dev.shadergrove.default-themes`   | `theme` `light`, `dark` (pair `default`) — default          |
+| `language-en/`      | `dev.shadergrove.language-en`      | `language` `english` (`en`) — default                       |
+| `language-fr/`      | `dev.shadergrove.language-fr`      | `language` `french` (`fr`) — default                        |
+| `grove-amber/`      | `dev.shadergrove.grove-amber`      | `theme` `amber-light`, `amber-dark` (pair `amber`)          |
+| `shadertoy/`        | `dev.shadergrove.shadertoy`        | `projectImporter` (paste, provider `shadertoy-api/v1`)      |
+| `wallpaper-engine/` | `dev.shadergrove.wallpaper-engine` | `projectExporter` (runtime `wallpaper-web/v1`)              |
+| `isf/`              | `dev.shadergrove.isf`              | `importer` / `exporter` `.fs` (one-pass ISF FX, protocol 1) |
 
 ## Default packages
 

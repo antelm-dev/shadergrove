@@ -67,6 +67,31 @@
       ]
     },
     {
+      "id": "dev.shadergrove.grove-amber",
+      "version": "1.0.1",
+      "name": "Grove Amber",
+      "description": "Grove Amber: warm amber Light and Dark themes for the app and the code editor, paired so the app can follow your system's setting.",
+      "publisher": "Shadergrove",
+      "license": "CC0-1.0",
+      "protocolVersion": 3,
+      "appVersionRange": ">=1.5.0 <3.0.0",
+      "file": "dev.shadergrove.grove-amber-1.0.1.sgplugin.json",
+      "bytes": 3211,
+      "sha256": "6641c42564b0f79db74ab915b4fd32e63cc79a4fc9ee8b0d1b0751c3da6e8113",
+      "contributions": [
+        {
+          "kind": "theme",
+          "id": "amber-dark",
+          "name": "Grove Amber Dark"
+        },
+        {
+          "kind": "theme",
+          "id": "amber-light",
+          "name": "Grove Amber Light"
+        }
+      ]
+    },
+    {
       "id": "dev.shadergrove.shadertoy",
       "version": "1.0.1",
       "name": "Shadertoy Import",
@@ -103,6 +128,31 @@
           "kind": "projectExporter",
           "id": "wallpaper-engine",
           "name": "Export to Wallpaper Engine"
+        }
+      ]
+    },
+    {
+      "id": "dev.shadergrove.isf",
+      "version": "1.0.1",
+      "name": "ISF filters",
+      "description": "Import one-pass ISF FX filters (.fs) as custom effects, and export custom effects back as ISF filters, with their controls as ISF inputs.",
+      "publisher": "Shadergrove",
+      "license": "Apache-2.0",
+      "protocolVersion": 1,
+      "appVersionRange": ">=1.5.0 <3.0.0",
+      "file": "dev.shadergrove.isf-1.0.1.sgplugin.json",
+      "bytes": 23090,
+      "sha256": "be59d2a925f25c6de62c024c36bdf6e062d14db8152a45ad1825be27ef4aeaaa",
+      "contributions": [
+        {
+          "kind": "importer",
+          "id": "isf-import",
+          "name": "ISF filter (.fs)"
+        },
+        {
+          "kind": "exporter",
+          "id": "isf-export",
+          "name": "ISF filter (.fs)"
         }
       ]
     }

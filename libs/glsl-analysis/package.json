@@ -24,7 +24,7 @@
     "esbuild": "^0.25.12",
     "playwright": "^1.57.0",
     "typescript": "~6.0.2",
-    "vitest": "4.0.8"
+    "vitest": "4.1.11"
   },
   "nx": {
     "targets": {

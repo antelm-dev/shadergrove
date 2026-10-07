@@ -1,7 +1,5 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -24,6 +22,7 @@ import type { StoredPlugin } from './plugin-store';
 import { ProjectPluginActions } from './project-actions';
 import { DesktopFolderWriter, type ProjectWriter } from './project-delivery';
 import { inProcessStart } from './testing/in-process-sandbox';
+import { officialPackageText } from './testing/official-packages';
 
 /**
  * The Plugins tab's project workflow against the real installations, host,
@@ -31,17 +30,9 @@ import { inProcessStart } from './testing/in-process-sandbox';
  * stand-ins. What matters here is lifecycle: nothing is adopted or written
  * once the context it started under has changed.
  */
-const generated = resolve(import.meta.dirname, '../../plugins');
 const SHADERTOY = 'dev.shadergrove.shadertoy';
 const WALLPAPER = 'dev.shadergrove.wallpaper-engine';
-/** A package's text as the release catalogue lists it. */
-const text = (id: string) => {
-  const catalogue = JSON.parse(readFileSync(resolve(generated, 'catalogue.json'), 'utf8')) as {
-    packages: { id: string; file: string }[];
-  };
-  const entry = catalogue.packages.find((item) => item.id === id)!;
-  return readFileSync(resolve(generated, entry.file), 'utf8');
-};
+const text = officialPackageText;
 
 const shadertoyJson = {
   Shader: {
