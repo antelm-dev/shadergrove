@@ -771,3 +771,186 @@ test('refuses a replay that disagrees with the live pre-effect Image', async ({ 
   expect(outcome.code).toBe('replay-mismatch');
   expect(outcome.retained).toBeNull();
 });
+
+// --- The inspector UI, driven through its real controls ---------------------------
+// The debug API below only observes the engine; every action is a click, key or typed value.
+
+const retained = (page: Page) =>
+  page.evaluate(
+    () =>
+      (window as any).ng.getComponent(document.querySelector('app-shader-canvas')).engine()
+        .capturedFrame !== null,
+  );
+
+/** Ctrl+J is the workspace's own bottom-panel shortcut; the tab is the panel's own control. */
+async function openInspection(page: Page) {
+  await page.keyboard.press('Control+j');
+  await page.locator('#bottom-panel-tab-inspection').click();
+  const panel = page.locator('app-render-inspection-panel');
+  await expect(panel.locator('.capture')).toBeVisible();
+  return panel;
+}
+
+const rawValues = (panel: ReturnType<Page['locator']>) =>
+  panel.locator('.raw-value').allTextContents();
+
+async function pickByTyping(panel: ReturnType<Page['locator']>, x: number, y: number) {
+  await panel.locator('.pixel-x').fill(String(x));
+  await panel.locator('.pixel-x').dispatchEvent('change');
+  await panel.locator('.pixel-y').fill(String(y));
+  await panel.locator('.pixel-y').dispatchEvent('change');
+}
+
+test('keeps the frozen capture through later frames and a rejected edit, and says it is frozen', async ({
+  page,
+}) => {
+  await open(
+    page,
+    'Inspect frozen UI',
+    pipeline((project) => project),
+    3,
+  );
+  const panel = await openInspection(page);
+  await panel.locator('.capture').click();
+  await expect(panel.locator('.badge')).toContainText('Frozen capture');
+  await expect(panel.locator('.release')).toBeVisible();
+
+  await pickByTyping(panel, 0, 0);
+  await expect(panel.locator('.raw-value')).toHaveCount(4);
+  const badge = await panel.locator('.badge').textContent();
+  const before = await rawValues(panel);
+  // Buffer B's blue channel is -1 beyond [0, 1], and the raw Image replay keeps it.
+  expect(before[2]).toBe('-1');
+  expect(before[3]).toBe('1');
+  expect(Number(before[0])).toBeGreaterThan(1);
+
+  // Later frames, then a source the engine rejects.
+  await page.evaluate(() => {
+    (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine()
+      .requestFrames(5);
+  });
+  await page.locator('.monaco-editor').first().click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.insertText('\nvoid broken( {');
+  await expect(page.locator('.doc-errors')).toBeVisible();
+
+  await expect(panel.locator('.badge')).toHaveText(badge!);
+  expect(await rawValues(panel)).toEqual(before);
+  await expect(panel.locator('.profiler-note')).toContainText('not part of this frozen capture');
+  expect(await retained(page)).toBe(true);
+
+  await panel.locator('.release').click();
+  await expect(panel.locator('.capture')).toBeVisible();
+  await expect(panel.locator('.badge')).toHaveCount(0);
+  expect(await retained(page)).toBe(false);
+});
+
+test('picks the right drawing-buffer texel when zoomed, and keeps raw HDR apart from the display', async ({
+  page,
+}) => {
+  await open(
+    page,
+    'Inspect zoomed pick',
+    pipeline((project, ids) =>
+      setPassResolution(project, ids.a, { mode: 'fixed', width: 64, height: 32 }),
+    ),
+    3,
+  );
+  const panel = await openInspection(page);
+  await panel.locator('.capture').click();
+  await expect(panel.locator('.badge')).toBeVisible();
+
+  await panel.locator('.pass-select').selectOption({ index: 0 });
+  await panel.locator('.zoom-in').click();
+  await expect(panel.locator('.zoom-value')).not.toHaveText('Fit');
+
+  // Texel (10, 5) counted from the bottom-left of this pass's own 64×32 target.
+  const canvas = panel.locator('canvas.image');
+  const box = (await canvas.boundingBox())!;
+  await canvas.click({
+    position: { x: box.width * (10.5 / 64), y: box.height * ((32 - 5 - 0.5) / 32) },
+  });
+  await expect(panel.locator('.pixel-x')).toHaveValue('10');
+  await expect(panel.locator('.pixel-y')).toHaveValue('5');
+
+  const raw = await rawValues(panel);
+  expect(raw.slice(1)).toEqual(['-0.25', '2048', '1']);
+  await expect(panel.locator('.flag')).toContainText(['negative', 'above 1 (HDR)']);
+  // The display transform only clamps what it draws: blue 2048 is white, red follows the frame.
+  await expect(panel.locator('.viz-value')).toHaveText('rgb(255, 0, 255)');
+  await panel.locator('.channel-select').selectOption('b');
+  await expect(panel.locator('.viz-value')).toHaveText('rgb(255, 255, 255)');
+  expect(await rawValues(panel)).toEqual(raw);
+
+  // The keyboard moves the same pick one texel, inside the image.
+  await canvas.press('ArrowLeft');
+  await expect(panel.locator('.pixel-x')).toHaveValue('9');
+  await panel.locator('.pixel-x').fill('64');
+  await panel.locator('.pixel-x').dispatchEvent('change');
+  await expect(panel.locator('[role="alert"]')).toBeVisible();
+  await expect(panel.locator('.pixel-x')).toHaveValue('9');
+});
+
+test('releases on hide, release and resize, and refuses an unsupported GPU honestly', async ({
+  page,
+}) => {
+  await open(
+    page,
+    'Inspect lifecycle UI',
+    pipeline((project) => project),
+    3,
+  );
+  const panel = await openInspection(page);
+
+  // Hiding the tab releases the capture instead of holding it behind the scenes.
+  await panel.locator('.capture').click();
+  await expect(panel.locator('.badge')).toBeVisible();
+  expect(await retained(page)).toBe(true);
+  await page.locator('#bottom-panel-tab-problems').click();
+  await expect.poll(() => retained(page)).toBe(false);
+  await page.locator('#bottom-panel-tab-inspection').click();
+  await expect(panel.locator('.capture')).toBeVisible();
+  await expect(panel.locator('.badge')).toHaveCount(0);
+
+  // A resize ends the capture, and the panel names why.
+  await panel.locator('.capture').click();
+  await expect(panel.locator('.badge')).toBeVisible();
+  const size = page.viewportSize()!;
+  await page.setViewportSize({ width: size.width - 40, height: size.height - 40 });
+  await expect(panel.getByText('preview was resized')).toBeVisible();
+  await expect(panel.locator('.badge')).toHaveCount(0);
+  expect(await retained(page)).toBe(false);
+
+  // A GPU that cannot read floats back is refused: nothing is faked from 8-bit data.
+  await page.evaluate(() => {
+    const gl = (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine()
+      .context.renderer.getContext();
+    const original = gl.getExtension.bind(gl);
+    (window as any).restoreExtensions = () => (gl.getExtension = original);
+    gl.getExtension = (name: string) => (name === 'EXT_color_buffer_float' ? null : original(name));
+  });
+  await panel.locator('.capture').click();
+  await expect(panel.getByText('cannot be captured exactly')).toBeVisible();
+  await expect(panel.locator('.badge')).toHaveCount(0);
+  await expect(panel.locator('.raw-value')).toHaveCount(0);
+  expect(await retained(page)).toBe(false);
+  await page.evaluate(() => (window as any).restoreExtensions());
+
+  // Context loss ends a capture taken afterwards.
+  await panel.locator('.capture').click();
+  await expect(panel.locator('.badge')).toBeVisible();
+  await page.evaluate(() =>
+    (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine()
+      .context.renderer.getContext()
+      .getExtension('WEBGL_lose_context')
+      .loseContext(),
+  );
+  await expect(panel.getByText('WebGL context was lost')).toBeVisible();
+  await expect(panel.locator('.badge')).toHaveCount(0);
+});

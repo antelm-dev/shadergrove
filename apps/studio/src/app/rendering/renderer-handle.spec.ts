@@ -167,7 +167,7 @@ function capturingEngine() {
   const pending: ((snapshot: ReturnType<typeof stubSnapshot>) => void)[] = [];
   const engine = Object.assign(stubEngine(), {
     retained: null as ReturnType<typeof stubSnapshot> | null,
-    onCaptureInvalidated: null as (() => void) | null,
+    onCaptureInvalidated: null as ((reason: string) => void) | null,
     captureFrame: vi.fn(
       () => new Promise<ReturnType<typeof stubSnapshot>>((resolve) => pending.push(resolve)),
     ),
@@ -262,6 +262,39 @@ describe('RendererHandle capture publication', () => {
     expect(await outcome(request)).toBe('released');
     expect(snapshot.released).toBe(true);
     expect(handle.capturedFrame()).toBeNull();
+  });
+
+  it('records why a held capture ended, and clears it on release or a new request', async () => {
+    const first = capturingEngine();
+    const second = capturingEngine();
+    handle.register('preview', first.engine as unknown as ShaderEngine);
+    handle.register('output', second.engine as unknown as ShaderEngine);
+
+    const request = handle.captureFrame();
+    first.finish();
+    await request;
+    first.engine.onCaptureInvalidated?.('resize');
+    expect(handle.capturedFrame()).toBeNull();
+    expect(handle.captureEnded()).toBe('resize');
+
+    const again = handle.captureFrame();
+    expect(handle.captureEnded()).toBeNull();
+    first.finish();
+    await again;
+    handle.setActive('output');
+    expect(handle.captureEnded()).toBe('active-context');
+
+    handle.releaseCapture();
+    expect(handle.captureEnded()).toBeNull();
+  });
+
+  it('ignores an invalidation from an engine that is not active', () => {
+    const first = capturingEngine();
+    const second = capturingEngine();
+    handle.register('preview', first.engine as unknown as ShaderEngine);
+    handle.register('output', second.engine as unknown as ShaderEngine);
+    second.engine.onCaptureInvalidated?.('resize');
+    expect(handle.captureEnded()).toBeNull();
   });
 
   it('never lets a stale request overwrite or release a newer retained capture', async () => {

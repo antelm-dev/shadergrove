@@ -80,6 +80,7 @@ describe('sanitizeBottomPanelTab', () => {
     expect(sanitizeBottomPanelTab('output')).toBe('output');
     expect(sanitizeBottomPanelTab('problems')).toBe('problems');
     expect(sanitizeBottomPanelTab('profiler')).toBe('profiler');
+    expect(sanitizeBottomPanelTab('inspection')).toBe('inspection');
   });
 
   it.each([['diagnostics'], [''], [null], [undefined], [1]])(
