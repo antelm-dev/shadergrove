@@ -465,6 +465,104 @@ test('refuses a capture over the payload budget without touching the picture', a
   expect(outcome.retained).toBeNull();
 });
 
+test('refuses one-sided NaN corruption in the observed live Image or its frozen replay', async ({
+  page,
+}) => {
+  await open(
+    page,
+    'Inspect nonfinite fidelity',
+    createProject('void main() { gl_FragColor = vec4(0.25, 0.5, 0.75, 1.0); }', DEFAULT_VERTEX),
+    1,
+  );
+  const results = await page.evaluate(async (render) => {
+    const engine = (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine();
+    let baseline: any;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      engine.setRenderSettings(render);
+      const snapshot = await engine.captureFrame();
+      if (snapshot.frame.usesPostProcessing) {
+        const image = snapshot.passes[0];
+        baseline = {
+          comparison: image.output.comparison,
+          raw: snapshot.pixel(image.output.rawImageId, 0, 0),
+        };
+        snapshot.release();
+        break;
+      }
+      snapshot.release();
+    }
+    if (!baseline) throw new Error('The real composer did not start');
+    const renderer = engine.context.renderer;
+    const originalRender = renderer.render.bind(renderer);
+    const originalRead = renderer.readRenderTargetPixels.bind(renderer);
+    let replayDraw = false;
+    renderer.render = (scene: any, camera: any) => {
+      // The live Image writes half float in the composer; only its replay writes float32.
+      // The copy-reader has a different shader, so buffer/reference copies cannot be mistaken for replay.
+      const target = renderer.getRenderTarget();
+      replayDraw =
+        target?.texture.type === engine.context.three.FloatType &&
+        scene.children[0]?.material.fragmentShader === engine.activeShader.fragment;
+      return originalRender(scene, camera);
+    };
+    try {
+      const outcomes = [];
+      for (const corrupt of ['replay', 'reference']) {
+        let injected = false;
+        let finiteBefore = false;
+        renderer.readRenderTargetPixels = (...args: any[]) => {
+          originalRead(...args);
+          const out = args[args.length - 1];
+          if (out instanceof Float32Array && (corrupt === 'replay') === replayDraw) {
+            finiteBefore = Number.isFinite(out[0]);
+            out[0] = NaN;
+            injected = true;
+          }
+        };
+        engine.setRenderSettings(render);
+        let code = 'resolved';
+        let comparison: any = null;
+        let rawIsNaN = false;
+        try {
+          const snapshot = await engine.captureFrame();
+          const image = snapshot.passes[0];
+          comparison = image.output.comparison;
+          rawIsNaN = Number.isNaN(snapshot.pixel(image.output.rawImageId, 0, 0)[0]);
+          snapshot.release();
+        } catch (error: any) {
+          code = error.code;
+        }
+        outcomes.push({
+          corrupt,
+          code,
+          injected,
+          finiteBefore,
+          comparison,
+          rawIsNaN,
+          retained: engine.capturedFrame !== null,
+        });
+      }
+      return { baseline, outcomes };
+    } finally {
+      renderer.render = originalRender;
+      renderer.readRenderTargetPixels = originalRead;
+    }
+  }, VIGNETTE);
+  expect(results.baseline.raw).toEqual([0.25, 0.5, 0.75, 1]);
+  expect(results.baseline.comparison).toMatchObject({
+    status: 'match',
+    reference: 'pre-effect-live',
+    skippedNonFinite: 0,
+  });
+  for (const outcome of results.outcomes) {
+    expect(outcome.injected && outcome.finiteBefore).toBe(true);
+    expect(outcome.code, JSON.stringify(outcome)).toBe('replay-mismatch');
+    expect(outcome.retained).toBe(false);
+  }
+});
+
 test('counts every actual feedback frame while the live profiler samples individual passes', async ({
   page,
 }) => {
