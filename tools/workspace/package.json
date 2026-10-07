@@ -10,7 +10,6 @@
     "check:ipc": "tsx src/check/ipc.ts",
     "check:plugins": "tsx src/generate/official-plugins.ts --check",
     "generate:fonts": "tsx src/generate/fonts.ts",
-    "generate:isf-plugin": "tsx src/generate/isf-plugin.ts",
     "generate:plugins": "tsx src/generate/official-plugins.ts",
     "smoke": "tsx src/smoke.ts",
     "smoke:website": "tsx src/website-smoke.ts",

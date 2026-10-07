@@ -17,11 +17,19 @@ import { expect, test } from './fixtures';
 // Each test is one long journey through Plugins, menus, dialogs and reloads.
 test.describe.configure({ timeout: 300_000 });
 
-const fixtures = resolve(import.meta.dirname, '../../../tools/workspace/fixtures/plugins');
-const AMBER_TEXT = readFileSync(resolve(fixtures, 'themes/grove-amber.sgplugin.json'), 'utf8');
-const ISF_TEXT = readFileSync(resolve(fixtures, 'isf/isf.sgplugin.json'), 'utf8');
+/** An official package's text, as this release's catalogue lists it. */
+const official = resolve(import.meta.dirname, '../../studio/src/plugins');
+function officialText(id: string): string {
+  const { packages } = JSON.parse(readFileSync(resolve(official, 'catalogue.json'), 'utf8')) as {
+    packages: { id: string; file: string }[];
+  };
+  return readFileSync(resolve(official, packages.find((p) => p.id === id)!.file), 'utf8');
+}
 
 const AMBER = 'dev.shadergrove.grove-amber';
+const AMBER_TEXT = officialText(AMBER);
+// ISF stays a protocol 1 package: one from before themes.
+const ISF_TEXT = officialText('dev.shadergrove.isf');
 const DARK = `plugin:${AMBER}/amber-dark`;
 const LIGHT = `plugin:${AMBER}/amber-light`;
 const DEFAULTS = 'dev.shadergrove.default-themes';

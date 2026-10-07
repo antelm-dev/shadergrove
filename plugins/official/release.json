@@ -1,1 +1,11 @@
-{ "packages": ["default-themes", "language-en", "language-fr", "shadertoy", "wallpaper-engine"] }
+{
+  "packages": [
+    "default-themes",
+    "language-en",
+    "language-fr",
+    "grove-amber",
+    "shadertoy",
+    "wallpaper-engine",
+    "isf"
+  ]
+}

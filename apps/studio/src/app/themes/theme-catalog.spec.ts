@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -14,6 +12,7 @@ import { isPluginCompatible } from '@shadergrove/shared/plugin';
 
 import { monacoThemeId } from '../editor/editor-themes';
 import type { InstalledPlugin } from '../plugins/plugin-installations';
+import { officialPackageText, withUnpairedThemes } from '../plugins/testing/official-packages';
 import {
   UI_ROLE_PROPERTIES,
   UI_THEME_PROPERTIES,
@@ -28,13 +27,10 @@ import {
   uiThemeProperties,
 } from './theme-catalog';
 
-const fixture = resolve(
-  import.meta.dirname,
-  '../../../../../tools/workspace/fixtures/plugins/themes/grove-amber.sgplugin.json',
-);
+const AMBER_TEXT = officialPackageText('dev.shadergrove.grove-amber');
 
 function amber(): PluginPackage {
-  const parsed = parsePluginPackage(readFileSync(fixture, 'utf8'));
+  const parsed = parsePluginPackage(AMBER_TEXT);
   if (!parsed.ok) throw new Error(parsed.errors.join());
   return parsed.value;
 }
@@ -56,8 +52,8 @@ function installed(
 const DARK = 'plugin:dev.shadergrove.grove-amber/amber-dark';
 const LIGHT = 'plugin:dev.shadergrove.grove-amber/amber-light';
 
-describe('the Grove Amber fixture', () => {
-  it('is a valid, code-free package of a light and a dark theme for this app', () => {
+describe('the official Grove Amber package', () => {
+  it('is a valid, code-free package of a paired light and dark theme for this app', () => {
     const plugin = amber();
     expect(plugin.code).toBeUndefined();
     expect(isPluginCompatible(plugin.manifest, APP_VERSION)).toBe(true);
@@ -67,6 +63,7 @@ describe('the Grove Amber fixture', () => {
       ['theme', 'dark'],
       ['theme', 'light'],
     ]);
+    expect(themePairs(pluginThemeEntries([installed(plugin)]))).toHaveLength(1);
   });
 });
 
@@ -77,7 +74,7 @@ describe('pluginThemeEntries', () => {
     expect(entries[0]).toMatchObject({
       packageName: 'Grove Amber',
       publisher: 'Shadergrove',
-      version: '1.0.0',
+      version: '1.0.1',
       license: 'CC0-1.0',
     });
     expect(pluginThemeEntries([installed(amber(), false)])).toEqual([]);
@@ -175,16 +172,18 @@ describe('resolveEditorTheme', () => {
   });
 });
 
-/** The fixture as a protocol 3 package whose themes are one pair, as the official pack is. */
+/** Grove Amber under another id, its themes one pair in `group`. */
 function pairedAmber(group = 'amber', id = 'dev.example.paired-amber'): PluginPackage {
-  const json = JSON.parse(readFileSync(fixture, 'utf8'));
+  const json = JSON.parse(AMBER_TEXT);
   json.manifest.id = id;
-  json.manifest.protocolVersion = 3;
-  for (const theme of json.manifest.contributions) {
-    theme.schemaVersion = 2;
-    theme.variantGroup = group;
-  }
+  for (const theme of json.manifest.contributions) theme.variantGroup = group;
   const parsed = parsePluginPackage(JSON.stringify(json));
+  if (!parsed.ok) throw new Error(parsed.errors.join());
+  return parsed.value;
+}
+
+function unpairedAmber(): PluginPackage {
+  const parsed = parsePluginPackage(withUnpairedThemes(AMBER_TEXT));
   if (!parsed.ok) throw new Error(parsed.errors.join());
   return parsed.value;
 }
@@ -193,7 +192,7 @@ describe('pairs and System mode', () => {
   const PAIRED_DARK = 'plugin:dev.example.paired-amber/amber-dark';
   const PAIRED_LIGHT = 'plugin:dev.example.paired-amber/amber-light';
   const paired = pluginThemeEntries([installed(pairedAmber(), true, 'dev.example.paired-amber')]);
-  const unpaired = pluginThemeEntries([installed(amber())]);
+  const unpaired = pluginThemeEntries([installed(unpairedAmber())]);
 
   it('finds each complete pair once, by package and group', () => {
     expect(themePairs(paired)).toEqual([

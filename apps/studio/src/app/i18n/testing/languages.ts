@@ -1,6 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-
 import { signal, type Provider } from '@angular/core';
 
 import {
@@ -11,32 +8,13 @@ import {
 } from '@shadergrove/shared/plugin';
 
 import { PluginInstallations, type InstalledPlugin } from '../../plugins/plugin-installations';
+import { officialPackageText } from '../../plugins/testing/official-packages';
 
 /**
  * For tests that render real text: `I18n` speaks the bundled English, and the
  * official French pack exactly as this release ships it is installed and on,
  * so a test can choose it the way a user does.
  */
-// Bundled with the spec that imports it, `import.meta.dirname` is that spec's folder:
-// found by walking up rather than by a fixed number of `..`.
-const generated = (() => {
-  for (let dir = import.meta.dirname; dir !== dirname(dir); dir = dirname(dir)) {
-    const candidate = resolve(dir, 'src/plugins');
-    if (existsSync(resolve(candidate, 'catalogue.json'))) return candidate;
-  }
-  throw new Error('No generated plugins found above ' + import.meta.dirname);
-})();
-
-/** The text of a package this release ships, by id. */
-export function officialPackageText(id: string): string {
-  const catalogue = JSON.parse(readFileSync(resolve(generated, 'catalogue.json'), 'utf8')) as {
-    packages: { id: string; file: string }[];
-  };
-  return readFileSync(
-    resolve(generated, catalogue.packages.find((entry) => entry.id === id)!.file),
-    'utf8',
-  );
-}
 
 /** A package as `PluginInstallations` lists it once installed. */
 export function installedPackage(text: string, active = true): InstalledPlugin {

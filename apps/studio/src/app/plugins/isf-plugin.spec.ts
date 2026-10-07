@@ -13,18 +13,20 @@ import {
 } from '@shadergrove/shared';
 import { PluginCallError, PluginHost } from './plugin-host';
 import { inProcessStart } from './testing/in-process-sandbox';
+import { officialPackageText } from './testing/official-packages';
 
 /**
- * The ISF plugin, as a user installs it: the committed `.sgplugin.json`, loaded
- * through the real `PluginHost` and its limits, its code run by an in-process
- * stand-in for the Worker (see `testing/in-process-sandbox`). Compiling and
- * drawing the converted effects is the browser E2E's part.
+ * The official ISF plugin, as a user installs it: the package this release's
+ * catalogue lists, loaded through the real `PluginHost` and its limits, its
+ * code run by an in-process stand-in for the Worker (see
+ * `testing/in-process-sandbox`). Compiling and drawing the converted effects
+ * is the browser E2E's part.
  */
-const dir = resolve(import.meta.dirname, '../../../../../tools/workspace/fixtures/plugins/isf');
-const read = (path: string) => readFileSync(resolve(dir, path), 'utf8');
+const fixtures = resolve(import.meta.dirname, '../../../../../plugins/official/isf/fixtures');
+const read = (name: string) => readFileSync(resolve(fixtures, name), 'utf8');
 
 function loadPackage(): PluginPackage {
-  const parsed = parsePluginPackage(read('isf.sgplugin.json'));
+  const parsed = parsePluginPackage(officialPackageText('dev.shadergrove.isf'));
   if (!parsed.ok) throw new Error(parsed.errors.join('; '));
   return parsed.value;
 }
@@ -60,16 +62,7 @@ const markedBody = (source: string) =>
   );
 
 describe('the ISF plugin package', () => {
-  it('is what its manifest and code build, and installs on this app version', () => {
-    const built = `${JSON.stringify(
-      {
-        manifest: JSON.parse(read('manifest.json')),
-        code: read('isf-plugin.js').replace(/\r\n/g, '\n'),
-      },
-      null,
-      2,
-    )}\n`;
-    expect(read('isf.sgplugin.json').replace(/\r\n/g, '\n')).toBe(built);
+  it('installs on this app version', () => {
     expect(isPluginCompatible(plugin.manifest, APP_VERSION)).toBe(true);
     expect(plugin.manifest.contributions.map((c) => `${c.kind}:${c.id}`)).toEqual([
       'importer:isf-import',
@@ -80,7 +73,7 @@ describe('the ISF plugin package', () => {
 
 describe('importing ISF FX filters', () => {
   it('converts a plain colour filter, keeping its code untouched between the markers', async () => {
-    const text = read('examples/tint.fs');
+    const text = read('tint.fs');
     const effect = await importIsf(text);
 
     expect(effect.name).toBe('Warm tint');
@@ -91,7 +84,7 @@ describe('importing ISF FX filters', () => {
   });
 
   it('converts a filter that samples at offset coordinates with time and render size', async () => {
-    const effect = await importIsf(read('examples/uv-offset.fs'));
+    const effect = await importIsf(read('uv-offset.fs'));
 
     expect(effect.name).toBe('Wobble');
     expect(effect.source).toContain(
@@ -110,7 +103,7 @@ describe('importing ISF FX filters', () => {
   });
 
   it("defines the spec's IMG_NORM_THIS_PIXEL and the IMG_THIS_NORM_PIXEL spelling", async () => {
-    const effect = await importIsf(read('examples/tint.fs'));
+    const effect = await importIsf(read('tint.fs'));
     expect(effect.source).toContain(
       '#define IMG_NORM_THIS_PIXEL(image) texture2D(tDiffuse, isf_uv)',
     );
@@ -172,7 +165,7 @@ describe('importing ISF FX filters', () => {
   });
 
   it('turns float, bool, color and long inputs into controls with their defaults', async () => {
-    const effect = await importIsf(read('examples/controls.fs'));
+    const effect = await importIsf(read('controls.fs'));
 
     expect(effect.controls).toEqual([
       { key: 'levels', type: 'number', default: 4, min: 2, max: 16, label: 'Levels' },
@@ -201,10 +194,7 @@ describe('importing ISF FX filters', () => {
 
 describe('exporting and re-importing', () => {
   it('round-trips an imported filter: code, controls, current values and the rest of the header', async () => {
-    const original = read('examples/controls.fs').replace(
-      'Shadergrove fixture',
-      'Shadergrove *\\/ fixture',
-    );
+    const original = read('controls.fs').replace('Shadergrove fixture', 'Shadergrove *\\/ fixture');
     const imported = await importIsf(original);
     const tuned = { ...imported, values: { levels: 8, invert: true, tint: '#00ff00', channel: 2 } };
 
