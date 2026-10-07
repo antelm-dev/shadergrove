@@ -352,6 +352,73 @@ void main() {
   expect(after.value - before.value).toBe(step * (after.index - before.index));
 });
 
+test('a live frame drawn while the observation yields between readback bands stays out of its target', async ({
+  page,
+}) => {
+  let project = addBuffer(createProject(IMAGE, DEFAULT_VERTEX));
+  const [a] = bufferPasses(project);
+  project = setPassSource(
+    project,
+    a.id,
+    `precision highp float;
+uniform vec2 iResolution;
+uniform sampler2D iChannel0;
+void main() {
+  vec4 previous = texture2D(iChannel0, gl_FragCoord.xy / iResolution.xy);
+  gl_FragColor = vec4(previous.r + 1.5, 0.0, 0.0, 1.0);
+}`,
+  );
+  project = setChannelBinding(project, a.id, 0, { kind: 'buffer', passId: a.id, feedback: true });
+  project = setPassSource(
+    project,
+    imagePass(project).id,
+    `precision highp float;
+uniform vec2 iResolution;
+uniform sampler2D iChannel0;
+void main() {
+  vec4 fromA = texture2D(iChannel0, gl_FragCoord.xy / iResolution.xy);
+  float seen = fromA.r * 2.0;
+  gl_FragColor = vec4(seen * 0.001, 0.0, 0.0, 1.0);
+}`,
+  );
+  project = setChannelBinding(project, imagePass(project).id, 0, {
+    kind: 'buffer',
+    passId: a.id,
+    feedback: false,
+  });
+  await open(page, 'Observe live frame between bands', project, 2);
+  const { panel, section } = await captureAndFind(page);
+  await panel.locator('.pass-select').selectOption({ index: 1 });
+  await section.locator('.find').click();
+  await choose(section, 'seen');
+  await pick(panel, 1, 1);
+  // A paused preview that owes a frame (any layout or control change asks for one) draws it on
+  // the next animation frame, which can land in any macrotask the observation yields to between
+  // readback bands. Draw exactly that real live frame right after the first band is read.
+  const framesBefore = (await page.evaluate(`${engineOf}.framesDrawn`)) as number;
+  await page.evaluate(() => {
+    const engine = (window as any).ng
+      .getComponent(document.querySelector('app-shader-canvas'))
+      .engine();
+    const renderer = engine.context.renderer;
+    const read = renderer.readRenderTargetPixels.bind(renderer);
+    let drawn = false;
+    renderer.readRenderTargetPixels = (...args: unknown[]) => {
+      read(...args);
+      if (!drawn && engine.observing) {
+        drawn = true;
+        renderer.readRenderTargetPixels = read;
+        engine.requestFrames(1);
+        engine.tick();
+      }
+    };
+  });
+  await measure(section);
+  expect(await page.evaluate(`${engineOf}.framesDrawn`)).toBe(framesBefore + 1);
+  // The frozen inputs and the frozen reference are unchanged; only a live frame was drawn.
+  await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
+});
+
 test('cancels when the capture is released or the panel is hidden, and starts no inactive work', async ({
   page,
 }) => {
