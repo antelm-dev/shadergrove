@@ -28,16 +28,16 @@
     },
     {
       "id": "dev.shadergrove.language-en",
-      "version": "1.0.1",
+      "version": "1.0.4",
       "name": "English",
       "description": "Shadergrove's interface in English.",
       "publisher": "Shadergrove",
       "license": "Apache-2.0",
       "protocolVersion": 3,
       "appVersionRange": ">=1.5.0 <3.0.0",
-      "file": "dev.shadergrove.language-en-1.0.1.sgplugin.json",
+      "file": "dev.shadergrove.language-en-1.0.4.sgplugin.json",
       "bytes": 48545,
-      "sha256": "6adedc7ba56bc8782b872f00752c2a9a3c53cab676bc11e8585184dc26e17fc0",
+      "sha256": "b949693ab9365723edb978ab1d59d20fac247452f3e15f4d10f9e3808b3ddc2b",
       "contributions": [
         {
           "kind": "language",
@@ -48,16 +48,16 @@
     },
     {
       "id": "dev.shadergrove.language-fr",
-      "version": "1.0.1",
+      "version": "1.0.4",
       "name": "French",
       "description": "Shadergrove's interface in French (Français).",
       "publisher": "Shadergrove",
       "license": "Apache-2.0",
       "protocolVersion": 3,
       "appVersionRange": ">=1.5.0 <3.0.0",
-      "file": "dev.shadergrove.language-fr-1.0.1.sgplugin.json",
+      "file": "dev.shadergrove.language-fr-1.0.4.sgplugin.json",
       "bytes": 53452,
-      "sha256": "bb2a351e59a8cf264d55479efbb5db04115dda6bd56ad0689b2375ccd3647090",
+      "sha256": "608f8c5b82ae781446dfad670f91c0731f489dd3773ace5da864e364aa2e589e",
       "contributions": [
         {
           "kind": "language",

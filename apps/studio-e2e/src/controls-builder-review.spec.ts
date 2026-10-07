@@ -126,16 +126,17 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
   page,
 }) => {
   const FRENCH = 'dev.shadergrove.language-fr';
-  // The 1.0.1 pack as shipped before the builder: this branch's 1.0.1 without its new keys.
+  // The 1.0.1 pack as shipped before the builder: the current pack at 1.0.1 without its new keys.
   const current = JSON.parse(
     readFileSync(
       resolve(
         import.meta.dirname,
-        '../../studio/src/plugins/dev.shadergrove.language-fr-1.0.1.sgplugin.json',
+        '../../studio/src/plugins/dev.shadergrove.language-fr-1.0.4.sgplugin.json',
       ),
       'utf8',
     ),
   );
+  current.manifest.version = '1.0.1';
   const messages = current.manifest.contributions[0].messages as Record<string, string>;
   for (const key of Object.keys(messages)) {
     if (
@@ -175,4 +176,14 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
   await page.getByTestId('open-plugins').click();
   await expect(page.getByTestId(`available-${FRENCH}`)).toBeVisible();
   await expect(page.getByTestId(`install-available-${FRENCH}`)).toBeVisible({ timeout: 10_000 });
+
+  // Updating carries the builder's French strings over; the pack may come back disabled.
+  await page.getByTestId(`install-available-${FRENCH}`).click();
+  await expect(page.getByTestId(`available-installed-${FRENCH}`)).toBeVisible();
+  const updated = page.getByTestId(`plugin-enable-${FRENCH}`).getByRole('switch');
+  if (!(await updated.isChecked())) await updated.click();
+  await expect(updated).toBeChecked();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+  await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
+  await expect(page.getByRole('button', { name: 'Modifier les contrôles' })).toBeVisible();
 });
