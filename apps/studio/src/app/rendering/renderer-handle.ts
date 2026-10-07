@@ -140,6 +140,14 @@ export class RendererHandle {
     const engine = this.engine();
     if (!engine) throw new FrameCaptureError('no-renderer', 'There is no active renderer.');
     const snapshot = await engine.captureFrame(options);
+    // The engine resolves inside its frame, and the callbacks of that frame run before
+    // this continuation: a release, unregister, invalidation, context switch or newer
+    // capture may already have ended this snapshot. Never publish what the engine no
+    // longer retains, and never overwrite what it retains now.
+    if (snapshot.released || this.engine() !== engine || engine.capturedFrame !== snapshot) {
+      snapshot.release();
+      throw new FrameCaptureError('released', 'The capture was released before it was published.');
+    }
     this.capturedFrame.set(snapshot);
     return snapshot;
   }

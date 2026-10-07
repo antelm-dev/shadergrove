@@ -4,6 +4,7 @@ import type { ChannelBinding } from '@shadergrove/shared';
 
 import { CHANNEL_UNIFORMS } from './engine/channel-binder';
 import type { PassRuntime } from './engine/pass-compiler';
+import type { PreEffectObserver } from './engine/post-processing';
 import { CHANNEL_COUNT, type TextureManager } from './engine/texture-manager';
 import type { GlContext, ThreeModule } from './gl-context';
 import type { BufferTargets } from './pass-targets';
@@ -96,6 +97,11 @@ export type ImageOrigin = 'image-slot' | 'buffer-output' | 'image-raw-replay' | 
 const BYTES_PER_TEXEL: Record<TexelFormat, number> = { rgba8: 4, rgba16f: 8, rgba32f: 16 };
 const FLOAT_TEXEL_BYTES = 16;
 
+/** A half float rounds to within 2^-11 of its value, and to 2^-25 of zero; this allows twice that. */
+const HALF_MAX = 65504;
+const HALF_RELATIVE = 2 ** -10;
+const HALF_ABSOLUTE = 2 ** -24;
+
 export type UniformValue = number | boolean | string | readonly UniformValue[];
 
 export interface CapturedImage {
@@ -133,14 +139,15 @@ export interface CapturedInput {
   readonly sampling: CapturedSampling;
 }
 
-export type ReplayComparison =
-  | {
-      readonly status: 'match';
-      readonly maxDelta: number;
-      readonly comparedChannels: 3 | 4;
-      readonly skippedNonFinite: number;
-    }
-  | { readonly status: 'not-comparable'; readonly reason: string };
+/** A replay that disagreed with its reference is refused, so a comparison always means a match. */
+export interface ReplayComparison {
+  readonly status: 'match';
+  /** What the replay was held against: the canvas itself, or the Image pass's own output before its effects. */
+  readonly reference: 'canvas' | 'pre-effect-live';
+  readonly maxDelta: number;
+  readonly comparedChannels: 3 | 4;
+  readonly skippedNonFinite: number;
+}
 
 export interface CapturedOutput {
   /** Raw, untransformed data: the buffer's target, or the labelled replay of the Image pass. */
@@ -318,6 +325,85 @@ function serializeUniform(value: unknown, name: string): UniformValue {
   throw new FrameCaptureError('unsupported', `Uniform "${name}" cannot be recorded faithfully.`);
 }
 
+/** The uniforms three.js itself supplies to a `ShaderMaterial`, from its camera and object. */
+const RENDERER_UNIFORMS = [
+  'modelMatrix',
+  'viewMatrix',
+  'projectionMatrix',
+  'modelViewMatrix',
+  'normalMatrix',
+  'cameraPosition',
+  'isOrthographic',
+] as const;
+
+/** Column-major `a × b`, as three.js lays matrices out. */
+function multiply4(a: ArrayLike<number>, b: ArrayLike<number>): number[] {
+  const out = new Array<number>(16).fill(0);
+  for (let column = 0; column < 4; column++) {
+    for (let row = 0; row < 4; row++) {
+      for (let k = 0; k < 4; k++) out[column * 4 + row] += a[k * 4 + row] * b[column * 4 + k];
+    }
+  }
+  return out;
+}
+
+/** The inverse transpose of a matrix's upper 3×3, or zeros where it has no inverse: three's `normalMatrix`. */
+function normalMatrixOf(m: readonly number[]): number[] {
+  const at = (row: number, column: number) => m[column * 4 + row];
+  const cofactor = (row: number, column: number) => {
+    const [r0, r1] = [0, 1, 2].filter((r) => r !== row);
+    const [c0, c1] = [0, 1, 2].filter((c) => c !== column);
+    const minor = at(r0, c0) * at(r1, c1) - at(r0, c1) * at(r1, c0);
+    return (row + column) % 2 === 0 ? minor : -minor;
+  };
+  const det = at(0, 0) * cofactor(0, 0) + at(0, 1) * cofactor(0, 1) + at(0, 2) * cofactor(0, 2);
+  const out = new Array<number>(9).fill(0);
+  if (det === 0) return out;
+  for (let column = 0; column < 3; column++) {
+    for (let row = 0; row < 3; row++) out[column * 3 + row] = cofactor(row, column) / det;
+  }
+  return out;
+}
+
+/**
+ * The renderer-supplied uniforms the accepted program actually names, as the draw
+ * is about to receive them. three.js sets these per draw from the camera and the
+ * object, not from `material.uniforms`, so they are read from the same two objects.
+ * The supported path draws one untransformed full-screen mesh; anything else would
+ * not replay faithfully and is refused rather than recorded wrongly.
+ */
+function rendererUniforms(
+  src: FrameSource,
+  vertex: string,
+  fragment: string,
+): Record<string, UniformValue> {
+  const code = `${vertex}\n${fragment}`.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
+  const used = RENDERER_UNIFORMS.filter((name) => new RegExp(`\\b${name}\\b`).test(code));
+  if (used.length === 0) return {};
+
+  const camera = src.camera as THREE.Camera & { isOrthographicCamera?: boolean };
+  const model = src.object.matrixWorld.elements;
+  const identity = model.every((value, index) => value === (index % 5 === 0 ? 1 : 0));
+  if (!identity && used.some((name) => /^(model|normal)/.test(name))) {
+    throw new FrameCaptureError(
+      'unsupported',
+      'The drawn object is transformed, which a capture cannot replay.',
+    );
+  }
+  const view = camera.matrixWorldInverse.elements;
+  const modelView = multiply4(view, model);
+  const values: Record<(typeof RENDERER_UNIFORMS)[number], () => UniformValue> = {
+    modelMatrix: () => [...model],
+    viewMatrix: () => [...view],
+    projectionMatrix: () => [...camera.projectionMatrix.elements],
+    modelViewMatrix: () => modelView,
+    normalMatrix: () => normalMatrixOf(modelView),
+    cameraPosition: () => camera.matrixWorld.elements.slice(12, 15),
+    isOrthographic: () => camera.isOrthographicCamera === true,
+  };
+  return Object.fromEntries(used.map((name) => [name, values[name]()]));
+}
+
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === 'object' && !ArrayBuffer.isView(value) && !Object.isFrozen(value)) {
     Object.freeze(value);
@@ -343,6 +429,8 @@ export interface FrameSource {
   readonly resolutionScale: number;
   readonly usesComposer: boolean;
   readonly geometry: THREE.BufferGeometry;
+  /** The full-screen mesh the Image and buffer passes are drawn on. */
+  readonly object: THREE.Object3D;
   readonly camera: THREE.Camera;
 }
 
@@ -537,15 +625,31 @@ function planFrame(three: ThreeModule, src: FrameSource, caps: Capabilities, lim
   }
 
   const hasImage = src.passes.some((pass) => pass.kind === 'image');
+  const frame = caps.width * caps.height;
+  // Behind effects the canvas is not the Image pass: its pre-effect output is read once
+  // as the replay's live reference, and that array lives until the comparison.
+  const observed = hasImage && src.usesComposer;
+  const reference = observed ? frame * FLOAT_TEXEL_BYTES : 0;
+  if (observed) {
+    if (Math.max(caps.width, caps.height) > caps.maxTextureSize) {
+      throw new FrameCaptureError(
+        'unsupported',
+        `A ${caps.width}×${caps.height} capture exceeds the GPU texture limit ${caps.maxTextureSize}.`,
+      );
+    }
+    maxWidth = Math.max(maxWidth, caps.width);
+    maxHeight = Math.max(maxHeight, caps.height);
+  }
   let replayTemp = 0;
   if (hasImage) {
-    const frame = caps.width * caps.height;
     retained += frame * BYTES_PER_TEXEL.rgba32f + frame * BYTES_PER_TEXEL.rgba8;
-    // The replay's own float target, its uploaded copies of the inputs, and the four placeholders.
-    replayTemp = frame * FLOAT_TEXEL_BYTES + replayInputs + CHANNEL_COUNT * 4;
+    // The replay's own float target, its uploaded copies of the inputs, the four placeholders,
+    // and the reference it is compared with.
+    replayTemp = frame * FLOAT_TEXEL_BYTES + replayInputs + CHANNEL_COUNT * 4 + reference;
   }
-  // The float target a texture is drawn into, and the CPU array it is read into.
-  const copyTemp = images.size > 0 ? maxWidth * maxHeight * FLOAT_TEXEL_BYTES * 2 : 0;
+  // The float target a texture is drawn into, the CPU array it is read into, and the reference.
+  const sources = images.size > 0 || observed;
+  const copyTemp = sources ? maxWidth * maxHeight * FLOAT_TEXEL_BYTES * 2 + reference : 0;
   const peak = retained + Math.max(copyTemp, replayTemp);
 
   if (peak > limit) {
@@ -554,7 +658,7 @@ function planFrame(three: ThreeModule, src: FrameSource, caps: Capabilities, lim
       `Capturing this frame needs ${peak} bytes of retained and temporary payload, over the ${limit}-byte limit. Nothing was captured or downsampled.`,
     );
   }
-  return { retained, peak, copyTemp, replayTemp, maxWidth, maxHeight, hasSources: images.size > 0 };
+  return { retained, peak, copyTemp, replayTemp, maxWidth, maxHeight, hasSources: sources };
 }
 
 // -----------------------------------------------------------------------------
@@ -781,6 +885,7 @@ interface ImagePassState {
   readonly inputs: CapturedInput[];
   readonly clones: Record<string, unknown>;
   readonly size: { width: number; height: number };
+  readonly camera: THREE.Camera;
 }
 
 /**
@@ -799,6 +904,8 @@ export class CaptureSession {
   private temp: number;
   private ended = false;
   private nextImage = 0;
+  /** The Image pass's own output behind post-processing, as drawn: what the replay is held to. */
+  private reference: Float32Array | null = null;
 
   /** @internal Use `FrameInspector`. */
   constructor(
@@ -864,6 +971,7 @@ export class CaptureSession {
         clones[name] = cloneUniform(uniform.value, name);
         uniforms[name] = serializeUniform(clones[name], name);
       }
+      Object.assign(uniforms, rendererUniforms(this.src, pass.vertex, pass.fragment));
 
       const accepted = pass.accepted;
       const requested = this.src.identity.requestedRevision;
@@ -892,9 +1000,31 @@ export class CaptureSession {
           comparison: null,
         },
       });
-      if (pass.kind === 'image') this.image = { pass, inputs, clones, size: { ...size } };
+      if (pass.kind === 'image') {
+        // The replay draws with this copy of the camera, not the live one.
+        this.image = { pass, inputs, clones, size: { ...size }, camera: this.src.camera.clone() };
+      }
     });
   }
+
+  /**
+   * Behind effects: the composer's buffer holds exactly what the Image pass drew,
+   * after the scene pass and before any effect. Read it now, before an effect
+   * overwrites it; it is the live reference the frozen replay is verified against.
+   */
+  readonly observePreEffect: PreEffectObserver = (texture, width, height) => {
+    this.guard(() => {
+      if (!this.image || !this.reader) return;
+      const frame = this.frameSize();
+      if (width !== frame.width || height !== frame.height) {
+        throw new FrameCaptureError(
+          'unsupported',
+          `The post-processing buffer is ${width}×${height} but the drawing buffer is ${frame.width}×${frame.height}; the Image pass cannot be observed before its effects.`,
+        );
+      }
+      this.reference = this.reader.read(texture, width, height).slice();
+    });
+  };
 
   /** After a buffer pass is drawn: what it wrote is raw data, still in its target. */
   afterDraw(pass: PassRuntime, target: THREE.WebGLRenderTarget): void {
@@ -945,6 +1075,7 @@ export class CaptureSession {
     this.ended = true;
     this.reader?.dispose();
     this.reader = null;
+    this.reference = null;
   }
 
   get active(): boolean {
@@ -1168,7 +1299,7 @@ export class CaptureSession {
       try {
         renderer.setRenderTarget(target);
         assertComplete(gl, 'Image replay');
-        renderer.render(scene, this.src.camera);
+        renderer.render(scene, image.camera);
         renderer.readRenderTargetPixels(target, 0, 0, frame.width, frame.height, raw);
       } finally {
         renderer.setRenderTarget(previous);
@@ -1192,17 +1323,65 @@ export class CaptureSession {
       };
     } finally {
       for (const resource of owned) resource.dispose();
+      this.reference = null;
     }
   }
 
-  private compare(raw: Float32Array, display: Uint8Array, gl: Gl): ReplayComparison {
-    if (this.src.usesComposer) {
-      return {
-        status: 'not-comparable',
-        reason:
-          'Post-processing is active, so the canvas holds the processed output, not the Image pass.',
-      };
+  /**
+   * Behind effects the canvas holds the processed picture, which stays a separate,
+   * labelled image: the replay is held to the Image pass's own pre-effect output.
+   * The composer's buffer is half-float, so equal means equal to a half's rounding.
+   */
+  private compareToReference(raw: Float32Array): ReplayComparison {
+    const reference = this.reference;
+    if (!reference || reference.length !== raw.length) {
+      throw new FrameCaptureError(
+        'unsupported',
+        'The Image pass could not be observed before its effects, so its replay cannot be verified.',
+      );
     }
+    let maxDelta = 0;
+    let skipped = 0;
+    let mismatch = false;
+    for (let index = 0; index < raw.length; index++) {
+      const live = reference[index];
+      const replayed = raw[index];
+      if (Number.isNaN(live) || Number.isNaN(replayed)) {
+        skipped++;
+        continue;
+      }
+      // Beyond the half-float range the live buffer saturates; the replay may exceed it.
+      if (!Number.isFinite(live)) {
+        if (Math.sign(live) === Math.sign(replayed) && Math.abs(replayed) >= HALF_MAX) {
+          skipped++;
+          continue;
+        }
+        maxDelta = Infinity;
+        mismatch = true;
+        break;
+      }
+      const delta = Math.abs(replayed - live);
+      maxDelta = Math.max(maxDelta, delta);
+      // False for an infinite replay too, which is the point.
+      if (!(delta <= Math.max(Math.abs(live) * HALF_RELATIVE, HALF_ABSOLUTE))) mismatch = true;
+    }
+    if (mismatch) {
+      throw new FrameCaptureError(
+        'replay-mismatch',
+        `The frozen Image replay differs from the live pre-effect Image output by ${maxDelta}; the raw Image data cannot be trusted.`,
+      );
+    }
+    return {
+      status: 'match',
+      reference: 'pre-effect-live',
+      maxDelta,
+      comparedChannels: 4,
+      skippedNonFinite: skipped,
+    };
+  }
+
+  private compare(raw: Float32Array, display: Uint8Array, gl: Gl): ReplayComparison {
+    if (this.src.usesComposer) return this.compareToReference(raw);
     // A canvas without an alpha buffer reads back opaque whatever the shader wrote.
     const channels = gl.getContextAttributes()?.alpha === false ? 3 : 4;
     let maxDelta = 0;
@@ -1224,7 +1403,13 @@ export class CaptureSession {
         `The frozen Image replay differs from the live canvas by ${maxDelta}/255; the raw Image data cannot be trusted.`,
       );
     }
-    return { status: 'match', maxDelta, comparedChannels: channels, skippedNonFinite: skipped };
+    return {
+      status: 'match',
+      reference: 'canvas',
+      maxDelta,
+      comparedChannels: channels,
+      skippedNonFinite: skipped,
+    };
   }
 }
 

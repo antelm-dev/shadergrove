@@ -1153,7 +1153,7 @@ export class ShaderEngine {
           height: resolution?.y ?? 0,
         });
       }
-      this.post.render(this.scene, this.camera);
+      this.post.render(this.scene, this.camera, session?.observePreEffect);
       session?.finish();
     } finally {
       session?.dispose();
@@ -1181,6 +1181,7 @@ export class ShaderEngine {
       resolutionScale: this.resolutionScale,
       usesComposer: this.post.usesComposer(),
       geometry: this.mesh.geometry,
+      object: this.mesh,
       camera: this.camera,
     };
   }
@@ -1215,19 +1216,24 @@ export class ShaderEngine {
 
   private drawFrameWithPassSample(samplePassId: string | null, usesComposer: boolean): void {
     this.post.setTime(this.time);
-    this.drawBuffers(samplePassId);
-    const image = this.compiler.imagePass;
-    if (image) this.binder.bind(image.uniforms, image.channels);
+    try {
+      this.drawBuffers(samplePassId);
+      const image = this.compiler.imagePass;
+      if (image) this.binder.bind(image.uniforms, image.channels);
 
-    const finalPassId = usesComposer ? POST_PASS_ID : IMAGE_PASS_ID;
-    if (samplePassId === finalPassId) {
-      this.profiler.beginGpu();
+      const finalPassId = usesComposer ? POST_PASS_ID : IMAGE_PASS_ID;
+      if (samplePassId === finalPassId) {
+        this.profiler.beginGpu();
+        this.post.render(this.scene, this.camera);
+        this.profiler.endGpu();
+        return;
+      }
+
       this.post.render(this.scene, this.camera);
-      this.profiler.endGpu();
-      return;
+    } finally {
+      // Every actual frame counts once, whichever path drew it.
+      this.framesDrawn++;
     }
-
-    this.post.render(this.scene, this.camera);
   }
 
   /** @deprecated internal alias kept for screenshot path */
