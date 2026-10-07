@@ -1,6 +1,7 @@
 import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { MatDialog } from '@angular/material/dialog';
+import { of } from 'rxjs';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -83,7 +84,8 @@ describe('PluginCommands', () => {
   const user = signal<{ id: string } | null>(null);
   const status = signal<'loading' | 'anonymous' | 'authenticated'>('anonymous');
   const record = signal<{ id: string; name: string } | null>({ id: 'waves', name: 'Waves' });
-  const navigate = vi.fn(async () => true);
+  const openDialog = vi.fn((..._args: unknown[]) => ({ afterClosed: () => of(undefined) }));
+  let dialogOpen = false;
   const adopt = vi.fn(() => ({ ok: true as const }));
   const notice = signal<{ text: string; error: boolean } | null>(null);
   let profiles: Map<string, Map<string, StoredPlugin>>;
@@ -145,7 +147,10 @@ describe('PluginCommands', () => {
           },
         },
         { provide: EffectAdoption, useValue: { adopt } },
-        { provide: Router, useValue: { navigate } },
+        {
+          provide: MatDialog,
+          useValue: { open: openDialog, getDialogById: () => (dialogOpen ? {} : undefined) },
+        },
         { provide: SOURCE_PROVIDERS, useValue: provider, multi: true },
         provideHostAdapters({ exportRuntimes: [WallpaperWebRuntime] }),
       ],
@@ -176,7 +181,8 @@ describe('PluginCommands', () => {
     user.set(null);
     status.set('anonymous');
     record.set({ id: 'waves', name: 'Waves' });
-    navigate.mockClear();
+    openDialog.mockClear();
+    dialogOpen = false;
     adopt.mockClear();
     notice.set(null);
   });
@@ -320,9 +326,72 @@ describe('PluginCommands', () => {
       'action.importShadertoy (Other Shadertoy)',
     ]);
 
-    // Each opens its own package's form in Plugins, not the first one found.
+    // Each opens its own import dialog, not the first one found — and never the Plugins page.
     commands.imports()[1].action();
-    expect(navigate).toHaveBeenCalledWith(['/plugins'], { queryParams: { use: other } });
+    await settle();
+    await vi.waitFor(() => expect(openDialog).toHaveBeenCalledOnce());
+    const config = openDialog.mock.calls[0]![1] as {
+      data: { context: { id: string }; contributionId: string };
+    };
+    expect(config.data.context.id).toBe(other);
+    expect(config.data.contributionId).toBe('shadertoy');
+    expect(notice()).toBeNull();
+  });
+
+  it('opens one import dialog at a time', async () => {
+    const { commands, installations } = setup();
+    await settle();
+    await install(installations, text(SHADERTOY));
+    await installations.setEnabled(SHADERTOY, true);
+    dialogOpen = true;
+    commands.imports()[0].action();
+    await settle();
+    expect(openDialog).not.toHaveBeenCalled();
+  });
+
+  it('refuses a kept import command once its package was updated, switched off or moved profile', async () => {
+    const { commands, installations } = setup();
+    await settle();
+    await install(installations, text(SHADERTOY));
+    await installations.setEnabled(SHADERTOY, true);
+    const [kept] = commands.imports();
+
+    // Updated to another version while the palette (or New shader) held the command.
+    const review = installations.review(
+      new TextEncoder().encode(
+        JSON.stringify({
+          ...JSON.parse(text(SHADERTOY)),
+          manifest: { ...JSON.parse(text(SHADERTOY)).manifest, version: '9.9.9' },
+        }),
+      ),
+    );
+    if (!review.ok) throw new Error(review.errors.join());
+    await installations.install(review);
+    await installations.setEnabled(SHADERTOY, true);
+    kept.action();
+    await settle();
+    expect(openDialog).not.toHaveBeenCalled();
+    expect(notice()).toEqual({ text: 'plugins.staleResult', error: true });
+
+    // The current command works; switched off, the same command no longer does.
+    notice.set(null);
+    const [current] = commands.imports();
+    await installations.setEnabled(SHADERTOY, false);
+    current.action();
+    await settle();
+    expect(openDialog).not.toHaveBeenCalled();
+    expect(notice()).toEqual({ text: 'plugins.staleResult', error: true });
+
+    await installations.setEnabled(SHADERTOY, true);
+    notice.set(null);
+    const [again] = commands.imports();
+    user.set({ id: 'u1' });
+    status.set('authenticated');
+    await settle();
+    again.action();
+    await settle();
+    expect(openDialog).not.toHaveBeenCalled();
+    expect(notice()).toEqual({ text: 'plugins.staleResult', error: true });
   });
 
   it('adds an effect only while the package it was offered for is still the current one', async () => {
