@@ -158,6 +158,21 @@ async function scrollExplore(page: Page): Promise<number> {
 const scrollOf = (page: Page) =>
   page.locator('app-explore-page').evaluate((host) => host.scrollTop);
 
+/**
+ * The card nearest the middle of what is on screen. Clicking a card off screen
+ * makes Playwright scroll to it first, which moves the very position under test.
+ */
+const cardOnScreen = (page: Page) =>
+  page.locator('app-explore-page').evaluate((host) => {
+    const box = host.getBoundingClientRect();
+    const middle = box.top + box.height / 2;
+    const distances = [...host.querySelectorAll('.card')].map((card) => {
+      const { top, bottom } = card.getBoundingClientRect();
+      return Math.abs((top + bottom) / 2 - middle);
+    });
+    return distances.indexOf(Math.min(...distances));
+  });
+
 test('Back and the Explore link both return to the same search, pages and scroll position', async ({
   page,
 }) => {
@@ -177,13 +192,13 @@ test('Back and the Explore link both return to the same search, pages and scroll
   await expect(page.getByRole('button', { name: 'Load more' })).toHaveCount(0);
   const scrolled = await scrollExplore(page);
   const requests = listings.length;
+  const opened = await cardOnScreen(page);
+  const number = String(opened + 1).padStart(2, '0');
 
   // Back.
-  await cards(page)
-    .nth(PER_NAME - 1)
-    .click();
-  await expect(page).toHaveURL('/explore/aurora-20');
-  await expect(page.getByRole('heading', { level: 1, name: 'Aurora 20' })).toBeVisible();
+  await cards(page).nth(opened).click();
+  await expect(page).toHaveURL(`/explore/aurora-${number}`);
+  await expect(page.getByRole('heading', { level: 1, name: `Aurora ${number}` })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL('/explore?q=aurora');
   await expect(cards(page)).toHaveCount(PER_NAME);
@@ -191,10 +206,8 @@ test('Back and the Explore link both return to the same search, pages and scroll
   await expect.poll(() => scrollOf(page)).toBe(scrolled);
 
   // The page's own link takes the same way back.
-  await cards(page)
-    .nth(PER_NAME - 1)
-    .click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Aurora 20' })).toBeVisible();
+  await cards(page).nth(opened).click();
+  await expect(page.getByRole('heading', { level: 1, name: `Aurora ${number}` })).toBeVisible();
   await page
     .locator('app-publication-page .page-bar')
     .getByRole('link', { name: 'Explore' })
