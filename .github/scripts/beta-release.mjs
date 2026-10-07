@@ -1,25 +1,18 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import {
+  compareStable,
+  findRelease,
+  highestPublishedStable,
+  listReleases,
+  readGitHub,
+  readReleasePage,
+  stableVersion,
+} from './releases.mjs';
 
-const stableVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+export { readGitHub };
+
 const betaVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-beta\.(0|[1-9]\d*)$/;
-
-export async function readGitHub(path, fetcher = fetch) {
-  const response = await fetcher(
-    `${process.env.GITHUB_API_URL || 'https://api.github.com'}/repos/${process.env.GITHUB_REPOSITORY}/${path}`,
-    {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${process.env.GH_TOKEN}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-      signal: AbortSignal.timeout(15_000),
-    },
-  );
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`GitHub ${path} returned HTTP ${response.status}`);
-  return response.json();
-}
 
 export async function resolveBetaRelease(input, read = readGitHub) {
   if (!['push', 'workflow_dispatch'].includes(input.event) || input.ref !== 'refs/heads/develop') {
@@ -35,21 +28,24 @@ export async function resolveBetaRelease(input, read = readGitHub) {
   }
   if (!betaVersion.test(version)) throw new Error('Expected a version such as 2.0.0-beta.1');
   const tag = `v${version}`;
-  const release = await read(`releases/tags/${tag}`);
+  // The tags endpoint hides drafts, so look the beta up in the full listing.
+  const releases = await listReleases(readReleasePage(read));
+  const release = findRelease(releases, tag);
   const ref = await read(`git/ref/tags/${tag}`);
   const commit = ref ? await read(`commits/${tag}`) : null;
   if (ref && commit?.sha !== input.sha) throw new Error('Beta tag points at another commit');
   if (release) {
+    // An existing beta is recovered or skipped as-is, even after its stable cycle ended.
     if (!release.prerelease) throw new Error('Existing beta release must be a prerelease');
     if (!ref && (!release.draft || release.target_commitish !== input.sha)) {
       throw new Error('Beta release targets another commit');
     }
   } else {
     const base = version.split('-beta.')[0];
-    const stable = await read(`releases/tags/v${base}`);
-    if (stable && !stable.draft && !stable.prerelease) {
+    const stable = highestPublishedStable(releases);
+    if (stable && compareStable(base, stable) <= 0) {
       throw new Error(
-        `Beta base ${base} is already released; update .github/beta-release.json or choose a newer manual version`,
+        `Beta base ${base} is not newer than published stable ${stable}; update .github/beta-release.json or choose a newer manual version`,
       );
     }
   }

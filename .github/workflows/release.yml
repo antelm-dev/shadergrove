@@ -41,7 +41,7 @@ jobs:
           # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
       - name: Test automatic release PR merge guards
-        run: node --test .github/scripts/stable-release-pr.test.mjs
+        run: node --test .github/scripts/releases.test.mjs .github/scripts/stable-release-pr.test.mjs
       - name: Create or update release pull request
         id: release
         if: ${{ !inputs.tag }}
