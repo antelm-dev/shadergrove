@@ -4,4 +4,4 @@
  * `package.json` by release-please (see `extra-files` in
  * `release-please-config.json`), so it is never edited by hand.
  */
-export const APP_VERSION = '2.1.1'; // x-release-please-version
+export const APP_VERSION = '2.2.0'; // x-release-please-version

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.2.0](https://github.com/antelm-dev/shadergrove/compare/v2.1.1...v2.2.0) (2026-10-07)
+
+
+### Features
+
+* **plugins:** open project importers in a generic import dialog ([#171](https://github.com/antelm-dev/shadergrove/issues/171)) ([b338450](https://github.com/antelm-dev/shadergrove/commit/b3384503375aeeb39770fb48dd0c4edf4aa96b26))
+* **studio:** keep Explore searches in the URL and restore browsing ([#169](https://github.com/antelm-dev/shadergrove/issues/169)) ([0fd00e0](https://github.com/antelm-dev/shadergrove/commit/0fd00e08a7bef05a4a7913d46e0731c3dd51f4f3))
+
 ## [2.1.1](https://github.com/antelm-dev/shadergrove/compare/v2.1.0...v2.1.1) (2026-10-07)
 
 
