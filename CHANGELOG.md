@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.1.0](https://github.com/antelm-dev/shadergrove/compare/v2.0.0...v2.1.0) (2026-10-07)
+
+
+### Features
+
+* **glsl-analysis:** add bounded ESSL analysis Worker ([b655607](https://github.com/antelm-dev/shadergrove/commit/b6556075b57ebbca2e6daf4296bf6eb6d30cf8a0))
+* **glsl-analysis:** replay reviewed foundation and P3 follow-up ([5aabea0](https://github.com/antelm-dev/shadergrove/commit/5aabea0bb086bb3c02ca1262c0c6e37e4655f9d9))
+
+
+### Bug Fixes
+
+* **ci:** restore plugin compatibility and isolate desktop tests ([df621f8](https://github.com/antelm-dev/shadergrove/commit/df621f860d8fcc81b772b5f0c040472f6547b90f))
+* **glsl-analysis:** raise cache-probe errors after finally ([16f4d66](https://github.com/antelm-dev/shadergrove/commit/16f4d66a4ae6d5c12dfda475f2843f54de5129ee))
+
 ## [2.0.0](https://github.com/antelm-dev/shadergrove/compare/v1.5.0...v2.0.0) (2026-10-06)
 
 
