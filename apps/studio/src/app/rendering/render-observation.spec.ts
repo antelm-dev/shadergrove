@@ -29,6 +29,7 @@ import {
   FLOAT_ABSOLUTE,
   FLOAT_RELATIVE,
   compareBand,
+  judgeFidelity,
   observationFootprint,
 } from './render-observation';
 import { ShaderEngine, type EnginePass, type MultiPassSpec } from './shader-engine';
@@ -45,6 +46,8 @@ describe('observation fidelity comparison', () => {
       maxDelta: expect.any(Number),
       mismatched: 0,
       skipped: 0,
+      mismatchedTexels: 0,
+      skippedTexels: 0,
     });
   });
 
@@ -73,6 +76,39 @@ describe('observation fidelity comparison', () => {
 
   it('never matches an infinite observation against a finite reference', () => {
     expect(compareBand([Infinity], [1], FLOAT, false).mismatched).toBe(1);
+  });
+
+  it('counts components and distinct texels separately', () => {
+    // Texel 0: two skipped components; texel 1: one mismatched and one skipped component.
+    const live = [Infinity, Infinity, 1, 1, 1, Infinity, 1, 1];
+    const seen = [Infinity, Infinity, 1, 1, 2, Infinity, 1, 1];
+    expect(compareBand(seen, live, FLOAT, false)).toMatchObject({
+      skipped: 3,
+      skippedTexels: 2,
+      mismatched: 1,
+      mismatchedTexels: 1,
+    });
+  });
+});
+
+describe('observation fidelity verdict', () => {
+  const none = { mismatchedComponents: 0, skippedComponents: 0, skippedTexels: 0 };
+
+  it('matches only when every component was numerically compared and agreed', () => {
+    expect(judgeFidelity(none)).toEqual({ status: 'match', reason: null });
+  });
+
+  it('keeps a skipped nonfinite comparison unverified, with a reason naming both counts', () => {
+    const verdict = judgeFidelity({ ...none, skippedComponents: 3, skippedTexels: 2 });
+    expect(verdict.status).toBe('unverified');
+    expect(verdict.reason).toContain('3 component(s)');
+    expect(verdict.reason).toContain('2 texel(s)');
+  });
+
+  it('keeps a real mismatch a mismatch even beside skipped components', () => {
+    expect(
+      judgeFidelity({ mismatchedComponents: 1, skippedComponents: 3, skippedTexels: 2 }).status,
+    ).toBe('mismatch');
   });
 });
 

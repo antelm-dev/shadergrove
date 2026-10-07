@@ -90,10 +90,15 @@ export interface ObservationFidelity {
   readonly reference: 'image-raw-replay' | 'buffer-live-target' | null;
   readonly tolerance: { readonly relative: number; readonly absolute: number };
   readonly comparedTexels: number;
+  /** Distinct texels with at least one mismatched component. */
   readonly mismatchedTexels: number;
+  /** Mismatched RGBA components (a texel has four). */
+  readonly mismatchedComponents: number;
   readonly maxDelta: number;
-  /** Texels where both sides were non-finite in the same way: no numeric equality exists to check. */
+  /** Distinct texels with a component that was non-finite in the same way on both sides: no numeric equality exists to check. */
   readonly skippedNonFinite: number;
+  /** The same skipped comparisons, counted per RGBA component. */
+  readonly skippedComponents: number;
   readonly reason: string | null;
   /** Agreement of a final colour is never evidence about an intermediate. */
   readonly certifiesIntermediates: false;
@@ -171,8 +176,14 @@ export function observationFootprint(input: {
 
 export interface BandComparison {
   readonly maxDelta: number;
+  /** RGBA components that disagree. */
   readonly mismatched: number;
+  /** RGBA components with no numeric comparison (equal NaN / same infinity). */
   readonly skipped: number;
+  /** Distinct texels with at least one mismatched component. */
+  readonly mismatchedTexels: number;
+  /** Distinct texels with at least one skipped component. */
+  readonly skippedTexels: number;
 }
 
 /**
@@ -190,17 +201,35 @@ export function compareBand(
   let maxDelta = 0;
   let mismatched = 0;
   let skipped = 0;
+  let mismatchedTexels = 0;
+  let skippedTexels = 0;
+  let lastMismatchTexel = -1;
+  let lastSkipTexel = -1;
+  const mismatch = (index: number): void => {
+    mismatched++;
+    if (lastMismatchTexel !== index >> 2) {
+      lastMismatchTexel = index >> 2;
+      mismatchedTexels++;
+    }
+  };
+  const skip = (index: number): void => {
+    skipped++;
+    if (lastSkipTexel !== index >> 2) {
+      lastSkipTexel = index >> 2;
+      skippedTexels++;
+    }
+  };
   for (let index = 0; index < observed.length; index++) {
     const live = reference[index];
     const seen = observed[index];
     const liveNaN = Number.isNaN(live);
     if (liveNaN !== Number.isNaN(seen)) {
       maxDelta = Infinity;
-      mismatched++;
+      mismatch(index);
       continue;
     }
     if (liveNaN) {
-      skipped++;
+      skip(index);
       continue;
     }
     if (!Number.isFinite(live)) {
@@ -209,19 +238,40 @@ export function compareBand(
       const agrees = halfReference
         ? Math.sign(live) === Math.sign(seen) && Math.abs(seen) >= HALF_MAX
         : seen === live;
-      if (agrees) skipped++;
+      if (agrees) skip(index);
       else {
         maxDelta = Infinity;
-        mismatched++;
+        mismatch(index);
       }
       continue;
     }
     const delta = Math.abs(seen - live);
     maxDelta = Math.max(maxDelta, delta);
     // False for an infinite observation too, which is the point.
-    if (!(delta <= Math.max(Math.abs(live) * tolerance.relative, tolerance.absolute))) mismatched++;
+    if (!(delta <= Math.max(Math.abs(live) * tolerance.relative, tolerance.absolute))) {
+      mismatch(index);
+    }
   }
-  return { maxDelta, mismatched, skipped };
+  return { maxDelta, mismatched, skipped, mismatchedTexels, skippedTexels };
+}
+
+/**
+ * The verdict of a whole comparison. A real mismatch stays a mismatch; a skipped
+ * component was never numerically checked, so it can never certify the output.
+ */
+export function judgeFidelity(compared: {
+  mismatchedComponents: number;
+  skippedComponents: number;
+  skippedTexels: number;
+}): { status: 'match' | 'mismatch' | 'unverified'; reason: string | null } {
+  if (compared.mismatchedComponents > 0) return { status: 'mismatch', reason: null };
+  if (compared.skippedComponents > 0) {
+    return {
+      status: 'unverified',
+      reason: `${compared.skippedComponents} component(s) in ${compared.skippedTexels} texel(s) are non-finite and were not compared numerically.`,
+    };
+  }
+  return { status: 'match', reason: null };
 }
 
 // -----------------------------------------------------------------------------
@@ -480,7 +530,9 @@ export async function observeFrozenPoint(
         : { relative: HALF_RELATIVE, absolute: HALF_ABSOLUTE };
     let comparedTexels = 0;
     let mismatchedTexels = 0;
-    let skipped = 0;
+    let mismatchedComponents = 0;
+    let skippedTexels = 0;
+    let skippedComponents = 0;
     let maxDelta = 0;
     let unverified: string | null = null;
     if (!reference || !referenceId) {
@@ -499,16 +551,21 @@ export async function observeFrozenPoint(
         const expected = snapshot.read(referenceId!, { x: 0, y, width, height: count }).data;
         const result = compareBand(view, expected, tolerance, reference!.format === 'rgba16f');
         comparedTexels += count * width;
-        mismatchedTexels += result.mismatched;
-        skipped += result.skipped;
+        mismatchedTexels += result.mismatchedTexels;
+        mismatchedComponents += result.mismatched;
+        skippedTexels += result.skippedTexels;
+        skippedComponents += result.skipped;
         maxDelta = Math.max(maxDelta, result.maxDelta);
         await boundary();
         // The target still holds this draw; re-assert it as the bound target for the next band.
         renderer.setRenderTarget(target);
       }
     }
+    const verdict = unverified
+      ? { status: 'unverified' as const, reason: unverified }
+      : judgeFidelity({ mismatchedComponents, skippedComponents, skippedTexels });
     const fidelity: ObservationFidelity = {
-      status: unverified ? 'unverified' : mismatchedTexels > 0 ? 'mismatch' : 'match',
+      status: verdict.status,
       reference: unverified
         ? null
         : reference!.format === 'rgba32f'
@@ -517,9 +574,11 @@ export async function observeFrozenPoint(
       tolerance,
       comparedTexels,
       mismatchedTexels,
+      mismatchedComponents,
       maxDelta,
-      skippedNonFinite: skipped,
-      reason: unverified,
+      skippedNonFinite: skippedTexels,
+      skippedComponents,
+      reason: verdict.reason,
       certifiesIntermediates: false,
     };
     await boundary();

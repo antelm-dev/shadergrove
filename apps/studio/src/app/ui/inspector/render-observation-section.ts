@@ -315,21 +315,23 @@ export class RenderObservationSection {
   /** Every request takes a token; an answer for any token but the newest is dropped. */
   private seq = 0;
   private abort: AbortController | null = null;
+  /** The texel of the pending measurement, while one is pending. */
+  private requestedPixel: { x: number; y: number } | null = null;
 
   protected readonly statusText = computed(() => this.note());
 
-  /** Where the measured point sits, from the accepted program the result was measured on. */
-  protected readonly source = computed(() => {
-    const measured = this.result();
-    const chosen = this.points().find((item) => item.point.id === this.pointId());
-    const pass = this.pass();
-    if (!measured || !chosen) return null;
-    return {
-      ...chosen.location,
-      fingerprint: pass.accepted.fingerprint,
-      revision: pass.accepted.revision,
-    };
-  });
+  /**
+   * Where the measured point sits, bound when the result was published to the point and
+   * accepted program that were actually measured, never to whatever is selected now.
+   */
+  private readonly measuredSource = signal<{
+    docName: string;
+    line: number;
+    column: number;
+    fingerprint: string;
+    revision: number | null;
+  } | null>(null);
+  protected readonly source = computed(() => (this.result() ? this.measuredSource() : null));
 
   protected readonly availabilityText = computed(() => {
     const measured = this.result();
@@ -375,9 +377,12 @@ export class RenderObservationSection {
 
     // The result describes a pixel, not just a point: moving it makes the result stale.
     effect(() => {
-      this.pixel();
+      const pixel = this.pixel();
       untracked(() => {
-        if (!this.measuring()) this.result.set(null);
+        // The same texel handed over again describes the same request.
+        const current = this.requestedPixel ?? this.result()?.pixel ?? null;
+        if (current && pixel && pixel.x === current.x && pixel.y === current.y) return;
+        this.supersede();
       });
     });
   }
@@ -393,13 +398,26 @@ export class RenderObservationSection {
 
   protected selectPoint(event: Event): void {
     this.pointId.set((event.target as HTMLSelectElement).value);
-    this.result.set(null);
+    this.supersede();
   }
 
   protected setVisit(event: Event): void {
     const text = (event.target as HTMLInputElement).value;
     this.visitText.set(text);
     this.visitInvalid.set(parseVisit(text, MAX_OBSERVATION_VISITS) === null);
+    this.supersede();
+  }
+
+  /**
+   * The point, visit or pixel changed: a pending measurement describes a different
+   * request now, so it is cancelled (its late answer or failure is then dropped by
+   * its token), and a displayed result is cleared. A catalogue lookup is left alone.
+   */
+  private supersede(): void {
+    if (this.measuring()) {
+      this.cancel();
+      this.note.set('');
+    }
     this.result.set(null);
   }
 
@@ -408,6 +426,7 @@ export class RenderObservationSection {
     this.seq++;
     this.abort?.abort();
     this.abort = null;
+    this.requestedPixel = null;
     this.finding.set(false);
     this.measuring.set(false);
   }
@@ -497,6 +516,7 @@ export class RenderObservationSection {
     const seq = ++this.seq;
     const controller = new AbortController();
     this.abort = controller;
+    this.requestedPixel = { x: pixel.x, y: pixel.y };
     this.result.set(null);
     this.measuring.set(true);
     this.note.set(this.i18n.t('observation.measuring'));
@@ -516,6 +536,11 @@ export class RenderObservationSection {
       );
       // Never publish for a newer request, a released capture or another pass.
       if (seq !== this.seq || frame.released || this.frame() !== frame) return;
+      this.measuredSource.set({
+        ...chosen.location,
+        fingerprint: pass.accepted.fingerprint,
+        revision: pass.accepted.revision,
+      });
       this.result.set(result);
       this.note.set('');
     } catch (error) {
@@ -532,6 +557,7 @@ export class RenderObservationSection {
       if (seq === this.seq) {
         this.measuring.set(false);
         this.abort = null;
+        this.requestedPixel = null;
       }
     }
   }
