@@ -424,6 +424,11 @@ export async function observeFrozenPoint(
   renderer.getClearColor(clearColour);
   const clearAlpha = renderer.getClearAlpha();
   const previousTarget = renderer.getRenderTarget();
+  /** Gives the renderer back to the live engine: the observer's target and clear colour never outlive its draw. */
+  const restoreLiveState = (): void => {
+    renderer.setRenderTarget(previousTarget);
+    renderer.setClearColor(clearColour, clearAlpha);
+  };
 
   try {
     await boundary();
@@ -509,6 +514,9 @@ export async function observeFrozenPoint(
           );
         }
       } finally {
+        // Readbacks name the target themselves, so nothing of the observer stays applied after the draw;
+        // a live frame drawn at any later point (a yield, or inside a readback) cannot land in it.
+        restoreLiveState();
         renderer.debug.onShaderError = previousHandler;
         scene.remove(mesh);
         material.dispose();
@@ -557,8 +565,6 @@ export async function observeFrozenPoint(
         skippedComponents += result.skipped;
         maxDelta = Math.max(maxDelta, result.maxDelta);
         await boundary();
-        // The target still holds this draw; re-assert it as the bound target for the next band.
-        renderer.setRenderTarget(target);
       }
     }
     const verdict = unverified
@@ -639,8 +645,7 @@ export async function observeFrozenPoint(
       budget: { bytes: footprint.total, limit: CAPTURE_BUDGET_BYTES },
     };
   } finally {
-    renderer.setRenderTarget(previousTarget);
-    renderer.setClearColor(clearColour, clearAlpha);
+    restoreLiveState();
     for (const resource of owned) resource.dispose();
     // The geometry belongs to the snapshot, but the clone given to this run is shared; it is not disposed here.
   }
