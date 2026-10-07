@@ -3,10 +3,13 @@
  *
  * Sources live in `plugins/official/<name>/`: a `manifest.json`, a
  * `listing.json` (catalogue-only text such as the description) and, for a
- * package with importers or exporters, `src/index.ts`, the Worker entry. That
- * code is bundled with esbuild into one self-contained script — no imports
- * left, nothing loaded at run time. A package without `src/` is data only
- * (themes, languages) and gets no code. Packages are written beside the
+ * package with Worker contributions (importers, exporters, analyzers, asset
+ * tools), `src/index.ts`, the Worker entry. That code is bundled with esbuild
+ * into one self-contained script — no imports left, nothing loaded at run time.
+ * A package without `src/` is data only (themes, languages, templates) and gets
+ * no code. A `projectTemplate`'s data is `templates/<contribution id>.json`; the
+ * files are read in name order into the package's `templates`, and the package
+ * validator refuses a missing, surplus or malformed one. Packages are written beside the
  * catalogue in `apps/studio/src/plugins/`, which the app ships as assets
  * (`plugins/…` under its base URL).
  *
@@ -79,13 +82,15 @@ interface SourceManifest {
 }
 
 /** Assemble one package's `.sgplugin.json` text: its manifest, and its bundled Worker code if it has any. */
-export function buildPackage(name: string): {
+export function buildPackage(
+  name: string,
+  dir = resolve(sourceDir, name),
+): {
   fileName: string;
   text: string;
   listing: Listing;
   plugin: PluginPackage;
 } {
-  const dir = resolve(sourceDir, name);
   const manifest = JSON.parse(
     readFileSync(resolve(dir, 'manifest.json'), 'utf8'),
   ) as SourceManifest;
@@ -98,9 +103,12 @@ export function buildPackage(name: string): {
     }
     contribution['messages'] = JSON.parse(readFileSync(resolve(root, messages), 'utf8'));
   }
-  const pkg = existsSync(resolve(dir, 'src/index.ts'))
-    ? { manifest, code: bundle(name, dir, manifest) }
-    : { manifest };
+  const templates = readTemplates(name, dir);
+  const pkg = {
+    manifest,
+    ...(existsSync(resolve(dir, 'src/index.ts')) ? { code: bundle(name, dir, manifest) } : {}),
+    ...(templates ? { templates } : {}),
+  };
   const text = `${JSON.stringify(pkg, null, 2)}\n`;
   const parsed = parsePluginPackage(text);
   if (!parsed.ok) throw new Error(`${name}: ${parsed.errors.join('; ')}`);
@@ -115,6 +123,20 @@ export function buildPackage(name: string): {
     listing,
     plugin: parsed.value,
   };
+}
+
+/** `templates/<id>.json` by id, in name order; `null` when the package has none. */
+function readTemplates(name: string, dir: string): Record<string, unknown> | null {
+  const templatesDir = resolve(dir, 'templates');
+  if (!existsSync(templatesDir)) return null;
+  const templates: Record<string, unknown> = {};
+  for (const file of readdirSync(templatesDir).sort()) {
+    if (!file.endsWith('.json')) throw new Error(`${name}: templates/${file} must be a .json file`);
+    templates[file.slice(0, -'.json'.length)] = JSON.parse(
+      readFileSync(resolve(templatesDir, file), 'utf8'),
+    );
+  }
+  return templates;
 }
 
 /** One package's Worker entry as a single self-contained script. */

@@ -8,8 +8,9 @@
  * ```json
  * { "manifest": { "id", "version", "protocolVersion", "appVersionRange",
  *                 "name", "publisher", "license", "contributions": [...] },
- *   "code": "<JS for every importer/exporter, and only then>",
- *   "glsl": { "<effect id>": "<GLSL>" } }
+ *   "code": "<JS for every Worker contribution, and only then>",
+ *   "glsl": { "<effect id>": "<GLSL>" },
+ *   "templates": { "<projectTemplate id>": { project, controls, render, presets } } }
  * ```
  *
  * `protocolVersion` (the contract with the host), `appVersionRange` (which app
@@ -18,9 +19,11 @@
  *
  * Validation happens before anything is activated. An `effect` is declarative
  * (GLSL plus controls the host turns into a pass), and so are a `theme` (colour
- * roles the host maps onto its own tokens — see `themes`) and a `language`
- * (messages for the app's own keys — see `languages`); `importer`/`exporter`
- * are JS run in the plugin Worker. Only the host picks files, builds forms,
+ * roles the host maps onto its own tokens — see `themes`), a `language`
+ * (messages for the app's own keys — see `languages`) and a `projectTemplate`
+ * (a texture-free starting project in `templates` — see `tools`);
+ * `importer`/`exporter` and the protocol-4 `analyzer`/`assetTool` are JS run in
+ * the plugin Worker. Only the host picks files, builds forms,
  * saves and mutates the project — see `ImporterInput` / `ExporterResult` for the
  * calls.
  */
@@ -37,6 +40,14 @@ import {
 } from './project';
 import { validateLanguageFields, type LanguageContribution } from './languages';
 import { validateThemeFields, validateThemeGroups, type ThemeContribution } from './themes';
+import {
+  validateTemplatePayload,
+  validateToolContributionFields,
+  type AnalyzerContribution,
+  type AssetToolContribution,
+  type ProjectTemplateContribution,
+  type ProjectTemplatePayload,
+} from './tools';
 import { utf8Bytes } from './utf8';
 
 export * from './refs';
@@ -48,16 +59,19 @@ export * from './project';
 export * from './texture-requests';
 export * from './wallpaper-web';
 export * from './catalogue';
+export * from './tools';
+export * from './tool-calls';
 
 /** The newest protocol this host speaks. */
-export const PLUGIN_PROTOCOL_VERSION = 3;
+export const PLUGIN_PROTOCOL_VERSION = 4;
 /**
  * Every protocol this host accepts. Protocol 1 packages keep working
  * unchanged; protocol 2 adds `projectImporter`/`projectExporter` (see `project`);
- * protocol 3 adds `language` and paired themes (theme schema 2). A host that
+ * protocol 3 adds `language` and paired themes (theme schema 2); protocol 4
+ * adds `analyzer`, `assetTool` and `projectTemplate` (see `tools`). A host that
  * predates a protocol refuses its packages rather than half-reading them.
  */
-export const SUPPORTED_PLUGIN_PROTOCOLS: readonly number[] = [1, 2, 3];
+export const SUPPORTED_PLUGIN_PROTOCOLS: readonly number[] = [1, 2, 3, 4];
 
 const KiB = 1024;
 const MiB = 1024 * KiB;
@@ -87,7 +101,10 @@ export type PluginContributionKind =
   | 'theme'
   | 'projectImporter'
   | 'projectExporter'
-  | 'language';
+  | 'language'
+  | 'analyzer'
+  | 'assetTool'
+  | 'projectTemplate';
 
 /** The protocol each kind first exists in. */
 const KIND_PROTOCOL: Readonly<Record<PluginContributionKind, number>> = {
@@ -98,6 +115,9 @@ const KIND_PROTOCOL: Readonly<Record<PluginContributionKind, number>> = {
   projectImporter: 2,
   projectExporter: 2,
   language: 3,
+  analyzer: 4,
+  assetTool: 4,
+  projectTemplate: 4,
 };
 
 interface ContributionBase {
@@ -140,14 +160,19 @@ export type PluginContribution =
   | ThemeContribution
   | ProjectImporterContribution
   | ProjectExporterContribution
-  | LanguageContribution;
+  | LanguageContribution
+  | AnalyzerContribution
+  | AssetToolContribution
+  | ProjectTemplateContribution;
 
 /** The kinds whose work runs as JS in the plugin Worker, and so need `code`. */
 export const isCodeContribution = (contribution: PluginContribution): boolean =>
   contribution.kind === 'importer' ||
   contribution.kind === 'exporter' ||
   contribution.kind === 'projectImporter' ||
-  contribution.kind === 'projectExporter';
+  contribution.kind === 'projectExporter' ||
+  contribution.kind === 'analyzer' ||
+  contribution.kind === 'assetTool';
 
 export interface PluginManifest {
   id: string;
@@ -163,10 +188,12 @@ export interface PluginManifest {
 
 export interface PluginPackage {
   manifest: PluginManifest;
-  /** JS bundle for the Worker; required when there is an importer or exporter, refused otherwise. */
+  /** JS bundle for the Worker; required when there is a Worker contribution, refused otherwise. */
   code?: string;
   /** GLSL by effect id; exactly one entry per `effect` contribution. */
   glsl: Record<string, string>;
+  /** Validated template data by id; exactly one entry per `projectTemplate` contribution. */
+  templates: Record<string, ProjectTemplatePayload>;
 }
 
 /** What the host sends an importer: the chosen file's bytes and the validated form values. */
@@ -323,7 +350,7 @@ export function parsePluginPackage(input: Uint8Array | string): Result<PluginPac
 /** Validate a parsed package. Nothing is activated, and nothing partly valid is returned. */
 export function validatePluginPackage(input: unknown): Result<PluginPackage> {
   if (!isRecord(input)) return fail('package must be an object');
-  const unknownKey = firstUnknownKey(input, ['manifest', 'code', 'glsl']);
+  const unknownKey = firstUnknownKey(input, ['manifest', 'code', 'glsl', 'templates']);
   if (unknownKey) return fail(`package.${unknownKey} is not a known field`);
 
   const manifest = validateManifest(input['manifest']);
@@ -337,10 +364,15 @@ export function validatePluginPackage(input: unknown): Result<PluginPackage> {
     }
   }
   const needsCode = manifest.value.contributions.some(isCodeContribution);
-  if (needsCode && !code)
-    return fail('package.code is required by importer/exporter contributions');
+  if (needsCode && !code) {
+    return fail(
+      'package.code is required by importer/exporter (and analyzer/assetTool) contributions',
+    );
+  }
   if (!needsCode && code !== undefined) {
-    return fail('package.code is only for importer/exporter contributions');
+    return fail(
+      'package.code is only for importer/exporter (and analyzer/assetTool) contributions',
+    );
   }
 
   const glslInput = input['glsl'] ?? {};
@@ -363,7 +395,46 @@ export function validatePluginPackage(input: unknown): Result<PluginPackage> {
     glsl[id] = source;
   }
 
-  return ok({ manifest: manifest.value, ...(code === undefined ? {} : { code }), glsl });
+  const templates = validateTemplates(input['templates'], manifest.value.contributions);
+  if (!templates.ok) return templates;
+
+  return ok({
+    manifest: manifest.value,
+    ...(code === undefined ? {} : { code }),
+    glsl,
+    templates: templates.value,
+  });
+}
+
+/** `package.templates`: exactly one validated payload per `projectTemplate` contribution. */
+function validateTemplates(
+  input: unknown,
+  contributions: readonly PluginContribution[],
+): Result<Record<string, ProjectTemplatePayload>> {
+  const listed = contributions.filter(
+    (c): c is ProjectTemplateContribution => c.kind === 'projectTemplate',
+  );
+  const raw = input ?? {};
+  if (!isRecord(raw)) return fail('package.templates must be an object');
+  for (const id of Object.keys(raw)) {
+    if (!listed.some((c) => c.id === id)) {
+      return fail(`package.templates["${id}"] has no projectTemplate contribution`);
+    }
+  }
+  const templates: Record<string, ProjectTemplatePayload> = {};
+  for (const contribution of listed) {
+    if (!Object.hasOwn(raw, contribution.id)) {
+      return fail(`package.templates["${contribution.id}"] is required`);
+    }
+    const payload = validateTemplatePayload(
+      raw[contribution.id],
+      contribution,
+      `package.templates["${contribution.id}"]`,
+    );
+    if (!payload.ok) return payload;
+    templates[contribution.id] = payload.value;
+  }
+  return ok(templates);
 }
 
 function validateManifest(input: unknown): Result<PluginManifest> {
@@ -454,10 +525,13 @@ function validateContribution(input: unknown, at: string): Result<PluginContribu
     kind !== 'theme' &&
     kind !== 'projectImporter' &&
     kind !== 'projectExporter' &&
-    kind !== 'language'
+    kind !== 'language' &&
+    kind !== 'analyzer' &&
+    kind !== 'assetTool' &&
+    kind !== 'projectTemplate'
   ) {
     return fail(
-      `${at}.kind "${String(kind)}" is not supported (effect, importer, exporter, theme, projectImporter, projectExporter or language)`,
+      `${at}.kind "${String(kind)}" is not supported (effect, importer, exporter, theme, projectImporter, projectExporter, language, analyzer, assetTool or projectTemplate)`,
     );
   }
   if (kind === 'effect' || kind === 'importer' || kind === 'exporter') {
@@ -477,6 +551,9 @@ function validateContribution(input: unknown, at: string): Result<PluginContribu
   if (kind === 'language') return validateLanguageFields(input, at, base);
   if (kind === 'projectImporter' || kind === 'projectExporter') {
     return validateProjectContributionFields(input, at, base);
+  }
+  if (kind === 'analyzer' || kind === 'assetTool' || kind === 'projectTemplate') {
+    return validateToolContributionFields(input, at, base);
   }
 
   if (kind === 'effect') {

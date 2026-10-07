@@ -1179,6 +1179,13 @@ export class PluginsPage {
         return this.i18n.t('plugins.kindProjectExporter');
       case 'language':
         return this.i18n.t('plugins.kindLanguage');
+      // Host text until the coordinator adds translation keys for the protocol-4 kinds.
+      case 'analyzer':
+        return 'Analyzer';
+      case 'assetTool':
+        return 'Asset tool';
+      case 'projectTemplate':
+        return 'Project template';
       default:
         return this.i18n.t('plugins.kindTheme');
     }
@@ -1208,6 +1215,12 @@ export class PluginsPage {
           name: contribution.nativeName,
           locale: contribution.locale,
         });
+      case 'analyzer':
+        return contribution.profiles.join(', ');
+      case 'assetTool':
+        return contribution.workflow;
+      case 'projectTemplate':
+        return contribution.description;
     }
   }
 

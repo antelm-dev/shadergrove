@@ -250,7 +250,7 @@ export function validateProjectCandidate(input: unknown): Result<ProjectCandidat
   const credits = validateCredits(input['credits'] ?? {});
   if (!credits.ok) return credits;
 
-  const project = validateProject(input['project']);
+  const project = validateCandidateProject(input['project']);
   if (!project.ok) return project;
 
   const controls = validateControls(input['controls'] ?? []);
@@ -302,7 +302,12 @@ function validateCredits(input: unknown): Result<ProjectCredits> {
   return ok(credits);
 }
 
-function validateProject(input: unknown): Result<ShaderProject> {
+/**
+ * A candidate's project, through the sanitizer a saved shader goes through.
+ * Texture bindings are cleared (see `validateProjectCandidate`); a caller that
+ * must refuse them instead checks the raw input first.
+ */
+export function validateCandidateProject(input: unknown): Result<ShaderProject> {
   if (!isRecord(input)) return fail('candidate.project must be an object');
   const passes = input['passes'];
   if (!Array.isArray(passes) || passes.length === 0 || passes.length > 8) {
