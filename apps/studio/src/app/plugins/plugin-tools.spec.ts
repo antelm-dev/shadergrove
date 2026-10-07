@@ -10,7 +10,9 @@ import {
   PLUGIN_PROTOCOL_VERSION,
   SUPPORTED_PLUGIN_PROTOCOLS,
   parsePluginPackage,
+  type AnalyzerReport,
   type PluginPackage,
+  type ResourceState,
 } from '@shadergrove/shared/plugin';
 import { migrateLegacyProject, type ShaderProject } from '@shadergrove/shared/project';
 import { AuthService } from '../auth/auth.service';
@@ -161,12 +163,14 @@ describe('plugin tools', () => {
       rgba: bytes.buffer,
     };
   };
-  const snapshot = (name: string) => ({
+  const snapshot = (name: string, state: ResourceState = 'empty') => ({
     name,
     project: draft().project,
     controls: [],
     params: {},
+    render: DEFAULT_RENDER,
     channels: Array.from({ length: 4 }, () => ({
+      state,
       present: false,
       ext: null,
       width: 0,
@@ -395,6 +399,92 @@ describe('plugin tools', () => {
       expect(second.targetVersion).toBe(1);
       const unknown = await session.analyze('webgpu/v1' as never, snapshot('a'));
       expect(unknown).toMatchObject({ status: 'failed' });
+    });
+
+    it('shows no report of another target while the new request runs, then the new target only', async () => {
+      const { tools, installations } = setup();
+      await install(installations);
+      const session = open(tools, 'doctor');
+      await session.analyze('studio-webgl2/v1', snapshot('a'));
+      expect(session.target()).toBe('studio-webgl2/v1');
+      expect(session.result()?.value).toMatchObject({ profile: 'studio-webgl2/v1' });
+
+      const hold = gate();
+      const pending = session.analyze('wallpaper-web/v1', snapshot('slow'));
+      await vi.waitFor(() => expect(sandbox.sent).toHaveLength(2));
+      // The old report belongs to the old target: gone at once, marked out of date.
+      expect(session.target()).toBe('wallpaper-web/v1');
+      expect(session.result()).toBeNull();
+      expect(session.stale()).toBe(true);
+
+      hold.release();
+      expect((await pending).status).toBe('ok');
+      expect(session.result()?.value).toMatchObject({ profile: 'wallpaper-web/v1' });
+      expect(session.stale()).toBe(false);
+    });
+
+    it('never falls back to the old target report when the new target request fails', async () => {
+      const { tools, installations } = setup();
+      // Declares studio-webgl2/v1 only: asking for the wallpaper target fails before any Worker starts.
+      await install(installations, toolsPackageText({ analyzerProfiles: ['studio-webgl2/v1'] }));
+      const session = open(tools, 'doctor');
+      await session.analyze('studio-webgl2/v1', snapshot('a'));
+      expect(session.result()).not.toBeNull();
+      const starts = sandbox.starts;
+
+      const refused = await session.analyze('wallpaper-web/v1', snapshot('a'));
+      expect(refused).toMatchObject({ status: 'failed' });
+      expect(sandbox.starts).toBe(starts);
+      expect(session.target()).toBe('wallpaper-web/v1');
+      expect(session.result()).toBeNull();
+      expect(session.stale()).toBe(true);
+
+      // An unknown profile behaves the same.
+      expect((await session.analyze('webgpu/v1' as never, snapshot('a'))).status).toBe('failed');
+      expect(session.result()).toBeNull();
+    });
+
+    it('shows no old report when the Worker fails for the new target', async () => {
+      const { tools, installations } = setup();
+      await install(installations);
+      const session = open(tools, 'doctor');
+      await session.analyze('studio-webgl2/v1', snapshot('a'));
+      expect(await session.analyze('wallpaper-web/v1', snapshot('boom'))).toMatchObject({
+        status: 'failed',
+      });
+      expect(session.result()).toBeNull();
+      // Going back to the first target is a new request with its own result.
+      await session.analyze('studio-webgl2/v1', snapshot('a'));
+      expect(session.result()?.value).toMatchObject({ profile: 'studio-webgl2/v1' });
+    });
+
+    it('reports a slot that is not loaded as unchecked, never as a verdict', async () => {
+      const { tools, installations } = setup();
+      await install(installations);
+      const session = open(tools, 'doctor');
+      const textureFindings = async (state: ResourceState) => {
+        await session.analyze('studio-webgl2/v1', snapshot('a', state));
+        const report = session.result()!.value as AnalyzerReport;
+        return report.findings.filter((finding) => finding.ruleId === 'resources.texture');
+      };
+      for (const state of ['empty', 'loaded'] as const) {
+        expect(await textureFindings(state)).toEqual([]);
+      }
+      for (const state of ['loading', 'failed', 'unknown'] as const) {
+        const findings = await textureFindings(state);
+        expect(findings).toHaveLength(4);
+        expect(findings.every((finding) => finding.coverage === 'unchecked')).toBe(true);
+        expect(findings[0]!.message).toContain(state);
+      }
+    });
+
+    it('sends the render settings and slot states to the Worker', async () => {
+      const { tools, installations } = setup();
+      await install(installations);
+      await open(tools, 'doctor').analyze('studio-webgl2/v1', snapshot('a', 'loading'));
+      const sent = sandbox.sent[0]!.params as { render: unknown; channels: { state: string }[] };
+      expect(sent.render).toEqual(DEFAULT_RENDER);
+      expect(sent.channels.map((channel) => channel.state)).toEqual(Array(4).fill('loading'));
     });
 
     it('refuses an analyzer request with no draft open, and a tool that is not what was asked', async () => {

@@ -631,7 +631,34 @@ export interface AnalyzerReport {
   findings: AnalyzerFinding[];
 }
 
-/** What the host sends an analyzer: a copied snapshot, texture metadata only, and the profile it chose. */
+/**
+ * What the host observed of one texture slot, from explicit load outcomes — not
+ * from whether bytes happen to be stored.
+ *
+ * - `empty`: the slot has no texture. A verdict.
+ * - `loaded`: the texture decoded and is available to the renderer. A verdict.
+ * - `loading`: a load is under way.
+ * - `failed`: a load settled as a failure (missing, undecodable, rejected).
+ * - `unknown`: the host has not observed the slot, or cannot tell.
+ *
+ * Only `empty` and `loaded` are verdicts. A rule about a slot in any other
+ * state cannot be evaluated and must report `coverage: 'unchecked'`; it must
+ * neither pass the slot nor claim a fact about it. The host decides how it
+ * observes load outcomes; this contract only carries and validates the result.
+ */
+export const RESOURCE_STATES = ['empty', 'loading', 'loaded', 'failed', 'unknown'] as const;
+export type ResourceState = (typeof RESOURCE_STATES)[number];
+
+/** Texture metadata for an analyzer: the exporter's metadata plus the host's load outcome. */
+export interface AnalyzerChannel extends ProjectExportChannel {
+  state: ResourceState;
+}
+
+/**
+ * What the host sends an analyzer: a copied snapshot, texture metadata only, and
+ * the profile it chose. The whole input, JSON-encoded, is bounded by
+ * `TOOL_LIMITS.analyzerInputBytes`.
+ */
 export interface AnalyzerInput {
   profile: CapabilityProfile;
   /** The host's fingerprint of the source (`sourceFingerprint`) this snapshot was taken from. */
@@ -640,8 +667,11 @@ export interface AnalyzerInput {
   project: ShaderProject;
   controls: ShaderControl[];
   params: ShaderParams;
-  /** One entry per texture slot: metadata only, never bytes. */
-  channels: ProjectExportChannel[];
+  /** The draft's render settings: the post-processing chain, including custom effects. */
+  render: RenderSettings;
+  /** One entry per texture slot: metadata and load state, never bytes. */
+  channels: AnalyzerChannel[];
+  /** Whether the draft's post-processing chain would change the frame. */
   postProcessingActive: boolean;
 }
 

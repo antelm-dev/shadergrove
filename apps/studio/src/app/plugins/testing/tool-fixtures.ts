@@ -39,13 +39,23 @@ export function resetGate(): void {
 }
 
 export const TOOL_WORKER_CODE = `
+// A slot whose load is not a verdict (anything but empty or loaded) is unchecked, never a pass.
+const unchecked = (input) => input.channels.flatMap((channel, slot) =>
+  channel.state === 'empty' || channel.state === 'loaded' ? [] : [{
+    ruleId: 'resources.texture',
+    severity: 'info',
+    message: 'texture ' + slot + ' is ' + channel.state + ': not checked',
+    confidence: 'possible',
+    coverage: 'unchecked',
+    targetVersion: input.profile.version,
+  }]);
 const report = (input, findings) => ({
   profile: input.profile.id,
   targetVersion: input.profile.version,
   revision: input.revision,
   checkedRules: ['limits.passes'],
   uncheckedRules: ['glsl.semantics'],
-  findings,
+  findings: [...findings, ...unchecked(input)],
 });
 shaderStudio.handle('analyzer:doctor', async (input) => {
   if (input.name === 'slow') await globalThis.__toolGate;
@@ -136,7 +146,9 @@ export function feedbackTemplate() {
   };
 }
 
-export function toolsPackageText(options: { version?: string; id?: string } = {}): string {
+export function toolsPackageText(
+  options: { version?: string; id?: string; analyzerProfiles?: string[] } = {},
+): string {
   return JSON.stringify({
     manifest: {
       id: options.id ?? TOOLS_PACKAGE_ID,
@@ -151,7 +163,7 @@ export function toolsPackageText(options: { version?: string; id?: string } = {}
           kind: 'analyzer',
           id: 'doctor',
           name: 'Doctor',
-          profiles: ['studio-webgl2/v1', 'wallpaper-web/v1'],
+          profiles: options.analyzerProfiles ?? ['studio-webgl2/v1', 'wallpaper-web/v1'],
         },
         {
           kind: 'assetTool',

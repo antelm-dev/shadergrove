@@ -20,15 +20,17 @@
 import type { ChannelIndex } from '../project';
 import { LIMITS } from '../validate/limits';
 import { isCleanString, isRecord } from '../validate/primitives';
-import type { ShaderParams } from '../model';
+import type { RenderSettings, ShaderParams } from '../model';
 import { validateEffectCandidate } from './package';
 import { utf8Bytes } from './utf8';
 import {
   ASSET_WORKFLOWS,
+  RESOURCE_STATES,
   TOOL_LIMITS,
   capabilityProfile,
   jsonBytes,
   validatePalette,
+  type AnalyzerChannel,
   type AnalyzerContribution,
   type AnalyzerFinding,
   type AnalyzerInput,
@@ -44,7 +46,6 @@ import {
   type RgbaDescriptor,
   type RgbaPlane,
 } from './tools';
-import type { ProjectExportChannel } from './project';
 import type { ShaderControl } from '../model';
 import type { ShaderProject } from '../project';
 
@@ -383,6 +384,10 @@ export function validateAssetToolOutput(
         `${at}.name must be 1–${LIMITS.nameLength} characters of plain text`,
       );
     }
+    // One buffer under two images would be detached for both when the host transfers either.
+    if (images.some((image) => image.rgba === rgba)) {
+      return bad('output-invalid', `${at}.rgba is the same buffer as another image's`);
+    }
     images.push({ ...plane.value, rgba, name: name.trim() });
   }
   if (total > TOOL_LIMITS.outputPixelBytes) {
@@ -404,7 +409,10 @@ export interface AnalyzerRequest {
   project: ShaderProject;
   controls: readonly ShaderControl[];
   params: ShaderParams;
-  channels: readonly ProjectExportChannel[];
+  /** The draft's render settings, taken in the same tick as the rest of the snapshot. */
+  render: RenderSettings;
+  /** One per texture slot, each with the host's observed load `state` (`ResourceState`). */
+  channels: readonly AnalyzerChannel[];
   postProcessingActive: boolean;
 }
 
@@ -425,6 +433,16 @@ export function prepareAnalyzerInput(
   ) {
     return bad('input-invalid', 'revision must be a short fingerprint string');
   }
+  if (!isRecord(request.render)) return bad('input-invalid', 'render must be the render settings');
+  if (!Array.isArray(request.channels)) return bad('input-invalid', 'channels must be a list');
+  for (const [slot, channel] of request.channels.entries()) {
+    if (!isRecord(channel) || !RESOURCE_STATES.includes(channel['state'] as never)) {
+      return bad(
+        'input-invalid',
+        `channels[${slot}].state must be one of ${RESOURCE_STATES.join(', ')}`,
+      );
+    }
+  }
   const input = {
     profile,
     revision: request.revision,
@@ -432,6 +450,7 @@ export function prepareAnalyzerInput(
     project: request.project,
     controls: request.controls,
     params: request.params,
+    render: request.render,
     channels: request.channels,
     postProcessingActive: request.postProcessingActive,
   };

@@ -9,6 +9,7 @@ import {
   type AnalyzerRequest,
   type PluginPackage,
 } from '@shadergrove/shared/plugin';
+import { DEFAULT_RENDER } from '@shadergrove/shared/model';
 import { migrateLegacyProject } from '@shadergrove/shared/project';
 
 import { PluginCallError, PluginHost } from './plugin-host';
@@ -56,6 +57,7 @@ const code = (promise: Promise<unknown>) =>
   );
 
 const channels = Array.from({ length: 4 }, () => ({
+  state: 'empty' as const,
   present: false,
   ext: null,
   width: 0,
@@ -70,6 +72,7 @@ function snapshot(name = 'Seascape'): AnalyzerRequest {
     project: migrateLegacyProject('void main() {}', 'void main() {}'),
     controls: [],
     params: {},
+    render: DEFAULT_RENDER,
     channels,
     postProcessingActive: false,
   };

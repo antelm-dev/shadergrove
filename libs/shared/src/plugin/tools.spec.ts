@@ -10,6 +10,7 @@ import {
   CAPABILITY_PROFILES,
   CAPABILITY_PROFILE_IDS,
   PALETTE_FORMAT,
+  RESOURCE_STATES,
   TOOL_LIMITS,
   capabilityProfile,
   instantiateProjectTemplate,
@@ -637,6 +638,15 @@ describe('validateAssetToolOutput', () => {
     ).toMatch(/name/);
   });
 
+  it('refuses two images that share one buffer, which a transfer would detach for both', () => {
+    const first = image(2, 2);
+    const aliased = image(2, 2, { name: 'again', rgba: first.rgba });
+    expect(failure(validateAssetToolOutput(imageOutput([first, aliased]), textureTool))).toMatch(
+      /output-invalid: output\.images\[1\]\.rgba is the same buffer as another image's/,
+    );
+    expect(validateAssetToolOutput(imageOutput([first, image(2, 2)]), textureTool).ok).toBe(true);
+  });
+
   it('bounds one image to 4 MiB raw, the count to four, and metadata to 64 KiB', () => {
     const atLimit = image(1024, 1024);
     expect((atLimit.rgba as ArrayBuffer).byteLength).toBe(TOOL_LIMITS.imageBytes);
@@ -718,6 +728,7 @@ describe('validateAssetToolOutput', () => {
 
 describe('analyzer calls', () => {
   const channels = Array.from({ length: 4 }, () => ({
+    state: 'empty' as const,
     present: false,
     ext: null,
     width: 0,
@@ -733,6 +744,7 @@ describe('analyzer calls', () => {
     project: feedbackProject(),
     controls: [],
     params: {},
+    render: DEFAULT_RENDER,
     channels,
     postProcessingActive: false,
   });
@@ -767,6 +779,54 @@ describe('analyzer calls', () => {
     expect(input.value.profile).toEqual(CAPABILITY_PROFILES['studio-webgl2/v1']);
     request.project.passes[0]!.source = 'mutated after the call';
     expect(input.value.project.passes[0]!.source).not.toBe('mutated after the call');
+  });
+
+  it('carries the render settings and every slot load state to the analyzer', () => {
+    expect(RESOURCE_STATES).toEqual(['empty', 'loading', 'loaded', 'failed', 'unknown']);
+    const request = {
+      ...base(),
+      channels: RESOURCE_STATES.map((state) => ({ ...channels[0]!, state })),
+    };
+    const input = prepareAnalyzerInput(analyzer, request);
+    if (!input.ok) throw new Error(input.errors.join());
+    expect(input.value.render).toEqual(DEFAULT_RENDER);
+    expect(input.value.channels.map((channel) => channel.state)).toEqual([...RESOURCE_STATES]);
+    // The input is a copy: it is not the caller's render object.
+    expect(input.value.render).not.toBe(DEFAULT_RENDER);
+  });
+
+  it('refuses a missing or invalid slot state, and missing render settings', () => {
+    const withChannel = (channel: unknown) => ({
+      ...base(),
+      channels: [channels[0]!, channel as never],
+    });
+    const { state: _omitted, ...stateless } = channels[1]!;
+    expect(failure(prepareAnalyzerInput(analyzer, withChannel(stateless)))).toMatch(
+      /input-invalid: channels\[1\]\.state must be one of empty, loading, loaded, failed, unknown/,
+    );
+    for (const state of ['ready', 'LOADED', '', null, 1, undefined]) {
+      expect(
+        failure(prepareAnalyzerInput(analyzer, withChannel({ ...channels[1], state }))),
+      ).toMatch(/channels\[1\]\.state/);
+    }
+    expect(failure(prepareAnalyzerInput(analyzer, withChannel(null)))).toMatch(
+      /channels\[1\]\.state/,
+    );
+    expect(failure(prepareAnalyzerInput(analyzer, { ...base(), channels: {} as never }))).toMatch(
+      /channels must be a list/,
+    );
+    expect(
+      failure(prepareAnalyzerInput(analyzer, { ...base(), render: undefined as never })),
+    ).toMatch(/render must be the render settings/);
+  });
+
+  it('counts the render settings against the snapshot limit', () => {
+    expect(prepareAnalyzerInput(analyzer, base()).ok).toBe(true);
+    const heavy = {
+      ...base(),
+      render: { ...DEFAULT_RENDER, note: 'x'.repeat(TOOL_LIMITS.analyzerInputBytes) },
+    };
+    expect(failure(prepareAnalyzerInput(analyzer, heavy))).toMatch(/input-too-large/);
   });
 
   it('refuses an unregistered or undeclared profile, a bad revision and an oversize snapshot', () => {

@@ -19,7 +19,11 @@
  *   updating or removing it, changing profile, or — for a project-derived result
  *   — editing or changing the draft makes it vanish at once. Independent file
  *   operations (no project source) stay independent until an assignment names a
- *   target (`deliver`'s `target`).
+ *   target (`deliver`'s `target`). An analyzer report is also bound to the
+ *   capability profile it ran for: the session's `target` is the profile of the
+ *   latest `analyze` call, set the moment the call is made, so after a target
+ *   switch the old report is out of date — while the new request runs, and for
+ *   good if it fails, even before any Worker starts.
  *
  * The windows that manage no plugins (the output window, the SSR render) offer
  * nothing and open no session: `available` is false there, so no Worker, file or
@@ -285,6 +289,8 @@ interface Capture {
   generation: number;
   context: PluginOperationContext;
   source: ToolSource | null;
+  /** The capability profile an analyzer request ran for; `null` for an asset tool. */
+  profileId: string | null;
 }
 
 /** Why an operation stopped without a result. */
@@ -310,9 +316,17 @@ export class ToolSession {
   private inFlight: AbortController | null = null;
   private readonly closed = new AbortController();
   private readonly state = signal<{ capture: Capture; value: unknown } | null>(null);
+  private readonly targetSignal = signal<string | null>(null);
   private readonly runningSignal = signal(false);
   private readonly errorSignal = signal<string | null>(null);
 
+  /**
+   * The capability profile the latest `analyze` call asked for, set when the
+   * call is made — whether or not it then runs, fails or is refused. A report
+   * shows only while it is the report of this profile. `null` until an analyzer
+   * is first asked, and always for an asset tool.
+   */
+  readonly target = this.targetSignal.asReadonly();
   /** Whether a request is under way. */
   readonly running = this.runningSignal.asReadonly();
   /** The message of the last failed request, until the next one starts. */
@@ -321,7 +335,8 @@ export class ToolSession {
   /**
    * The displayed result: the latest one, and only while everything it was
    * computed under still holds. Reactive — it turns `null` the moment the plugin
-   * changes, the profile switches or the source is edited.
+   * changes, the capability profile an analyzer targets switches, or the source
+   * is edited.
    */
   readonly result: Signal<ToolResultView<AnalyzerReport | AssetToolOutput> | null> = computed(
     () => {
@@ -349,13 +364,31 @@ export class ToolSession {
     this.contribution = tool.contribution;
   }
 
-  /** Whether a capture still describes the world: plugin, profile, version, install and source. */
+  /** Whether a capture still describes the world: plugin, profile, version, install, target and source. */
   private holds(capture: Capture): boolean {
     if (this.closed.signal.aborted || !this.installations.isCurrent(capture.context)) return false;
+    if (capture.profileId !== this.targetSignal()) return false;
     return this.source === null || sameSource(this.source(), capture.source);
   }
 
-  /** Run the analyzer against a host-selected capability profile. Newer requests supersede it. */
+  /**
+   * Run the analyzer against a host-selected capability profile. Newer requests
+   * supersede it.
+   *
+   * `profileId` becomes the session's `target` at once, before anything can
+   * fail: a report for another profile stops showing now, while this request
+   * runs and if it never lands (an undeclared or unknown profile, a stopped
+   * Worker, an invalid snapshot).
+   *
+   * Snapshot coherence: the caller supplies the snapshot, and the request's
+   * `revision` is the fingerprint of that snapshot, while the staleness check
+   * compares the source's own fingerprint (`PluginTools.draftSource`, read from
+   * `ShaderStore` when the request starts). The two describe one draft only if
+   * the snapshot is built from the store in the same tick as this call — no
+   * `await` in between, which is how a project-derived panel must call it. A
+   * load state that changes later does not change `draftSource`; a tool that
+   * wants it to invalidate a report passes a `source` to `openSession`.
+   */
   analyze(
     profileId: CapabilityProfileId,
     snapshot: Omit<AnalyzerRequest, 'profileId' | 'revision'>,
@@ -364,10 +397,11 @@ export class ToolSession {
     if (this.contribution.kind !== 'analyzer') {
       return Promise.resolve({ status: 'failed', message: 'This tool is not an analyzer.' });
     }
+    this.targetSignal.set(profileId);
     if (!CAPABILITY_PROFILE_IDS.includes(profileId)) {
       return Promise.resolve({ status: 'failed', message: 'Unknown capability profile.' });
     }
-    return this.execute<AnalyzerReport>(true, (host, signal) =>
+    return this.execute<AnalyzerReport>(true, profileId, (host, signal) =>
       host.analyze(
         this.contributionId,
         { ...snapshot, profileId, revision: sourceFingerprint(snapshot) },
@@ -394,7 +428,7 @@ export class ToolSession {
         message: settings.errors[0] ?? 'Invalid settings',
       });
     }
-    return this.execute<AssetToolOutput>(false, (host, signal) =>
+    return this.execute<AssetToolOutput>(false, null, (host, signal) =>
       host.runAssetTool(this.contributionId, { ...request, settings: settings.value }, { signal }),
     );
   }
@@ -460,6 +494,7 @@ export class ToolSession {
 
   private async execute<T>(
     needsSource: boolean,
+    profileId: string | null,
     call: (
       host: NonNullable<ReturnType<PluginInstallations['host']>>,
       signal: AbortSignal,
@@ -479,7 +514,7 @@ export class ToolSession {
     this.inFlight?.abort(new Superseded());
     const own = new AbortController();
     this.inFlight = own;
-    const capture: Capture = { generation: ++this.generation, context, source };
+    const capture: Capture = { generation: ++this.generation, context, source, profileId };
     const pending = this.installations.begin(this.packageId);
     const signal = AbortSignal.any([pending.signal, own.signal, this.closed.signal]);
     this.errorSignal.set(null);
