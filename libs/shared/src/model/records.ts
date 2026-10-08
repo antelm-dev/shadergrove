@@ -90,6 +90,38 @@ export interface ShaderRecord extends ShaderMeta {
   project: ShaderProject;
 }
 
+/**
+ * Why a history entry exists. `baseline` is the pre-feature state captured just
+ * before a shader's first versioned mutation; `sync` is a whole-shader replace
+ * from a bundle.
+ */
+export type ShaderHistoryCause =
+  | 'create'
+  | 'import'
+  | 'duplicate'
+  | 'baseline'
+  | 'update'
+  | 'preset-save'
+  | 'preset-delete'
+  | 'sync'
+  | 'restore';
+
+/**
+ * One immutable saved state of a shader's document (`project`, controls, render
+ * settings and presets), keyed by the shader's persisted `revision`. Revisions
+ * may have gaps: a texture, channel, metadata or thumbnail write bumps the
+ * counter without a history entry. Only `checkpointName` ever changes.
+ */
+export interface ShaderHistoryEntry {
+  revision: number;
+  createdAt: string;
+  cause: ShaderHistoryCause;
+  /** A user-given name; named entries are never pruned. */
+  checkpointName: string | null;
+  /** The entry a `restore` copied from; `null` for every other cause. */
+  restoredFromRevision: number | null;
+}
+
 export interface ShaderSummary {
   id: string;
   kind: ShaderKind;

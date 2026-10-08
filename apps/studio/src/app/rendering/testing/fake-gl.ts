@@ -235,6 +235,15 @@ const identity = () => ({
   elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
 });
 
+/** A geometry that can be cloned (a capture freezes its own copy) and owns no vertex data. */
+export class FakeGeometry extends FakeDisposable {
+  readonly attributes: Record<string, never> = {};
+  readonly index = null;
+  clone(): FakeGeometry {
+    return new FakeGeometry();
+  }
+}
+
 export class FakeMesh {
   readonly matrixWorld = identity();
   constructor(
@@ -258,7 +267,7 @@ export const fakeThree = {
   Scene: FakeScene,
   OrthographicCamera: FakeCamera,
   Mesh: FakeMesh,
-  PlaneGeometry: FakeDisposable,
+  PlaneGeometry: FakeGeometry,
   ShaderMaterial: FakeMaterial,
   WebGLRenderTarget: FakeRenderTarget,
   DataTexture: class extends FakeTexture {},

@@ -86,6 +86,7 @@ export function setupSwagger(app: INestApplication): void {
     .setVersion('1.0')
     .addTag('shaders', 'Create, read, update and delete shaders')
     .addTag('presets', 'Saved control values for a shader')
+    .addTag('history', 'Saved document states of a shader: list, name and restore')
     .addTag('textures', 'Channel images and thumbnails')
     .addTag('transfer', 'Bundle import and export, including Shadertoy')
     .addTag('i18n', 'UI translation catalogs')

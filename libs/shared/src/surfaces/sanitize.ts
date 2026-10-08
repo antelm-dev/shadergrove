@@ -10,6 +10,7 @@ import {
   sanitizeInspectorTab,
 } from '../prefs/panel';
 import { capabilitiesFor } from './capabilities';
+import { sanitizeEditorLayout } from './editor-layout';
 import {
   clampDockSize,
   clampFloatingRect,
@@ -35,9 +36,9 @@ import {
   SURFACE_KINDS,
   WELL_KNOWN_SURFACE_IDS,
   type DockSide,
-  type LayoutPreferences,
   type NativePlacement,
   type RestorePoint,
+  type SanitizedLayoutPreferences,
   type SurfaceChrome,
   type SurfaceKind,
   type SurfacePlacement,
@@ -366,9 +367,8 @@ export function createDefaultSurface(
 export function sanitizeLayoutPreferences(
   value: unknown,
   options: { viewport?: Size; workArea?: Size } = {},
-): LayoutPreferences {
+): SanitizedLayoutPreferences {
   const input = asRecord(value);
-  const version = finite(input['version']) === LAYOUT_VERSION ? LAYOUT_VERSION : LAYOUT_VERSION;
 
   const rawSurfaces = Array.isArray(input['surfaces']) ? input['surfaces'] : [];
   const surfaces: SurfaceRecord[] = [];
@@ -423,7 +423,18 @@ export function sanitizeLayoutPreferences(
     if (!zOrder.includes(surface.id)) zOrder.push(surface.id);
   }
 
-  return { version, surfaces, zOrder };
+  // Version 1 (no split tree) and corrupt trees both repair to leaves over the
+  // contained editor surfaces; the output is always the current version.
+  const defaultEditorId = asSurfaceId(defaultSurfaceId('editor'));
+  const editors = surfaces.filter((s) => s.kind === 'editor' && s.placement.host === 'contained');
+  const editorLayout = sanitizeEditorLayout(input['editorLayout'], {
+    known: editors.map((s) => s.id),
+    required: editors.filter((s) => s.open).map((s) => s.id),
+    fallback:
+      editors.find((s) => s.id === defaultEditorId)?.id ?? editors[0]?.id ?? defaultEditorId,
+  });
+
+  return { version: LAYOUT_VERSION, surfaces, zOrder, editorLayout };
 }
 
 /** Strip non-executable unknown fields from a surface while keeping known shape. */

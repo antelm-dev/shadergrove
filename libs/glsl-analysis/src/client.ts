@@ -261,10 +261,10 @@ export class GlslAnalysisClient {
     const generation = this.generation;
     pending.startedAt = performance.now();
     this.watchdog = setTimeout(() => this.onTimeout(generation, pending), this.limits.timeoutMs);
-    const { requestId, stage, profile, source } = pending.request;
+    const { requestId, stage, profile, source, observe } = pending.request;
     this.worker.postMessage({
       type: 'analyze',
-      job: { requestId, stage, version: profile.version, source },
+      job: { requestId, stage, version: profile.version, source, ...(observe ? { observe } : {}) },
     });
   }
 

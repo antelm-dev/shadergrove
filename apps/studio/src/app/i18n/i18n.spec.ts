@@ -16,7 +16,8 @@ import {
 import { PluginInstallations, type InstalledPlugin } from '../plugins/plugin-installations';
 import { Preferences, type WorkspacePreferences } from '../prefs/preferences';
 import { I18n } from './i18n';
-import { installedPackage, officialPackageText } from './testing/languages';
+import { officialPackageText } from '../plugins/testing/official-packages';
+import { installedPackage } from './testing/languages';
 
 const spanishText = readFileSync(
   resolve(

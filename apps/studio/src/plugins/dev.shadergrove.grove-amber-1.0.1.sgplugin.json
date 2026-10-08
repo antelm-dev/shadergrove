@@ -1,9 +1,9 @@
 {
   "manifest": {
     "id": "dev.shadergrove.grove-amber",
-    "version": "1.0.0",
-    "protocolVersion": 1,
-    "appVersionRange": ">=1.4.0 <3.0.0",
+    "version": "1.0.1",
+    "protocolVersion": 3,
+    "appVersionRange": ">=1.5.0 <3.0.0",
     "name": "Grove Amber",
     "publisher": "Shadergrove",
     "license": "CC0-1.0",
@@ -12,8 +12,9 @@
         "kind": "theme",
         "id": "amber-dark",
         "name": "Grove Amber Dark",
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "scheme": "dark",
+        "variantGroup": "amber",
         "ui": {
           "background": "#15120e",
           "on-background": "#ede4d8",
@@ -59,8 +60,9 @@
         "kind": "theme",
         "id": "amber-light",
         "name": "Grove Amber Light",
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "scheme": "light",
+        "variantGroup": "amber",
         "ui": {
           "background": "#fbf6ef",
           "on-background": "#231b12",

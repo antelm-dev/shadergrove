@@ -21,6 +21,9 @@ import {
   type ImportMode,
   type ImportResult,
   type Preset,
+  type RenderSettings,
+  type ShaderHistoryCause,
+  type ShaderHistoryEntry,
   type ShaderControl,
   type ShaderParams,
   type ShaderPayload,
@@ -70,6 +73,8 @@ import {
   textureAssetKey,
   THUMBNAIL_ASSET_KEY,
   type AssetMeta,
+  type HistoryEntryRow,
+  type HistoryRow,
   type PresetRow,
   type ShaderMutableFields,
   type ShaderRepository,
@@ -81,6 +86,9 @@ import {
 
 /** The last thumbnail stamp handed out per store, in ms, shared by every scope's library. */
 const lastThumbnailStamps = new WeakMap<ShaderRepository, number>();
+
+/** Phase 1 history keeps this many unnamed entries per shader, plus every named checkpoint. */
+export const HISTORY_UNNAMED_LIMIT = 50;
 
 /** Bump when the bundled examples change in a way that should reach existing stores. */
 export const SEED_VERSION = 1;
@@ -223,8 +231,12 @@ export class ShaderLibrary {
       channelsJson: JSON.stringify(cloneDefaultChannels()),
     };
 
-    const id = await this.insertUnique(uniqueId(slugify(name), await this.ids()), (tx, candidate) =>
-      tx.insertShader({ ...row, id: candidate }),
+    const id = await this.insertUnique(
+      uniqueId(slugify(name), await this.ids()),
+      async (tx, candidate) => {
+        await tx.insertShader({ ...row, id: candidate });
+        await this.snapshotHead(tx, candidate, 'create');
+      },
     );
     return this.read(id);
   }
@@ -323,6 +335,10 @@ export class ShaderLibrary {
         channelsJson: JSON.stringify(channels),
       };
 
+      // Name, description and channel-only patches are not document changes.
+      const versioned = projectTouched || controls !== undefined || render !== undefined;
+      if (versioned) await this.ensureBaseline(tx, stored);
+
       await tx.updateShader(this.scope, validId, fields, expectedRevision);
 
       // Re-project presets against a changed schema, exactly as the file store did.
@@ -333,6 +349,8 @@ export class ShaderLibrary {
         }));
         await tx.replacePresets(validId, reprojected.map(presetToRow));
       }
+
+      if (versioned) await this.snapshotHead(tx, validId, 'update');
     });
 
     return this.read(id);
@@ -369,7 +387,8 @@ export class ShaderLibrary {
     );
     const copyId = await this.insertUnique(
       uniqueId(slugify(copyName), await this.ids()),
-      (tx, candidate) => this.insertPayload(tx, { ...source, id: candidate, name: copyName }),
+      (tx, candidate) =>
+        this.insertPayload(tx, { ...source, id: candidate, name: copyName }, 'duplicate'),
     );
     return this.read(copyId);
   }
@@ -627,8 +646,10 @@ export class ShaderLibrary {
         ? shader.presets.map((entry) => (entry.id === presetId ? preset : entry))
         : [...shader.presets, preset];
 
+      await this.ensureBaseline(tx, stored);
       await tx.replacePresets(validId, presets.map(presetToRow));
       await this.touch(tx, shader);
+      await this.snapshotHead(tx, validId, 'preset-save');
       return preset;
     });
   }
@@ -647,8 +668,92 @@ export class ShaderLibrary {
         throw new StorageError('not_found', `Preset "${presetId}" was not found on shader "${id}"`);
       }
 
+      await this.ensureBaseline(tx, stored);
       await tx.replacePresets(validId, presets.map(presetToRow));
       await this.touch(tx, shader);
+      await this.snapshotHead(tx, validId, 'preset-delete');
+    });
+  }
+
+  // --- History -------------------------------------------------------------
+
+  /** The shader's saved document states, newest first. Empty for one that has never been edited. */
+  async listHistory(id: string): Promise<ShaderHistoryEntry[]> {
+    const validId = this.validId(id);
+    const stored = await this.repo.loadShader(this.scope, validId);
+    if (!stored) throw new StorageError('not_found', `Shader "${id}" was not found`);
+    return (await this.repo.listHistory(validId)).map(toHistoryEntry);
+  }
+
+  /**
+   * Names the entry at `revision`, or clears the name with `null`. Only the
+   * entry's metadata changes: no new revision, no content write. A named entry
+   * is exempt from pruning.
+   */
+  async setCheckpoint(id: string, revision: unknown, name: unknown): Promise<ShaderHistoryEntry> {
+    const validId = this.validId(id);
+    const target = parseHistoryRevision(revision);
+    const checkpoint =
+      name === null
+        ? null
+        : expect(validateName(name, 'checkpoint name'), 'Invalid checkpoint name');
+
+    return this.repo.transaction(async (tx) => {
+      const stored = await tx.loadShader(this.scope, validId);
+      // Writable means owned: a shared template reads but never takes a name.
+      if (!stored || stored.row.ownerUserId !== this.scope.userId) {
+        throw new StorageError('not_found', `Shader "${id}" was not found`);
+      }
+      const entry = await tx.setHistoryCheckpoint(validId, target, checkpoint);
+      if (!entry) throw historyNotFound(id, target);
+      return toHistoryEntry(entry);
+    });
+  }
+
+  /**
+   * Copies the versioned content of the entry at `revision` (project,
+   * controls, render settings and presets) into a new head revision. Identity,
+   * name, description, author, channel settings, texture bytes and the
+   * thumbnail stay as they are now, no entry is deleted or rewritten, and the
+   * new entry records where it came from. `expectedRevision` is required and
+   * must still be the head, or nothing is written (`conflict`).
+   */
+  async restoreHistory(
+    id: string,
+    revision: unknown,
+    expectedRevision: unknown,
+  ): Promise<ShaderRecord> {
+    const validId = this.validId(id);
+    const source = parseHistoryRevision(revision);
+    const expected = parseExpectedRevision(expectedRevision);
+    if (expected === undefined) throw new StorageError('invalid', 'Invalid expected revision');
+
+    return this.repo.transaction(async (tx) => {
+      const stored = await tx.loadShader(this.scope, validId);
+      if (!stored) throw new StorageError('not_found', `Shader "${id}" was not found`);
+      if (stored.row.kind === 'template') {
+        throw new StorageError('invalid', `Shader "${id}" is a template and cannot be restored`);
+      }
+      const entry = await tx.loadHistory(validId, source);
+      if (!entry) throw historyNotFound(id, source);
+      const content = parseHistoryContent(entry, id);
+      const current = this.mapRecord(stored);
+
+      await tx.updateShader(
+        this.scope,
+        validId,
+        {
+          ...this.fields(current, new Date().toISOString()),
+          projectJson: JSON.stringify(content.project),
+          controlsJson: JSON.stringify(content.controls),
+          renderJson: JSON.stringify(content.render),
+        },
+        expected,
+      );
+      await tx.replacePresets(validId, content.presets.map(presetToRow));
+      await this.snapshotHead(tx, validId, 'restore', source);
+
+      return this.mapRecord(await this.reload(tx, validId));
     });
   }
 
@@ -739,7 +844,7 @@ export class ShaderLibrary {
 
       const id = await this.insertUnique(wanted, async (tx, candidate) => {
         if (replaced && candidate === wanted) await tx.deleteShader(this.scope, candidate);
-        await this.insertPayload(tx, { ...payload, id: candidate });
+        await this.insertPayload(tx, { ...payload, id: candidate }, 'import');
       });
 
       taken.add(id);
@@ -783,6 +888,7 @@ export class ShaderLibrary {
         throw new StorageError('invalid', `Shader "${id}" is a template and cannot be replaced`);
       }
 
+      await this.ensureBaseline(tx, stored);
       await tx.updateShader(this.scope, validId, fields, revision);
       for (const asset of stored.assets) {
         if (asset.key !== THUMBNAIL_ASSET_KEY) await tx.deleteAsset(validId, asset.key);
@@ -791,6 +897,7 @@ export class ShaderLibrary {
 
       const written = await tx.loadShader(this.scope, validId);
       if (!written) throw new StorageError('not_found', `Shader "${id}" was not found`);
+      await this.recordHistory(tx, written, 'sync');
       return this.mapRecord(written);
     });
   }
@@ -832,7 +939,7 @@ export class ShaderLibrary {
       const existing = new Set(await tx.listIds(this.scope));
       for (const payload of examples) {
         if (existing.has(payload.id)) continue;
-        await this.insertPayload(tx, payload, kind);
+        await this.insertPayload(tx, payload, 'import', kind);
         existing.add(payload.id);
       }
       await tx.setMeta('seed_version', String(SEED_VERSION));
@@ -866,7 +973,7 @@ export class ShaderLibrary {
       const existing = new Set(await tx.listIds(this.scope));
       for (const payload of payloads) {
         const id = existing.has(payload.id) ? uniqueId(payload.id, existing) : payload.id;
-        await this.insertPayload(tx, { ...payload, id });
+        await this.insertPayload(tx, { ...payload, id }, 'import');
         existing.add(id);
         await this.verifyImported(tx, payload, id);
       }
@@ -933,7 +1040,7 @@ export class ShaderLibrary {
 
     const source = await this.exportOne(validId);
     return this.insertUnique(uniqueId(source.id, await this.ids()), (tx, candidate) =>
-      this.insertPayload(tx, { ...source, id: candidate }),
+      this.insertPayload(tx, { ...source, id: candidate }, 'duplicate'),
     );
   }
 
@@ -971,10 +1078,56 @@ export class ShaderLibrary {
     return { ...this.fields(current, updatedAt), channelsJson: JSON.stringify(channels) };
   }
 
+  /**
+   * Captures the head as it now stands in this transaction, so an entry is by
+   * construction exactly what the mutation just wrote, at the revision it wrote.
+   */
+  private async snapshotHead(
+    tx: ShaderTx,
+    id: string,
+    cause: ShaderHistoryCause,
+    restoredFromRevision: number | null = null,
+  ): Promise<void> {
+    await this.recordHistory(tx, await this.reload(tx, id), cause, restoredFromRevision);
+  }
+
+  /** Inserts the entry for `stored`'s revision, then prunes in the same transaction. */
+  private async recordHistory(
+    tx: ShaderTx,
+    stored: StoredShader,
+    cause: ShaderHistoryCause,
+    restoredFromRevision: number | null = null,
+  ): Promise<void> {
+    const { row } = stored;
+    await tx.insertHistory(row.id, {
+      revision: row.revision,
+      createdAt: row.updatedAt,
+      cause,
+      checkpointName: null,
+      restoredFromRevision,
+      projectJson: row.projectJson,
+      controlsJson: row.controlsJson,
+      renderJson: row.renderJson,
+      presetsJson: JSON.stringify(this.mapRecord(stored).presets),
+    });
+    await tx.pruneHistory(row.id, HISTORY_UNNAMED_LIMIT);
+  }
+
+  /**
+   * A shader that predates history has no entries, so its first versioned
+   * mutation would otherwise erase the only copy of what it used to be. Call
+   * before that mutation, with the state loaded in the same transaction.
+   */
+  private async ensureBaseline(tx: ShaderTx, stored: StoredShader): Promise<void> {
+    if (await tx.hasHistory(stored.row.id)) return;
+    await this.recordHistory(tx, stored, 'baseline');
+  }
+
   /** Writes a full payload (shader row, presets and asset bytes) inside a transaction. */
   private async insertPayload(
     tx: ShaderTx,
     payload: ShaderPayload,
+    cause: ShaderHistoryCause,
     kind: ShaderKind = 'shader',
   ): Promise<void> {
     const now = new Date().toISOString();
@@ -989,6 +1142,7 @@ export class ShaderLibrary {
 
     await tx.insertShader(row);
     await this.writePayloadChildren(tx, payload.id, payload, now);
+    await this.snapshotHead(tx, payload.id, cause);
   }
 
   /** Presets, texture bytes and thumbnail of a payload, written under `id`. */
@@ -1197,6 +1351,65 @@ function parseExpectedRevision(value: unknown): number | undefined {
     throw new StorageError('invalid', 'Invalid expected revision');
   }
   return revision;
+}
+
+function toHistoryEntry(row: HistoryEntryRow): ShaderHistoryEntry {
+  return {
+    revision: row.revision,
+    createdAt: row.createdAt,
+    cause: row.cause,
+    checkpointName: row.checkpointName,
+    restoredFromRevision: row.restoredFromRevision,
+  };
+}
+
+function historyNotFound(id: string, revision: number): StorageError {
+  return new StorageError(
+    'not_found',
+    `Shader "${id}" has no history entry for revision ${revision}`,
+  );
+}
+
+function parseHistoryRevision(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw new StorageError('invalid', 'Invalid history revision');
+  }
+  return value;
+}
+
+/** A stored entry's document, re-validated the way a shader row is on read. */
+function parseHistoryContent(
+  entry: HistoryRow,
+  id: string,
+): {
+  project: ShaderProject;
+  controls: ShaderControl[];
+  render: RenderSettings;
+  presets: Preset[];
+} {
+  const corrupt = () =>
+    new StorageError('io', `History entry ${entry.revision} of "${id}" is corrupt`);
+  const parse = (raw: string): unknown => {
+    const value = safeParse(raw);
+    if (value === undefined) throw corrupt();
+    return value;
+  };
+  const controls = validateControls(parse(entry.controlsJson));
+  if (!controls.ok) throw corrupt();
+  const rawPresets = parse(entry.presetsJson);
+  if (!Array.isArray(rawPresets)) throw corrupt();
+  const presets: Preset[] = [];
+  for (const raw of rawPresets as { id?: unknown }[]) {
+    const result = validatePreset(raw, controls.value, String(raw?.id));
+    if (!result.ok) throw corrupt();
+    presets.push(result.value);
+  }
+  return {
+    project: sanitizeProject(parse(entry.projectJson), TEMPLATE_FRAGMENT, DEFAULT_VERTEX),
+    controls: controls.value,
+    render: validateRender(parse(entry.renderJson)),
+    presets,
+  };
 }
 
 function safeParse(raw: string | null): unknown {

@@ -6,6 +6,7 @@ import { DEFAULT_EDITOR_WINDOW } from '@shadergrove/shared/editor-prefs';
 import {
   COMPACT_VIEWPORT_WIDTH,
   DEFAULT_EDITOR_GROUP_ID,
+  LAYOUT_VERSION,
   WELL_KNOWN_SURFACE_IDS,
   editorSurfaceId,
   isContainedPlacement,
@@ -253,6 +254,22 @@ describe('SurfaceLayoutService characterization', () => {
       layout.activate(previewId);
       expect(registry.foreground()).toBe(previewId);
       expect(registry.zIndex(previewId)!).toBeGreaterThan(registry.zIndex(editorId)!);
+    });
+  });
+
+  describe('persistence', () => {
+    it('reloads a persisted layout with the same surfaces and one default editor leaf', () => {
+      layout.float(editorId);
+      layout.float(previewId);
+      layout.activate(editorId);
+      const saved = preferences.value().surfacesLayout!;
+
+      const reloaded = migrateLayoutFromPreferences({ surfacesLayout: saved });
+
+      expect(reloaded.version).toBe(LAYOUT_VERSION);
+      expect(reloaded.surfaces).toEqual(saved.surfaces);
+      expect(reloaded.zOrder).toEqual(saved.zOrder);
+      expect(reloaded.editorLayout).toEqual({ kind: 'leaf', surfaceId: editorId });
     });
   });
 });

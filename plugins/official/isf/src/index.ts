@@ -1,6 +1,6 @@
 // Shadergrove ISF plugin — one-pass ISF FX filters to and from custom effects.
 //
-// Runs inside the plugin Worker: no DOM, no network, no imports; it only sees the
+// Runs inside the plugin Worker: no DOM, no network, no runtime imports; it only sees the
 // bytes and form values the host hands it, and the host revalidates and compiles
 // whatever it returns. https://docs.isf.video/ref_json, /ref_functions.html
 //
@@ -16,6 +16,35 @@
 // Built-ins: isf_FragNormCoord, RENDERSIZE, TIME, PASSINDEX, IMG_THIS_PIXEL,
 // IMG_NORM_THIS_PIXEL (and IMG_THIS_NORM_PIXEL), IMG_NORM_PIXEL, IMG_PIXEL, IMG_SIZE. Anything else fails to
 // compile, and the host shows where.
+
+import type { ParamValue, ShaderControl, ShaderParams } from '@shadergrove/shared/model';
+import type {
+  EffectCandidate,
+  ExporterInput,
+  ExporterResult,
+  ImporterInput,
+  ImporterResult,
+} from '@shadergrove/shared/plugin';
+
+/** Parsed ISF JSON — a header, an input or a pass: untrusted, checked field by field as it is read. */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+interface Isf {
+  [field: string]: unknown;
+  ISFVSN?: any;
+  DESCRIPTION?: any;
+  IMPORTED?: any;
+  PASSES?: any;
+  INPUTS?: any;
+  NAME?: any;
+  TYPE?: any;
+  LABEL?: any;
+  LABELS?: any;
+  DEFAULT?: any;
+  MIN?: any;
+  MAX?: any;
+  VALUES?: any;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const HEADER_MARK = '// ISF-HEADER: ';
 const BEGIN_MARK = '// ---- ISF source ----';
@@ -435,7 +464,7 @@ const THREE_RESERVED = new Set([
   'textureCubeGradEXT',
 ]);
 
-const fail = (message) => {
+const fail = (message: string): never => {
   throw new Error(message);
 };
 
@@ -443,23 +472,23 @@ const fail = (message) => {
 // Import
 // ---------------------------------------------------------------------------
 
-function splitIsf(text) {
+function splitIsf(text: string): { header: Isf; body: string } {
   const start = text.indexOf('/*');
   if (start < 0 || text.slice(0, start).trim() !== '') {
     fail('Not an ISF file: it must start with a /*{ … }*/ JSON header');
   }
   const end = text.indexOf('*/', start + 2);
   if (end < 0) fail('The ISF JSON header is never closed with */');
-  let header;
+  let header: unknown;
   try {
     header = JSON.parse(text.slice(start + 2, end));
   } catch (error) {
-    fail(`The ISF JSON header is not valid JSON: ${error.message}`);
+    fail(`The ISF JSON header is not valid JSON: ${(error as Error).message}`);
   }
   if (!header || typeof header !== 'object' || Array.isArray(header)) {
     fail('The ISF JSON header must be an object');
   }
-  return { header, body: text.slice(end + 2).replace(/^\r?\n/, '') };
+  return { header: header as Isf, body: text.slice(end + 2).replace(/^\r?\n/, '') };
 }
 
 /**
@@ -468,14 +497,14 @@ function splitIsf(text) {
  * parameter `vec4 color`, into one that does not compile — `u_color` is itself a macro in
  * a filter this plugin exported.
  */
-function viaGlobal(key, type, value) {
+function viaGlobal(key: string, type: string, value: string) {
   return {
     macro: `${type} isf_in_${key};\n#define ${key} isf_in_${key}`,
     setup: `  isf_in_${key} = ${value};`,
   };
 }
 
-function checkSupported(header) {
+function checkSupported(header: Isf): void {
   const version = header.ISFVSN;
   if (version === undefined) fail('ISF 1 files (no ISFVSN) are not supported; only ISF 2 is');
   if (!['2', '2.0'].includes(String(version))) {
@@ -500,18 +529,18 @@ function checkSupported(header) {
   }
 }
 
-const number = (value, fallback) =>
+const number = <T>(value: unknown, fallback: T): number | T =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-function label(input) {
+function label(input: Isf): { label?: string } {
   return typeof input.LABEL === 'string' && input.LABEL.trim()
     ? { label: input.LABEL.trim().slice(0, 64) }
     : {};
 }
 
-function hex(rgba) {
-  const channel = (value) =>
+function hex(rgba: unknown): string {
+  const channel = (value: unknown) =>
     Math.round(clamp(number(value, 0), 0, 1) * 255)
       .toString(16)
       .padStart(2, '0');
@@ -526,7 +555,7 @@ function hex(rgba) {
  * `u_gain` beside a key `gain` would be read through the other's macro.
  * Swizzle names would also rewrite vector components through the input macro.
  */
-const usableName = (key) =>
+const usableName = (key: unknown): key is string =>
   typeof key === 'string' &&
   KEY.test(key) &&
   !/^(?:[xyzw]{1,4}|[rgba]{1,4}|[stpq]{1,4})$/.test(key) &&
@@ -541,7 +570,7 @@ const usableName = (key) =>
   !key.startsWith('u_');
 
 /** One ISF input as a control, and the macro that makes the ISF name mean that control's uniform. */
-function inputToControl(input) {
+function inputToControl(input: Isf): { control: ShaderControl; macro: string; setup: string } {
   const key = input.NAME;
   if (!usableName(key)) {
     fail(
@@ -584,8 +613,8 @@ function inputToControl(input) {
         fail(`Input "${key}": a long input needs VALUES, a list of at most 64 integers`);
       }
       const labels = Array.isArray(input.LABELS) ? input.LABELS : [];
-      const options = {};
-      values.forEach((value, index) => {
+      const options: Record<string, number> = {};
+      values.forEach((value: number, index: number) => {
         const name =
           typeof labels[index] === 'string' && labels[index].trim()
             ? labels[index].trim()
@@ -630,20 +659,22 @@ function inputToControl(input) {
   }
 }
 
-function importIsf(text) {
+function importIsf(text: string): ImporterResult & { candidate: EffectCandidate } {
   const { header, body } = splitIsf(text);
   checkSupported(header);
-  const inputs = header.INPUTS ?? [];
-  if (!Array.isArray(inputs)) fail('INPUTS must be an array');
-  const isImage = (input) => input && input.NAME === 'inputImage' && input.TYPE === 'image';
+  const inputs: unknown = header.INPUTS ?? [];
+  if (!Array.isArray(inputs)) return fail('INPUTS must be an array');
+  const isImage = (input: Isf) => input && input.NAME === 'inputImage' && input.TYPE === 'image';
   if (!inputs.some(isImage)) {
     fail('This ISF file has no inputImage: it is a generator, and only FX filters are supported');
   }
-  const converted = inputs.filter((input) => !isImage(input)).map(inputToControl);
+  const converted = (inputs as Isf[]).filter((input) => !isImage(input)).map(inputToControl);
   if (converted.length > MAX_CONTROLS) fail(`At most ${MAX_CONTROLS} inputs are supported`);
 
   const controls = converted.map((entry) => entry.control);
-  const values = Object.fromEntries(controls.map((control) => [control.key, control.default]));
+  const values: ShaderParams = Object.fromEntries(
+    controls.map((control) => [control.key, control.default]),
+  );
   const name =
     (typeof header.DESCRIPTION === 'string' && header.DESCRIPTION.trim().slice(0, 64)) ||
     'ISF effect';
@@ -690,14 +721,14 @@ function importIsf(text) {
 // Export
 // ---------------------------------------------------------------------------
 
-function rgba(value) {
+function rgba(value: unknown): number[] {
   const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(value));
   if (!match) return [0, 0, 0, 1];
-  return [1, 2, 3].map((i) => Math.round((parseInt(match[i], 16) / 255) * 1000) / 1000).concat(1);
+  return [1, 2, 3].map((i) => Math.round((parseInt(match[i]!, 16) / 255) * 1000) / 1000).concat(1);
 }
 
 /** A control back as an ISF input, its DEFAULT the effect's current value. */
-function controlToInput(control, values) {
+function controlToInput(control: ShaderControl, values: Record<string, ParamValue>): Isf {
   if (!usableName(control.key)) {
     fail(
       `Control "${control.key}" cannot be exported: its name is reserved in ISF or by this plugin, or is a vector swizzle`,
@@ -728,18 +759,18 @@ function controlToInput(control, values) {
     case 'color':
       return { ...named, TYPE: 'color', DEFAULT: rgba(value) };
     default:
-      return fail(`Control "${control.key}" cannot be expressed in ISF`);
+      return fail(`Control "${(control as ShaderControl).key}" cannot be expressed in ISF`);
   }
 }
 
 /** The ISF code and kept header of an effect this plugin imported, or null for any other effect. */
-function extractIsf(source) {
+function extractIsf(source: string): { header: Isf; body: string } | null {
   const lines = source.split('\n');
   const headerLine = lines.find((line) => line.startsWith(HEADER_MARK));
   const begin = lines.indexOf(BEGIN_MARK);
   const end = lines.indexOf(END_MARK);
   if (!headerLine || begin < 0 || end < begin) return null;
-  let header;
+  let header: Isf;
   try {
     header = JSON.parse(headerLine.slice(HEADER_MARK.length));
   } catch {
@@ -754,7 +785,7 @@ function extractIsf(source) {
  * only be the ISF input — a macro expanding to the bare name would bind to whatever
  * the effect's code declares under it, like `effect(vec4 color, …)` for a control `color`.
  */
-function wrapNative(effect) {
+function wrapNative(effect: EffectCandidate): string {
   const readers = effect.controls.flatMap((control) => {
     const [type, value] =
       control.type === 'color'
@@ -790,7 +821,7 @@ function wrapNative(effect) {
   ].join('\n');
 }
 
-function exportIsf(effect) {
+function exportIsf(effect: EffectCandidate): ExporterResult {
   if (!effect || typeof effect.source !== 'string' || !Array.isArray(effect.controls)) {
     fail('Not an effect definition');
   }
@@ -811,14 +842,15 @@ function exportIsf(effect) {
       .replace(/[^\w.-]+/g, '-')
       .replace(/^-+|-+$/g, '') || 'effect';
   return {
-    bytes: new TextEncoder().encode(text).buffer,
+    bytes: new TextEncoder().encode(text).buffer as ArrayBuffer,
     mime: 'text/plain',
     fileName: `${stem}.fs`,
   };
 }
 
-shaderStudio.handle('importer:isf-import', ({ bytes }) => {
-  let text;
+shaderStudio.handle('importer:isf-import', (params) => {
+  const { bytes } = params as ImporterInput;
+  let text = '';
   try {
     text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
@@ -827,4 +859,6 @@ shaderStudio.handle('importer:isf-import', ({ bytes }) => {
   return importIsf(text);
 });
 
-shaderStudio.handle('exporter:isf-export', ({ effect }) => exportIsf(effect));
+shaderStudio.handle('exporter:isf-export', (params) =>
+  exportIsf((params as ExporterInput).effect as EffectCandidate),
+);

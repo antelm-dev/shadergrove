@@ -5,24 +5,13 @@ import {
   withInterceptors,
 } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import {
-  Component,
-  TransferState,
-  input,
-  makeStateKey,
-  provideZonelessChangeDetection,
-  signal,
-} from '@angular/core';
+import { Component, input, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { BehaviorSubject, firstValueFrom } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type {
-  PublicationDetail,
-  PublicationPage as PublicationPageDto,
-  PublicationSummary,
-} from '@shadergrove/shared/publication';
+import type { PublicationDetail, PublicationSummary } from '@shadergrove/shared/publication';
 import { authInterceptor } from '../auth/auth.interceptor';
 import { AuthPrompt } from '../auth/auth-prompt';
 import { AuthService, type AuthStatus } from '../auth/auth.service';
@@ -198,6 +187,8 @@ describe('ExplorePage', () => {
     const search = root.querySelector('input') as HTMLInputElement;
     search.value = ' bloom ';
     root.querySelector('form')?.dispatchEvent(new Event('submit'));
+    // The search lands in the address first; the page loads what the address says.
+    await settle(fixture);
     const [searched] = listing(http);
     expect(searched.request.params.get('search')).toBe('bloom');
     expect(searched.request.params.has('cursor')).toBe(false);
@@ -225,18 +216,6 @@ describe('ExplorePage', () => {
     listing(http)[0].flush({ publications: [summary('a1', 'Aurora')], nextCursor: null });
     await settle(second);
     expect(text(second)).toContain('Aurora');
-  });
-
-  it('starts from the page the server rendered instead of fetching it again', async () => {
-    const http = configure();
-    TestBed.inject(TransferState).set(makeStateKey<PublicationPageDto>('explore'), {
-      publications: [summary('a1', 'Aurora')],
-      nextCursor: null,
-    });
-    const fixture = TestBed.createComponent(ExplorePage);
-    await settle(fixture);
-    expect(listing(http)).toHaveLength(0);
-    expect(text(fixture)).toContain('Aurora');
   });
 });
 

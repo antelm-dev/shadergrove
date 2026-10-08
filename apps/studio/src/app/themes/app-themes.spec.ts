@@ -2,9 +2,6 @@ import { DOCUMENT, PLATFORM_ID, provideZonelessChangeDetection, signal } from '@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { DEFAULT_THEMES_PACKAGE_ID, DEFAULT_THEME_REFS } from '@shadergrove/shared/plugin';
 
 import { AuthService } from '../auth/auth.service';
@@ -12,6 +9,7 @@ import { EditorSettings } from '../editor/editor-settings';
 import { monacoThemeId } from '../editor/editor-themes';
 import type { MonacoApi } from '../editor/monaco-loader';
 import { PLUGIN_STORE, PluginInstallations } from '../plugins/plugin-installations';
+import { officialPackageText, withUnpairedThemes } from '../plugins/testing/official-packages';
 import type { PluginStore, StoredPlugin } from '../plugins/plugin-store';
 import { Preferences } from '../prefs/preferences';
 import { AppThemes } from './app-themes';
@@ -22,29 +20,14 @@ const PACKAGE_ID = 'dev.shadergrove.grove-amber';
 const DARK = `plugin:${PACKAGE_ID}/amber-dark` as const;
 const LIGHT = `plugin:${PACKAGE_ID}/amber-light` as const;
 
-const amberText = readFileSync(
-  resolve(
-    import.meta.dirname,
-    '../../../../../tools/workspace/fixtures/plugins/themes/grove-amber.sgplugin.json',
-  ),
-  'utf8',
-);
+const amberText = officialPackageText(PACKAGE_ID);
+/** Grove Amber from before pairs: a third-party theme System mode cannot follow. */
+const unpairedAmberText = withUnpairedThemes(amberText);
 
 /** The official Light/Dark pack, exactly as this release ships it. */
-const pluginsDir = resolve(import.meta.dirname, '../../plugins');
-const defaultThemesText = readFileSync(
-  resolve(
-    pluginsDir,
-    (
-      JSON.parse(readFileSync(resolve(pluginsDir, 'catalogue.json'), 'utf8')) as {
-        packages: { id: string; file: string }[];
-      }
-    ).packages.find((entry) => entry.id === DEFAULT_THEMES_PACKAGE_ID)!.file,
-  ),
-  'utf8',
-);
+const defaultThemesText = officialPackageText(DEFAULT_THEMES_PACKAGE_ID);
 
-/** The fixture with the dark theme's primary changed: a new release of the same package. */
+/** Grove Amber with the dark theme's primary changed: a new release of the same package. */
 function amberUpdate(primary: string, version = '1.1.0'): string {
   const json = JSON.parse(amberText);
   json.manifest.version = version;
@@ -226,7 +209,7 @@ describe('AppThemes', () => {
   });
 
   it('wears a plugin theme in its own scheme, keeping the built-in scheme for later', async () => {
-    stores.seed('anonymous', amberText, true);
+    stores.seed('anonymous', unpairedAmberText, true);
     const { themes, preferences } = setup({ colorScheme: 'dark' });
     await settle();
 
@@ -463,7 +446,7 @@ describe('AppThemes', () => {
     });
 
     it('paints the fallback, keeping the choice, while the pack is off — and offers System only for pairs', async () => {
-      stores.seed('anonymous', amberText, true);
+      stores.seed('anonymous', unpairedAmberText, true);
       stores.seed('anonymous', defaultThemesText, true, DEFAULT_THEMES_PACKAGE_ID);
       const { themes, installations, preferences } = setup({
         appThemeId: OFFICIAL_DARK,

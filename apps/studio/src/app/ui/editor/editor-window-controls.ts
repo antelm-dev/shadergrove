@@ -1,11 +1,18 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { EDITOR_DOCK_SIDES, type EditorDockSide } from '@shadergrove/shared/editor-prefs';
-import { COMPACT_VIEWPORT_WIDTH, isContainedPlacement } from '@shadergrove/shared/surfaces';
+import {
+  COMPACT_VIEWPORT_WIDTH,
+  DEFAULT_EDITOR_GROUP_ID,
+  createDefaultSurface,
+  editorSurfaceId,
+  isContainedPlacement,
+  type SurfaceId,
+} from '@shadergrove/shared/surfaces';
 import { SurfaceLayoutService, SurfaceRegistry, describeSurfaceCommands } from '../../surfaces';
 import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
@@ -45,7 +52,7 @@ const DOCK_ICONS: Record<EditorDockSide, string> = {
         <span>{{ 'action.appearance' | translate }}</span>
       </button>
       @if (!compact()) {
-        <button mat-menu-item type="button" (click)="layout.float(editorId)">
+        <button mat-menu-item type="button" (click)="layout.float(surfaceId())">
           <mat-icon>open_in_new</mat-icon>
           <span>{{ 'action.detach' | translate }}</span>
         </button>
@@ -55,7 +62,7 @@ const DOCK_ICONS: Record<EditorDockSide, string> = {
           mat-menu-item
           type="button"
           [attr.aria-checked]="dockedOn(side)"
-          (click)="layout.dock(editorId, side)"
+          (click)="layout.dock(surfaceId(), side)"
         >
           <mat-icon>{{ dockIcon(side) }}</mat-icon>
           <span>{{ dockLabel(side) }}</span>
@@ -73,7 +80,7 @@ const DOCK_ICONS: Record<EditorDockSide, string> = {
       [matTooltip]="(minimized() ? 'editor.expand' : 'editor.collapse') | translate"
       [attr.aria-label]="(minimized() ? 'editor.expand' : 'editor.collapse') | translate"
       [attr.aria-expanded]="!minimized()"
-      (click)="layout.toggleMinimized(editorId)"
+      (click)="layout.toggleMinimized(surfaceId())"
     >
       <mat-icon>{{ minimized() ? 'expand_less' : 'minimize' }}</mat-icon>
     </button>
@@ -85,7 +92,7 @@ const DOCK_ICONS: Record<EditorDockSide, string> = {
       [matTooltip]="(maximized() ? 'editor.restore' : 'editor.maximize') | translate"
       [attr.aria-label]="(maximized() ? 'editor.restore' : 'editor.maximize') | translate"
       [attr.aria-pressed]="maximized()"
-      (click)="layout.toggleMaximized(editorId)"
+      (click)="layout.toggleMaximized(surfaceId())"
     >
       <mat-icon>{{ maximized() ? 'close_fullscreen' : 'open_in_full' }}</mat-icon>
     </button>
@@ -96,7 +103,7 @@ const DOCK_ICONS: Record<EditorDockSide, string> = {
       class="control"
       [matTooltip]="'editor.close' | translate"
       [attr.aria-label]="'editor.close' | translate"
-      (click)="layout.close(editorId)"
+      (click)="layout.close(surfaceId())"
     >
       <mat-icon>close</mat-icon>
     </button>
@@ -139,9 +146,15 @@ export class EditorWindowControls {
   protected readonly workspace = inject(WorkspaceActions);
   private readonly i18n = inject(I18n);
   protected readonly dockSides = EDITOR_DOCK_SIDES;
-  protected readonly editorId = this.layout.editorId;
 
-  private readonly surface = computed(() => this.layout.editor());
+  /** The editor surface these controls act on; the default group's when absent. */
+  readonly surfaceId = input<SurfaceId>(editorSurfaceId(DEFAULT_EDITOR_GROUP_ID));
+
+  private readonly surface = computed(
+    () =>
+      this.registry.get(this.surfaceId()) ??
+      createDefaultSurface('editor', { id: this.surfaceId() }),
+  );
 
   protected readonly compact = computed(() => {
     const { width } = this.registry.viewport();
@@ -158,7 +171,16 @@ export class EditorWindowControls {
     return isContainedPlacement(placement) && placement.mode === 'minimized';
   });
 
-  private readonly activeDockSide = computed(() => this.layout.editorDockSide());
+  private readonly activeDockSide = computed(() => {
+    const placement = this.surface().placement;
+    if (!isContainedPlacement(placement)) return 'bottom';
+    if (placement.mode === 'docked') return placement.side;
+    if (placement.mode === 'maximized' || placement.mode === 'minimized') {
+      if (placement.restore.mode === 'docked') return placement.restore.side;
+    }
+    // Floating, or restoring from floating: only the default surface has a legacy dock side.
+    return this.surfaceId() === this.layout.editorId ? this.layout.editorDockSide() : 'bottom';
+  });
 
   protected dockedOn(side: EditorDockSide): boolean {
     return this.activeDockSide() === side;

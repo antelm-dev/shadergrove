@@ -8,7 +8,7 @@
  * history avoids a second migration tool treating live tables as uninitialized.
  */
 
-import { and, asc, count, eq, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { alias } from 'drizzle-orm/pg-core';
 import { Pool } from 'pg';
@@ -23,6 +23,8 @@ import { runMigrations } from '../migration-runner';
 import {
   type AssetKey,
   type AssetMeta,
+  type HistoryEntryRow,
+  type HistoryRow,
   type PresetRow,
   type ShaderMutableFields,
   type ShaderRepository,
@@ -37,7 +39,7 @@ import {
 import type { UserScope } from '../user-scope';
 import { postgresAuthSchema } from './auth-schema';
 import { POSTGRES_MIGRATIONS } from './migrations';
-import { assets, postgresSchema, presets, shaders, storageMetadata } from './schema';
+import { assets, postgresSchema, presets, shaderHistory, shaders, storageMetadata } from './schema';
 
 /**
  * What a scope may read: its own shaders, plus the shared templates. The
@@ -166,6 +168,10 @@ export class PostgresRepository implements ShaderRepository, PublicationReposito
 
   loadAsset(scope: UserScope, id: string, key: AssetKey): Promise<StoredAsset | null> {
     return new PgOps(this.database()).loadAsset(scope, id, key);
+  }
+
+  listHistory(shaderId: string): Promise<HistoryEntryRow[]> {
+    return new PgOps(this.database()).listHistory(shaderId);
   }
 
   getMeta(key: string): Promise<string | null> {
@@ -388,9 +394,13 @@ class PgOps implements ShaderTx {
   }
 
   /**
-   * Locks the shader row, then, when conditional, reads the revision and
-   * thumbnail in a new statement (a fresh snapshot under READ COMMITTED), then
-   * deletes. Every child-row write holds the same lock first (see `PgOps`).
+   * Locks the shader row, then, when conditional, compares the revision it
+   * locked and the thumbnail, itself read `FOR UPDATE`, then deletes. Locking
+   * the asset row matters: under READ COMMITTED a plain read would see the
+   * last committed stamp while an uncommitted thumbnail write still holds that
+   * row, and the delete's cascade would then wait it out and drop the newer
+   * thumbnail. `FOR UPDATE` waits too, and returns the row as committed. Same
+   * lock order as every child-row write (see `PgOps`): shader row, then assets.
    */
   async deleteShader(
     scope: UserScope,
@@ -400,26 +410,20 @@ class PgOps implements ShaderTx {
   ): Promise<boolean> {
     const owned = and(eq(shaders.id, id), eq(shaders.ownerUserId, scope.userId));
     const [locked] = await this.db
-      .select({ id: shaders.id })
+      .select({ revision: shaders.revision })
       .from(shaders)
       .where(owned)
       .for('update');
     if (!locked) return false;
-    if (expectedRevision === undefined && expectedThumbnail === undefined) {
-      await this.db.delete(shaders).where(owned);
-      return true;
+    let matches = expectedRevision === undefined || locked.revision === expectedRevision;
+    if (matches && expectedThumbnail !== undefined) {
+      const [thumbnail] = await this.db
+        .select({ updatedAt: assets.updatedAt })
+        .from(assets)
+        .where(and(eq(assets.shaderId, id), eq(assets.assetKey, THUMBNAIL_ASSET_KEY)))
+        .for('update');
+      matches = (thumbnail?.updatedAt ?? null) === expectedThumbnail;
     }
-    const [current] = await this.db
-      .select({
-        revision: shaders.revision,
-        thumbnail: sql<string | null>`(SELECT ${assets.updatedAt} FROM ${assets}
-          WHERE ${assets.shaderId} = ${shaders.id} AND ${assets.assetKey} = ${THUMBNAIL_ASSET_KEY})`,
-      })
-      .from(shaders)
-      .where(owned);
-    const matches =
-      (expectedRevision === undefined || current.revision === expectedRevision) &&
-      (expectedThumbnail === undefined || current.thumbnail === expectedThumbnail);
     if (!matches) {
       throw new StorageError('conflict', `Shader "${id}" was modified by another write`);
     }
@@ -523,6 +527,98 @@ class PgOps implements ShaderTx {
     return rows.length > 0;
   }
 
+  async insertHistory(shaderId: string, row: HistoryRow): Promise<void> {
+    try {
+      await this.db.insert(shaderHistory).values({
+        shaderId,
+        revision: row.revision,
+        createdAt: row.createdAt,
+        checkpointName: row.checkpointName,
+        cause: row.cause,
+        restoredFromRevision: row.restoredFromRevision,
+        projectJson: parseJson(row.projectJson),
+        controlsJson: parseJson(row.controlsJson),
+        renderJson: parseJson(row.renderJson),
+        presetsJson: parseJson(row.presetsJson),
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new StorageError(
+          'conflict',
+          `Shader "${shaderId}" already has a history entry for revision ${row.revision}`,
+        );
+      }
+      throw asStorageError(error, 'Failed to insert the history entry');
+    }
+  }
+
+  listHistory(shaderId: string): Promise<HistoryEntryRow[]> {
+    return this.db
+      .select(historyEntryColumns)
+      .from(shaderHistory)
+      .where(eq(shaderHistory.shaderId, shaderId))
+      .orderBy(desc(shaderHistory.revision));
+  }
+
+  async loadHistory(shaderId: string, revision: number): Promise<HistoryRow | null> {
+    const [row] = await this.db
+      .select()
+      .from(shaderHistory)
+      .where(and(eq(shaderHistory.shaderId, shaderId), eq(shaderHistory.revision, revision)))
+      .limit(1);
+    if (!row) return null;
+    return {
+      revision: row.revision,
+      createdAt: row.createdAt,
+      cause: row.cause,
+      checkpointName: row.checkpointName,
+      restoredFromRevision: row.restoredFromRevision,
+      projectJson: stringifyJson(row.projectJson),
+      controlsJson: stringifyJson(row.controlsJson),
+      renderJson: stringifyJson(row.renderJson),
+      presetsJson: stringifyJson(row.presetsJson),
+    };
+  }
+
+  async hasHistory(shaderId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ revision: shaderHistory.revision })
+      .from(shaderHistory)
+      .where(eq(shaderHistory.shaderId, shaderId))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  async setHistoryCheckpoint(
+    shaderId: string,
+    revision: number,
+    name: string | null,
+  ): Promise<HistoryEntryRow | null> {
+    const [row] = await this.db
+      .update(shaderHistory)
+      .set({ checkpointName: name })
+      .where(and(eq(shaderHistory.shaderId, shaderId), eq(shaderHistory.revision, revision)))
+      .returning(historyEntryColumns);
+    return row ?? null;
+  }
+
+  async pruneHistory(shaderId: string, keepUnnamed: number): Promise<number> {
+    const rows = await this.db
+      .delete(shaderHistory)
+      .where(
+        and(
+          eq(shaderHistory.shaderId, shaderId),
+          isNull(shaderHistory.checkpointName),
+          sql`${shaderHistory.revision} NOT IN (
+            SELECT revision FROM shader_history
+            WHERE shader_id = ${shaderId} AND checkpoint_name IS NULL
+            ORDER BY revision DESC LIMIT ${keepUnnamed})`,
+        ),
+      )
+      .returning({ revision: shaderHistory.revision });
+    return rows.length;
+  }
+
   async getMeta(key: string): Promise<string | null> {
     const [row] = await this.db
       .select({ value: storageMetadata.value })
@@ -561,6 +657,14 @@ function executor(db: Pick<PostgresDb, 'execute'>): SqlExecutor {
     run: async (text, params) => (await execute(text, params)).rowCount ?? 0,
   };
 }
+
+const historyEntryColumns = {
+  revision: shaderHistory.revision,
+  createdAt: shaderHistory.createdAt,
+  cause: shaderHistory.cause,
+  checkpointName: shaderHistory.checkpointName,
+  restoredFromRevision: shaderHistory.restoredFromRevision,
+};
 
 function toAssetMeta(row: {
   assetKey: string;

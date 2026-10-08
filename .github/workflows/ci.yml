@@ -104,6 +104,16 @@ jobs:
     if: needs.changes.outputs.studio == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Disposable database for the backend's PostgreSQL conformance suite, which is skipped without it.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -124,6 +134,8 @@ jobs:
         run: pnpm gen:ipc && pnpm nx run-many -t typecheck --exclude 'shadergrove,@shadergrove/website,@shadergrove/brand'
 
       - name: Test
+        env:
+          SHADER_TEST_DATABASE_URL: postgres://postgres:test@localhost:5433/postgres
         run: pnpm nx run-many -t test --exclude 'shadergrove,@shadergrove/website,@shadergrove/brand'
 
       - name: GLSL analysis Worker smoke
@@ -196,7 +208,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.studio == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # One worker runs every spec in turn: ~13 min before the GPU observation specs, ~16 slow
+    # Chromium tests more with them.
+    timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6

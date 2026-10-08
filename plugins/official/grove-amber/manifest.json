@@ -1,0 +1,103 @@
+{
+  "id": "dev.shadergrove.grove-amber",
+  "version": "1.0.1",
+  "protocolVersion": 3,
+  "appVersionRange": ">=1.5.0 <3.0.0",
+  "name": "Grove Amber",
+  "publisher": "Shadergrove",
+  "license": "CC0-1.0",
+  "contributions": [
+    {
+      "kind": "theme",
+      "id": "amber-dark",
+      "name": "Grove Amber Dark",
+      "schemaVersion": 2,
+      "scheme": "dark",
+      "variantGroup": "amber",
+      "ui": {
+        "background": "#15120e",
+        "on-background": "#ede4d8",
+        "surface": "#15120e",
+        "on-surface": "#ede4d8",
+        "on-surface-variant": "#b9ab98",
+        "surface-container-lowest": "#0f0c09",
+        "surface-container-low": "#1c1813",
+        "surface-container": "#221d17",
+        "surface-container-high": "#2b251e",
+        "surface-container-highest": "#352e25",
+        "outline": "#8a7c69",
+        "outline-variant": "#3a3229",
+        "primary": "#f2a93b",
+        "on-primary": "#2a1700",
+        "primary-container": "#5c3b00",
+        "on-primary-container": "#ffdcae",
+        "secondary": "#d9b98c",
+        "on-secondary": "#3b2a10",
+        "error": "#ffb4a8",
+        "on-error": "#690003"
+      },
+      "editor": {
+        "base": "vs-dark",
+        "background": "#1a1611",
+        "foreground": "#e8dccb",
+        "lineHighlight": "#241e17",
+        "lineNumber": "#5e5243",
+        "tokens": {
+          "comment": "#8c7d68",
+          "keyword": "#f2a93b",
+          "directive": "#e07a4f",
+          "type": "#9cc7d9",
+          "predefined": "#a8d08d",
+          "variable": "#f0d07a",
+          "number": "#e6a07a",
+          "string": "#c3d68a",
+          "operator": "#d9c3a5"
+        }
+      }
+    },
+    {
+      "kind": "theme",
+      "id": "amber-light",
+      "name": "Grove Amber Light",
+      "schemaVersion": 2,
+      "scheme": "light",
+      "variantGroup": "amber",
+      "ui": {
+        "background": "#fbf6ef",
+        "on-background": "#231b12",
+        "surface": "#fbf6ef",
+        "on-surface": "#231b12",
+        "on-surface-variant": "#5a4d3d",
+        "surface-container-lowest": "#ffffff",
+        "surface-container-low": "#f6efe5",
+        "surface-container": "#f0e7db",
+        "surface-container-high": "#eae0d2",
+        "surface-container-highest": "#e3d8c8",
+        "outline": "#85776a",
+        "outline-variant": "#d8ccbb",
+        "primary": "#8a5100",
+        "on-primary": "#ffffff",
+        "primary-container": "#ffdcb8",
+        "on-primary-container": "#2c1600"
+      },
+      "editor": {
+        "base": "vs",
+        "background": "#fdf9f3",
+        "foreground": "#2e2418",
+        "lineHighlight": "#f3ebdf",
+        "lineNumber": "#ab9d8a",
+        "tokens": {
+          "comment": "#8a7b66",
+          "keyword": "#9a5200",
+          "directive": "#b0461c",
+          "type": "#1f6788",
+          "predefined": "#3d7a2a",
+          "variable": "#8a6400",
+          "number": "#a3461e",
+          "string": "#5a7a12",
+          "operator": "#6b5640"
+        }
+      }
+    }
+  ]
+}

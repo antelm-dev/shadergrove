@@ -188,6 +188,85 @@ export class ShadersController {
     response.status(201).json({ shader: copy });
   }
 
+  @ApiTags('history')
+  @ApiOperation({
+    summary: "List a shader's history",
+    description:
+      'Saved document states (source, settings and presets), newest first. Entries are ' +
+      'immutable; texture bytes, channel settings and thumbnails are not part of them.',
+  })
+  @ApiErrors(404)
+  @AllowUnverified()
+  @Get('shaders/:id/history')
+  async history(@Param('id') id: string, @CurrentUser() principal: Principal): Promise<unknown> {
+    return { history: await this.libraryFor(principal).listHistory(id) };
+  }
+
+  @ApiTags('history')
+  @ApiOperation({
+    summary: 'Name or clear a history checkpoint',
+    description:
+      'Sets the entry name, or clears it with `null`. Changes only this entry: the shader ' +
+      'revision does not move. Named entries are never pruned.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['name'],
+      properties: { name: { type: 'string', nullable: true } },
+    },
+  })
+  @ApiErrors(400, 404)
+  @Put('shaders/:id/history/:revision/checkpoint')
+  async setCheckpoint(
+    @Param('id') id: string,
+    @Param('revision') rawRevision: string,
+    @Body() body: JsonBody | undefined,
+    @CurrentUser() principal: Principal,
+  ): Promise<unknown> {
+    const input = body ?? {};
+    return {
+      entry: await this.libraryFor(principal).setCheckpoint(
+        id,
+        historyRevision(rawRevision),
+        input['name'],
+      ),
+    };
+  }
+
+  @ApiTags('history')
+  @ApiOperation({
+    summary: 'Restore a history entry',
+    description:
+      'Copies the entry’s source, settings and presets into a new head revision; nothing is ' +
+      'deleted. `expectedRevision` is required: a stale one is a 409 and writes nothing.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['expectedRevision'],
+      properties: { expectedRevision: { type: 'integer' } },
+    },
+  })
+  @ApiErrors(400, 404, 409)
+  @Post('shaders/:id/history/:revision/restore')
+  @HttpCode(200)
+  async restoreHistory(
+    @Param('id') id: string,
+    @Param('revision') rawRevision: string,
+    @Body() body: JsonBody | undefined,
+    @CurrentUser() principal: Principal,
+  ): Promise<unknown> {
+    const input = body ?? {};
+    return {
+      shader: await this.libraryFor(principal).restoreHistory(
+        id,
+        historyRevision(rawRevision),
+        input['expectedRevision'],
+      ),
+    };
+  }
+
   @ApiTags('presets')
   @ApiOperation({ summary: "List a shader's presets" })
   @ApiErrors(404)
@@ -621,6 +700,13 @@ function expectedRevision(raw: unknown): number | undefined {
       'invalid',
       'Query parameter "expectedRevision" must be a positive integer',
     );
+  }
+  return Number(raw);
+}
+
+function historyRevision(raw: string): number {
+  if (!/^[1-9]\d*$/.test(raw)) {
+    throw new StorageError('invalid', 'The history revision must be a positive integer');
   }
   return Number(raw);
 }

@@ -9,8 +9,10 @@ import type {
   GlobalSymbolKind,
   GlslStage,
   GlslTypeInfo,
+  ObservationCatalogue,
 } from './contract';
 import { MAX_DIAGNOSTICS, parseInfoLog, SourceLines } from './diagnostics';
+import { verifyObservation, type NativeObservation } from './observation';
 
 /** JSON produced by `gla_analyze` in native/glsl_analysis.cpp. */
 export interface NativeReply {
@@ -23,6 +25,8 @@ export interface NativeReply {
   globals?: NativeGlobal[];
   functions?: NativeFunction[];
   symbolsTruncated?: boolean;
+  /** Only in replies to `gla_observe`. */
+  observation?: NativeObservation;
 }
 
 interface NativeLocation {
@@ -62,6 +66,8 @@ export interface AnalysisJob {
   readonly stage: GlslStage;
   readonly version: EsslVersion;
   readonly source: string;
+  /** Opt-in: also verify and return the observation catalogue. */
+  readonly observe?: boolean;
 }
 
 export type JobOutcome =
@@ -69,6 +75,7 @@ export type JobOutcome =
       readonly status: 'ok';
       readonly diagnostics: AnalysisDiagnostic[];
       readonly symbols: AnalysisSymbols;
+      readonly observation?: ObservationCatalogue;
     }
   | { readonly status: 'invalid-source'; readonly diagnostics: AnalysisDiagnostic[] }
   | {
@@ -229,5 +236,8 @@ export function interpretNativeReply(reply: NativeReply, job: AnalysisJob): JobO
       functions: toFunctions(reply.functions ?? [], lines),
       truncated: Boolean(reply.symbolsTruncated),
     },
+    ...(job.observe && reply.observation
+      ? { observation: verifyObservation(job.source, reply.observation) }
+      : {}),
   };
 }

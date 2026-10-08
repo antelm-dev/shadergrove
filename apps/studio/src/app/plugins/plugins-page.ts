@@ -15,7 +15,7 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
 
 import type { CustomEffect, ShaderControl, ShaderParams } from '@shadergrove/shared/model';
@@ -38,13 +38,13 @@ import { defaultParams } from '@shadergrove/shared/validate';
 import { DesktopPlatform } from '../desktop/desktop-platform';
 import { I18n } from '../i18n/i18n';
 import { TranslatePipe } from '../i18n/translate.pipe';
-import { Preferences } from '../prefs/preferences';
 import { PAGE_STYLES } from '../publications/page';
 import { AppThemes } from '../themes/app-themes';
 import { ShaderStore } from '../workspace/shader-store';
 import { EffectAdoption, adoptionMessage, type AdoptionResult } from './effect-adoption';
-import { HostAdapters, type ProviderField } from './host-adapters';
+import { HostAdapters } from './host-adapters';
 import { PluginCatalogueService } from './plugin-catalogue';
+import { PluginCommands } from './plugin-commands';
 import {
   PluginInstallations,
   type InstalledPlugin,
@@ -408,81 +408,19 @@ type AvailableState = 'install' | 'update' | 'installed';
                       }
                       @case ('projectImporter') {
                         @let importer = asProjectImporter(contribution);
-                        @let provider = providerOf(importer);
-                        @if (importer.provider && !provider) {
+                        @if (importer.provider && !providerOf(importer)) {
                           <p class="muted">{{ 'plugins.noAdapter' | translate }}</p>
                         } @else {
-                          <p class="muted">{{ 'plugins.contentRights' | translate }}</p>
-                          @if (importer.modes.length > 1) {
-                            <div
-                              class="modes"
-                              role="radiogroup"
-                              [attr.aria-label]="contribution.name"
-                            >
-                              @for (mode of importer.modes; track mode) {
-                                <label>
-                                  <input
-                                    type="radio"
-                                    [name]="'mode-' + key"
-                                    [attr.data-testid]="'mode-' + mode + '-' + key"
-                                    [checked]="modeOf(key, importer) === mode"
-                                    (change)="setMode(key, mode)"
-                                  />
-                                  {{
-                                    (mode === 'provider'
-                                      ? 'plugins.modeProvider'
-                                      : 'plugins.modePaste'
-                                    ) | translate
-                                  }}
-                                </label>
-                              }
-                            </div>
-                          }
-                          @if (modeOf(key, importer) === 'provider' && provider) {
-                            @for (field of provider.fields; track field.key) {
-                              <label class="field stacked">
-                                <span>{{ field.label | translate }}</span>
-                                <input
-                                  [type]="field.kind === 'credential' ? 'password' : 'text'"
-                                  [attr.autocomplete]="field.kind === 'credential' ? 'off' : null"
-                                  [attr.data-testid]="'field-' + field.key + '-' + key"
-                                  [attr.maxlength]="field.maxLength"
-                                  [placeholder]="field.placeholder ?? ''"
-                                  [ngModel]="fieldValue(key, field)"
-                                  (ngModelChange)="setField(key, field, $event)"
-                                />
-                                @if (field.hint) {
-                                  <small class="muted">{{ field.hint | translate }}</small>
-                                }
-                              </label>
-                            }
-                          } @else {
-                            <label class="field stacked">
-                              <span>{{ 'plugins.pasteName' | translate }}</span>
-                              <input
-                                type="text"
-                                maxlength="64"
-                                [attr.data-testid]="'paste-name-' + key"
-                                [ngModel]="pasteName(key)"
-                                (ngModelChange)="setPaste(key, 'name', $event)"
-                              />
-                            </label>
-                            <label class="field stacked">
-                              <span>{{ 'plugins.pasteSource' | translate }}</span>
-                              <textarea
-                                rows="8"
-                                spellcheck="false"
-                                [attr.data-testid]="'paste-source-' + key"
-                                [ngModel]="pasteSource(key)"
-                                (ngModelChange)="setPaste(key, 'text', $event)"
-                              ></textarea>
-                              <small class="muted">{{ 'plugins.pasteHint' | translate }}</small>
-                            </label>
-                          }
-                          <ng-container
-                            [ngTemplateOutlet]="runControls"
-                            [ngTemplateOutletContext]="{ key, label: 'plugins.runImport' }"
-                          />
+                          <!-- The same dialog the editor's import commands open. -->
+                          <button
+                            matButton="filled"
+                            type="button"
+                            [attr.data-testid]="'open-import-' + key"
+                            [disabled]="busy() !== null || projects.running() !== null"
+                            (click)="openImport(installed, importer)"
+                          >
+                            {{ 'action.import' | translate }}
+                          </button>
                         }
                       }
                       @case ('projectExporter') {
@@ -551,7 +489,7 @@ type AvailableState = 'install' | 'update' | 'installed';
           type="button"
           [attr.data-testid]="'run-' + key"
           [disabled]="busy() !== null || running !== null"
-          (click)="runProject(key)"
+          (click)="runExport(key)"
         >
           {{ label | translate }}
         </button>
@@ -724,29 +662,6 @@ type AvailableState = 'install' | 'update' | 'installed';
       margin: 4px 0;
     }
 
-    .field.stacked {
-      flex-direction: column;
-      align-items: stretch;
-      align-self: stretch;
-      max-width: 640px;
-    }
-
-    .field.stacked input,
-    .field.stacked textarea {
-      font: var(--mat-sys-body-medium);
-      padding: 6px 8px;
-      border: 1px solid var(--mat-sys-outline);
-      border-radius: 4px;
-      background: var(--mat-sys-surface);
-      color: var(--mat-sys-on-surface);
-    }
-
-    .field.stacked textarea {
-      font-family: var(--app-font-mono, monospace);
-      resize: vertical;
-    }
-
-    .modes,
     .run {
       display: flex;
       flex-wrap: wrap;
@@ -786,11 +701,12 @@ export class PluginsPage {
   private readonly store = inject(ShaderStore);
   private readonly desktop = inject(DesktopPlatform);
   protected readonly i18n = inject(I18n);
-  private readonly preferences = inject(Preferences);
   private readonly adapters = inject(HostAdapters);
   private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
   protected readonly catalogue = inject(PluginCatalogueService);
   protected readonly projects = inject(ProjectPluginActions);
+  private readonly commands = inject(PluginCommands);
+  private readonly router = inject(Router);
 
   private readonly route = inject(ActivatedRoute);
   /**
@@ -810,11 +726,6 @@ export class PluginsPage {
     const state = this.catalogue.state();
     return state.status === 'error' ? state.message : '';
   });
-
-  /** Form state of project contributions, by `<package>/<contribution>`; never sent to a plugin as is. */
-  private readonly modes = signal<Record<string, 'paste' | 'provider'>>({});
-  private readonly fields = signal<Record<string, Record<string, string>>>({});
-  private readonly pastes = signal<Record<string, { name: string; text: string }>>({});
 
   protected readonly appVersion = APP_VERSION;
   protected readonly review = signal<PluginReview | null>(null);
@@ -949,81 +860,40 @@ export class PluginsPage {
     return this.adapters.runtime(exporter.runtime);
   }
 
-  protected modeOf(key: string, importer: ProjectImporterContribution): 'paste' | 'provider' {
-    const chosen = this.modes()[key];
-    return chosen && importer.modes.includes(chosen) ? chosen : importer.modes[0]!;
-  }
-
-  protected setMode(key: string, mode: 'paste' | 'provider'): void {
-    this.modes.update((all) => ({ ...all, [key]: mode }));
-  }
-
-  protected fieldValue(key: string, field: ProviderField): string {
-    const typed = this.fields()[key]?.[field.key];
-    if (typed !== undefined) return typed;
-    return field.remember ? (this.preferences.value()[field.remember] ?? '') : '';
-  }
-
-  protected setField(key: string, field: ProviderField, value: string): void {
-    this.fields.update((all) => ({ ...all, [key]: { ...all[key], [field.key]: value } }));
-  }
-
-  protected pasteName(key: string): string {
-    return this.pastes()[key]?.name ?? this.i18n.t('shadertoy.defaultName');
-  }
-
-  protected pasteSource(key: string): string {
-    return this.pastes()[key]?.text ?? '';
-  }
-
-  protected setPaste(key: string, part: 'name' | 'text', value: string): void {
-    this.pastes.update((all) => ({
-      ...all,
-      [key]: { name: this.pasteName(key), text: this.pasteSource(key), [part]: value },
-    }));
-  }
-
   protected stepLabel(step: string): string {
     return this.i18n.t(`plugins.step.${step}` as Parameters<I18n['t']>[0]);
   }
 
-  /** Runs the project importer or exporter keyed `<package>/<contribution>`. */
-  protected async runProject(key: string): Promise<void> {
+  /** Opens the import dialog the editor's commands open, for this importer. */
+  protected async openImport(
+    installed: InstalledPlugin,
+    importer: ProjectImporterContribution,
+  ): Promise<void> {
+    this.message.set(null);
+    const result = await this.commands.openImport(
+      this.installations.context(installed.id),
+      importer.id,
+    );
+    if (result?.toEditor) {
+      void this.router.navigateByUrl('/');
+    } else if (result?.imported) {
+      this.reportOutcome({
+        status: 'imported',
+        ...result.imported,
+        warnings: [...result.imported.warnings],
+      });
+    }
+  }
+
+  /** Runs the project exporter keyed `<package>/<contribution>`. */
+  protected async runExport(key: string): Promise<void> {
     const [pluginId, contributionId] = splitKey(key);
     const contribution = this.installations
       .find(pluginId)
       ?.plugin?.manifest.contributions.find((entry) => entry.id === contributionId);
-    if (!contribution) return;
+    if (contribution?.kind !== 'projectExporter') return;
     this.message.set(null);
-    let outcome: ProjectActionOutcome;
-    if (contribution.kind === 'projectExporter') {
-      outcome = await this.projects.runExport(pluginId, contributionId);
-    } else if (contribution.kind === 'projectImporter') {
-      const mode = this.modeOf(key, contribution);
-      if (mode === 'provider') {
-        const provider = this.providerOf(contribution);
-        if (!provider) return;
-        const values = Object.fromEntries(
-          provider.fields.map((field) => [field.key, this.fieldValue(key, field).trim()]),
-        );
-        // Credentials the host remembers stay in the host's preferences.
-        for (const field of provider.fields) {
-          if (field.remember && values[field.key]) {
-            this.preferences.patch({ [field.remember]: values[field.key] });
-          }
-        }
-        outcome = await this.projects.runImport(pluginId, contributionId, { mode, values });
-      } else {
-        outcome = await this.projects.runImport(pluginId, contributionId, {
-          mode,
-          name: this.pasteName(key).trim(),
-          text: this.pasteSource(key),
-        });
-      }
-    } else {
-      return;
-    }
-    this.reportOutcome(outcome);
+    this.reportOutcome(await this.projects.runExport(pluginId, contributionId));
   }
 
   private reportOutcome(outcome: ProjectActionOutcome): void {

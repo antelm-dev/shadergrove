@@ -288,6 +288,7 @@
         "!{projectRoot}/rollup.desktop.config.mjs",
         "!{projectRoot}/vitest.desktop.config.ts",
         "!{projectRoot}/electron-builder.yml",
+        "!{projectRoot}/icons/**/*",
         "!{projectRoot}/vitest.server.config.ts"
       ]
     }

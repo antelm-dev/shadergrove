@@ -1,5 +1,6 @@
 import { Injectable, computed, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { MatDialog } from '@angular/material/dialog';
+import { firstValueFrom } from 'rxjs';
 
 import {
   FALLBACK_LANGUAGE_ID,
@@ -21,6 +22,13 @@ import {
 } from './plugin-installations';
 import { PluginTools } from './plugin-tools';
 import { ProjectPluginActions } from './project-actions';
+import type {
+  ProjectImportDialog,
+  ProjectImportDialogData,
+  ProjectImportDialogResult,
+} from './project-import-dialog';
+
+const IMPORT_DIALOG_ID = 'project-import-dialog';
 
 /** A menu command that a plugin contribution put there. */
 export interface PluginCommand extends MenuCommand {
@@ -38,8 +46,9 @@ export interface PluginCommand extends MenuCommand {
  * because a contribution of a supported kind does, and where it goes follows
  * from that kind.
  *
- * - `projectImporter` → Import & export: opens its form in Plugins (the host
- *   draws it; a plugin draws nothing).
+ * - `projectImporter` → Import & export and New shader: opens the host's import
+ *   dialog for that importer, where it is (a plugin draws nothing). The
+ *   Installed page opens the same dialog.
  * - `projectExporter` → Import & export and the shader's own menu: exports the
  *   open shader directly, dimmed when none is open.
  * - `effect` → the palette's Shader section: adds the effect to the open shader.
@@ -67,7 +76,7 @@ export class PluginCommands {
   private readonly pluginTools = inject(PluginTools);
   private readonly themes = inject(AppThemes);
   private readonly store = inject(ShaderStore);
-  private readonly router = inject(Router);
+  private readonly dialog = inject(MatDialog);
   private readonly i18n = inject(I18n);
 
   private readonly noShader = (): boolean => !this.store.record();
@@ -75,6 +84,7 @@ export class PluginCommands {
   readonly imports = computed<readonly PluginCommand[]>(() =>
     distinguish(
       this.projects.importers().map(({ installed, contribution }) => {
+        const context = this.installations.context(installed.id);
         const command = contribution.provider
           ? this.adapters.provider(contribution.provider)?.command
           : undefined;
@@ -83,7 +93,7 @@ export class PluginCommands {
           package: packageName(installed),
           icon: command?.icon ?? 'input',
           text: () => (command ? this.i18n.t(command.label) : `${contribution.name}…`),
-          action: () => void this.openInPlugins(installed.id),
+          action: () => void this.openImport(context, contribution.id),
         };
       }),
     ),
@@ -203,8 +213,36 @@ export class PluginCommands {
     },
   ]);
 
-  private openInPlugins(packageId: string): Promise<boolean> {
-    return this.router.navigate(['/plugins'], { queryParams: { use: packageId } });
+  /**
+   * Opens the import dialog of one importer, if the installation it was offered
+   * for is still the current one — a kept command (the palette's, the New shader
+   * dialog's) is refused like any other. Resolves with how the dialog ended; one
+   * dialog at a time.
+   */
+  async openImport(
+    context: PluginOperationContext | null,
+    contributionId: string,
+  ): Promise<ProjectImportDialogResult | undefined> {
+    const installed = this.current(context);
+    const offered = this.projects
+      .importers()
+      .some(
+        (entry) => entry.installed.id === installed?.id && entry.contribution.id === contributionId,
+      );
+    if (!context || !offered) return void this.stale();
+    if (this.dialog.getDialogById(IMPORT_DIALOG_ID)) return undefined;
+    const { ProjectImportDialog } = await import('./project-import-dialog');
+    // The chunk can take a moment; the installation is checked again before anything opens.
+    if (!this.current(context)) return void this.stale();
+    if (this.dialog.getDialogById(IMPORT_DIALOG_ID)) return undefined;
+    return firstValueFrom(
+      this.dialog
+        .open<ProjectImportDialog, ProjectImportDialogData, ProjectImportDialogResult>(
+          ProjectImportDialog,
+          { id: IMPORT_DIALOG_ID, data: { context, contributionId }, disableClose: true },
+        )
+        .afterClosed(),
+    );
   }
 
   /** Opens the tool's panel, if it is still offered: a kept palette entry cannot bring back a removed one. */

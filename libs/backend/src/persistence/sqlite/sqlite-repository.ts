@@ -28,6 +28,8 @@ import {
   type AssetKey,
   type AssetMeta,
   type AuthDatabase,
+  type HistoryEntryRow,
+  type HistoryRow,
   type PresetRow,
   type ShaderMutableFields,
   type ShaderRepository,
@@ -204,6 +206,10 @@ export class SqliteRepository implements ShaderRepository, PublicationRepository
 
   async loadAsset(scope: UserScope, id: string, key: AssetKey): Promise<StoredAsset | null> {
     return new SqliteTx(this.database()).loadAsset(scope, id, key);
+  }
+
+  async listHistory(shaderId: string): Promise<HistoryEntryRow[]> {
+    return new SqliteTx(this.database()).listHistory(shaderId);
   }
 
   async getMeta(key: string): Promise<string | null> {
@@ -442,6 +448,91 @@ class SqliteTx implements ShaderTx {
     return Number(result.changes) > 0;
   }
 
+  async insertHistory(shaderId: string, row: HistoryRow): Promise<void> {
+    this.exec(
+      `INSERT INTO shader_history (shader_id, revision, created_at, checkpoint_name, cause,
+                                   restored_from_revision, project_json, controls_json,
+                                   render_json, presets_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (stmt) =>
+        stmt.run(
+          shaderId,
+          row.revision,
+          row.createdAt,
+          row.checkpointName,
+          row.cause,
+          row.restoredFromRevision,
+          row.projectJson,
+          row.controlsJson,
+          row.renderJson,
+          row.presetsJson,
+        ),
+      `Shader "${shaderId}" already has a history entry for revision ${row.revision}`,
+    );
+  }
+
+  async listHistory(shaderId: string): Promise<HistoryEntryRow[]> {
+    return this.db
+      .prepare(
+        `SELECT revision, created_at, checkpoint_name, cause, restored_from_revision
+         FROM shader_history WHERE shader_id = ? ORDER BY revision DESC`,
+      )
+      .all(shaderId)
+      .map(toHistoryEntryRow);
+  }
+
+  async loadHistory(shaderId: string, revision: number): Promise<HistoryRow | null> {
+    const row = this.db
+      .prepare('SELECT * FROM shader_history WHERE shader_id = ? AND revision = ?')
+      .get(shaderId, revision);
+    if (!row) return null;
+    return {
+      ...toHistoryEntryRow(row),
+      projectJson: String(row['project_json']),
+      controlsJson: String(row['controls_json']),
+      renderJson: String(row['render_json']),
+      presetsJson: String(row['presets_json']),
+    };
+  }
+
+  async hasHistory(shaderId: string): Promise<boolean> {
+    return (
+      this.db.prepare('SELECT 1 FROM shader_history WHERE shader_id = ? LIMIT 1').get(shaderId) !==
+      undefined
+    );
+  }
+
+  async setHistoryCheckpoint(
+    shaderId: string,
+    revision: number,
+    name: string | null,
+  ): Promise<HistoryEntryRow | null> {
+    this.db
+      .prepare('UPDATE shader_history SET checkpoint_name = ? WHERE shader_id = ? AND revision = ?')
+      .run(name, shaderId, revision);
+    const row = this.db
+      .prepare(
+        `SELECT revision, created_at, checkpoint_name, cause, restored_from_revision
+         FROM shader_history WHERE shader_id = ? AND revision = ?`,
+      )
+      .get(shaderId, revision);
+    return row ? toHistoryEntryRow(row) : null;
+  }
+
+  async pruneHistory(shaderId: string, keepUnnamed: number): Promise<number> {
+    const result = this.db
+      .prepare(
+        `DELETE FROM shader_history
+         WHERE shader_id = ? AND checkpoint_name IS NULL
+           AND revision NOT IN (
+             SELECT revision FROM shader_history
+             WHERE shader_id = ? AND checkpoint_name IS NULL
+             ORDER BY revision DESC LIMIT ?)`,
+      )
+      .run(shaderId, shaderId, keepUnnamed);
+    return Number(result.changes);
+  }
+
   async getMeta(key: string): Promise<string | null> {
     const row = this.db.prepare('SELECT value FROM storage_metadata WHERE key = ?').get(key);
     return row ? String(row['value']) : null;
@@ -498,6 +589,17 @@ function toPresetRow(row: SQLRow): PresetRow {
     createdAt: String(row['created_at']),
     valuesJson: String(row['values_json']),
     renderJson: row['render_json'] === null ? null : String(row['render_json']),
+  };
+}
+
+function toHistoryEntryRow(row: SQLRow): HistoryEntryRow {
+  return {
+    revision: Number(row['revision']),
+    createdAt: String(row['created_at']),
+    cause: String(row['cause']) as HistoryEntryRow['cause'],
+    checkpointName: row['checkpoint_name'] === null ? null : String(row['checkpoint_name']),
+    restoredFromRevision:
+      row['restored_from_revision'] === null ? null : Number(row['restored_from_revision']),
   };
 }
 

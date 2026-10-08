@@ -24,13 +24,14 @@ import {
   imagePass,
   migrateLegacyProject,
   setChannelBinding,
+  setPassSource,
 } from '@shadergrove/shared/project';
 import { buildCollectionBundle, parseBundle } from '@shadergrove/shared/validate';
 import { DEFAULT_VERTEX, TEMPLATE_FRAGMENT } from '@shadergrove/shared/templates';
 
 import { ShaderLibrary, type PayloadSource } from './shader-library';
 import { StorageError } from './storage-error';
-import type { AssetKey, ShaderRepository } from '../persistence/shader-repository';
+import type { AssetKey, ShaderRepository, ShaderTx } from '../persistence/shader-repository';
 import { LOCAL_SCOPE, LOCAL_USER_ID } from '../persistence/user-scope';
 
 export interface ConformanceHarness {
@@ -42,6 +43,11 @@ export interface ConformanceHarness {
   corruptProjectJson(id: string): Promise<void>;
   /** Deletes an asset row directly, leaving `channels_json` pointing at bytes that are gone. */
   removeAssetRow(id: string, key: AssetKey): Promise<void>;
+  /** Deletes every history row of a shader, leaving it as a pre-feature library would. */
+  clearHistory(id: string): Promise<void>;
+  countHistory(id: string): Promise<number>;
+  /** Makes one entry's stored controls unreadable, for refusal tests. */
+  corruptHistory(id: string, revision: number): Promise<void>;
 }
 
 const PNG = Buffer.from('a fake png image').toString('base64');
@@ -74,6 +80,21 @@ function withTexture(payload: ShaderPayload, channel: number, data = PNG): Shade
   ) as unknown as TextureChannelPayloads;
   return { ...payload, channels };
 }
+
+/**
+ * Every account this suite acts as. A store that enforces shader ownership
+ * (PostgreSQL) must have them before the library bootstraps; add any new
+ * `lib.as({ userId })` here.
+ */
+export const CONFORMANCE_USER_IDS = [
+  LOCAL_USER_ID,
+  'user-alice',
+  'user-bob',
+  'history-alice',
+  'history-bob',
+  'history-forker',
+  'history-viewer',
+] as const;
 
 export function runShaderLibraryConformance(
   engine: string,
@@ -887,6 +908,491 @@ export function runShaderLibraryConformance(
       } finally {
         await reopened.close();
       }
+    });
+
+    // 21b — shader history (Phase 1)
+    describe('history', () => {
+      const SECOND = 'void main() { gl_FragColor = vec4(0.5); }';
+      const THIRD = 'void main() { gl_FragColor = vec4(0.25); }';
+      const revisions = async (id: string) => (await lib.listHistory(id)).map((e) => e.revision);
+
+      /** A second library over the same store whose history inserts can be made to fail. */
+      async function failingLibrary(): Promise<{ failing: ShaderLibrary; armed: { on: boolean } }> {
+        const armed = { on: false };
+        const repo = harness.makeRepository();
+        const wrapTx = (tx: ShaderTx): ShaderTx =>
+          new Proxy(tx, {
+            get(target, prop) {
+              if (prop === 'insertHistory' && armed.on) {
+                return async () => {
+                  throw new StorageError('io', 'history insert failed');
+                };
+              }
+              const value = Reflect.get(target, prop) as unknown;
+              return typeof value === 'function' ? value.bind(target) : value;
+            },
+          });
+        const proxy = new Proxy(repo, {
+          get(target, prop) {
+            if (prop === 'transaction') {
+              return <T>(work: (tx: ShaderTx) => Promise<T>) =>
+                target.transaction((tx) => work(wrapTx(tx)));
+            }
+            const value = Reflect.get(target, prop) as unknown;
+            return typeof value === 'function' ? value.bind(target) : value;
+          },
+        });
+        const failing = new ShaderLibrary(proxy, LOCAL_SCOPE);
+        await failing.init();
+        return { failing, armed };
+      }
+
+      it('records an initial entry for a new shader and one per source/config/render save', async () => {
+        const created = await lib.create({ name: 'Timeline' });
+        expect(await lib.listHistory(created.id)).toEqual([
+          {
+            revision: 1,
+            createdAt: created.createdAt,
+            cause: 'create',
+            checkpointName: null,
+            restoredFromRevision: null,
+          },
+        ]);
+
+        await lib.update(created.id, { fragment: SECOND });
+        await lib.update(created.id, { render: { ...DEFAULT_RENDER } });
+        await lib.update(created.id, {
+          controls: [{ key: 'speed', type: 'number', default: 1, min: 0, max: 2 }],
+        });
+        const history = await lib.listHistory(created.id);
+        expect(history.map((entry) => entry.revision)).toEqual([4, 3, 2, 1]);
+        expect(history.map((entry) => entry.cause)).toEqual([
+          'update',
+          'update',
+          'update',
+          'create',
+        ]);
+      });
+
+      it('lists newest first and survives a restart', async () => {
+        const { id } = await lib.create({ name: 'Durable History' });
+        await lib.update(id, { fragment: SECOND });
+        await lib.setCheckpoint(id, 1, 'Start');
+        await lib.close();
+
+        const reopened = new ShaderLibrary(harness.makeRepository(), LOCAL_SCOPE);
+        await reopened.init();
+        try {
+          const history = await reopened.listHistory(id);
+          expect(history.map((entry) => entry.revision)).toEqual([2, 1]);
+          expect(history[1]?.checkpointName).toBe('Start');
+        } finally {
+          await reopened.close();
+        }
+      });
+
+      it('records preset save and delete, and the entry holds the presets of that moment', async () => {
+        const { id } = await lib.create({ name: 'Presets' });
+        const saved = await lib.savePreset(id, { name: 'Warm', values: {} });
+        await lib.deletePreset(id, saved.id);
+
+        const history = await lib.listHistory(id);
+        expect(history.map((entry) => entry.cause)).toEqual([
+          'preset-delete',
+          'preset-save',
+          'create',
+        ]);
+
+        // Restoring the entry written by the save brings the preset back.
+        const head = (await lib.read(id)).revision;
+        const restored = await lib.restoreHistory(id, 2, head);
+        expect(restored.presets.map((preset) => preset.name)).toEqual(['Warm']);
+        // ...and restoring the creation state drops it again.
+        const emptied = await lib.restoreHistory(id, 1, restored.revision);
+        expect(emptied.presets).toEqual([]);
+      });
+
+      it('does not record texture, channel, metadata or thumbnail writes, leaving revision gaps', async () => {
+        const { id } = await lib.create({ name: 'Gaps' });
+        await lib.update(id, { name: 'Gaps Renamed', description: 'd' });
+        await lib.update(id, {
+          channels: [{ wrap: 'repeat' }, {}, {}, {}],
+        });
+        await lib.setTexture(id, 0, { ext: 'png', bytes: Buffer.from('t'), width: 1, height: 1 });
+        await lib.clearTexture(id, 0);
+        await lib.setThumbnail(id, { ext: 'png', bytes: Buffer.from('thumb') });
+        await lib.clearThumbnail(id);
+        expect(await revisions(id)).toEqual([1]);
+
+        const edited = await lib.update(id, { fragment: SECOND });
+        expect(edited.revision).toBeGreaterThan(2);
+        expect(await revisions(id)).toEqual([edited.revision, 1]);
+      });
+
+      it('freezes the head exactly as it was written', async () => {
+        const { id } = await lib.create({ name: 'Frozen' });
+        const edited = await lib.update(id, { fragment: SECOND });
+        await lib.update(id, { fragment: THIRD });
+
+        const restored = await lib.restoreHistory(
+          id,
+          edited.revision,
+          (await lib.read(id)).revision,
+        );
+        expect(restored.fragment).toBe(SECOND);
+        expect(restored.project).toEqual(edited.project);
+        expect(restored.controls).toEqual(edited.controls);
+        expect(restored.render).toEqual(edited.render);
+      });
+
+      it('captures a baseline for a pre-feature shader before its first versioned mutation', async () => {
+        const mutations = [
+          (id: string) => lib.update(id, { fragment: SECOND }),
+          (id: string) => lib.savePreset(id, { name: 'P', values: {} }),
+        ];
+        for (const [index, mutate] of mutations.entries()) {
+          const { id } = await lib.create({ name: `Legacy ${index}` });
+          await harness.clearHistory(id);
+          expect(await lib.listHistory(id)).toEqual([]);
+
+          // Metadata-only writes are not versioned, so they do not capture it.
+          await lib.update(id, { description: 'touch' });
+          expect(await lib.listHistory(id)).toEqual([]);
+
+          await mutate(id);
+          const history = await lib.listHistory(id);
+          expect(history.map((entry) => entry.cause)).toEqual([expect.any(String), 'baseline']);
+          const baseline = history[1];
+          expect(baseline?.revision).toBe(2);
+
+          const restored = await lib.restoreHistory(id, 2, (await lib.read(id)).revision);
+          expect(restored.fragment).toBe(TEMPLATE_FRAGMENT);
+          expect(restored.presets).toEqual([]);
+        }
+      });
+
+      it('does not capture a baseline when the mutation is rejected', async () => {
+        const { id } = await lib.create({ name: 'Rejected' });
+        await harness.clearHistory(id);
+        await expect(
+          lib.update(id, { fragment: SECOND, expectedRevision: 99 }),
+        ).rejects.toMatchObject({ code: 'conflict' });
+        expect(await harness.countHistory(id)).toBe(0);
+        expect((await lib.read(id)).revision).toBe(1);
+      });
+
+      it('starts imported, overwritten and duplicated shaders with history', async () => {
+        await lib.importPayloads([payloadOf('imp', 'Imp')], 'rename');
+        expect((await lib.listHistory('imp')).map((e) => [e.revision, e.cause])).toEqual([
+          [1, 'import'],
+        ]);
+
+        await lib.update('imp', { fragment: SECOND });
+        await lib.importPayloads([payloadOf('imp', 'Imp')], 'overwrite');
+        expect((await lib.listHistory('imp')).map((e) => [e.revision, e.cause])).toEqual([
+          [1, 'import'],
+        ]);
+
+        const copy = await lib.duplicate('imp', 'Imp Copy');
+        expect((await lib.listHistory(copy.id)).map((e) => [e.revision, e.cause])).toEqual([
+          [1, 'duplicate'],
+        ]);
+      });
+
+      it('records a whole-shader replace', async () => {
+        const { id } = await lib.create({ name: 'Synced' });
+        const payload = await lib.exportOne(id);
+        const replaced = await lib.replaceFromPayload(
+          id,
+          {
+            ...payload,
+            fragment: SECOND,
+            project: setPassSource(payload.project, imagePass(payload.project).id, SECOND),
+          },
+          1,
+        );
+        const history = await lib.listHistory(id);
+        expect(history.map((entry) => [entry.revision, entry.cause])).toEqual([
+          [replaced.revision, 'sync'],
+          [1, 'create'],
+        ]);
+      });
+
+      it('rolls the mutation back when its snapshot cannot be written', async () => {
+        const { id } = await lib.create({ name: 'Atomic' });
+        const before = await lib.read(id);
+        const { failing, armed } = await failingLibrary();
+        try {
+          armed.on = true;
+          await expect(failing.update(id, { fragment: SECOND })).rejects.toMatchObject({
+            code: 'io',
+          });
+          await expect(failing.savePreset(id, { name: 'P', values: {} })).rejects.toThrow();
+          await expect(failing.restoreHistory(id, 1, before.revision)).rejects.toThrow();
+          await expect(failing.create({ name: 'Never' })).rejects.toThrow();
+
+          expect(await lib.read(id)).toEqual(before);
+          expect(await revisions(id)).toEqual([1]);
+          await expect(lib.read('never')).rejects.toMatchObject({ code: 'not_found' });
+          expect((await lib.list()).map((entry) => entry.id)).toEqual([id]);
+        } finally {
+          await failing.close();
+        }
+      });
+
+      it('names and clears a checkpoint without touching the shader or the entry', async () => {
+        const { id } = await lib.create({ name: 'Names' });
+        const edited = await lib.update(id, { fragment: SECOND });
+        const before = await lib.read(id);
+
+        const named = await lib.setCheckpoint(id, 1, '  First light  ');
+        expect(named).toMatchObject({ revision: 1, checkpointName: 'First light' });
+        expect(await lib.read(id)).toEqual(before);
+        expect(edited.revision).toBe(2);
+        expect((await lib.listHistory(id)).map((e) => e.checkpointName)).toEqual([
+          null,
+          'First light',
+        ]);
+
+        const cleared = await lib.setCheckpoint(id, 1, null);
+        expect(cleared.checkpointName).toBeNull();
+        expect(await lib.read(id)).toEqual(before);
+      });
+
+      it('rejects bad checkpoint input and unknown entries', async () => {
+        const { id } = await lib.create({ name: 'Bad Names' });
+        for (const name of ['', '   ', 'x'.repeat(500), 7, undefined, 'a\u0000b']) {
+          await expect(lib.setCheckpoint(id, 1, name)).rejects.toMatchObject({ code: 'invalid' });
+        }
+        for (const revision of [0, -1, 1.5, '1', null, undefined]) {
+          await expect(lib.setCheckpoint(id, revision, 'ok')).rejects.toMatchObject({
+            code: 'invalid',
+          });
+          await expect(lib.restoreHistory(id, revision, 1)).rejects.toMatchObject({
+            code: 'invalid',
+          });
+        }
+        await expect(lib.setCheckpoint(id, 9, 'ok')).rejects.toMatchObject({ code: 'not_found' });
+        await expect(lib.setCheckpoint('nope', 1, 'ok')).rejects.toMatchObject({
+          code: 'not_found',
+        });
+        await expect(lib.listHistory('nope')).rejects.toMatchObject({ code: 'not_found' });
+        expect((await lib.listHistory(id))[0]?.checkpointName).toBeNull();
+      });
+
+      it('keeps every named checkpoint and only the newest 50 unnamed entries', async () => {
+        const { id } = await lib.create({ name: 'Retention' });
+        await lib.update(id, { fragment: `${FRAGMENT} // 1` });
+        await lib.setCheckpoint(id, 2, 'Keep me');
+        await lib.setCheckpoint(id, 1, 'And me');
+
+        let head = 2;
+        for (let n = 2; n <= 60; n += 1) {
+          head = (await lib.update(id, { fragment: `${FRAGMENT} // ${n}` })).revision;
+        }
+        expect(head).toBe(61);
+
+        const history = await lib.listHistory(id);
+        const named = history.filter((entry) => entry.checkpointName !== null);
+        const unnamed = history.filter((entry) => entry.checkpointName === null);
+        expect(named.map((entry) => entry.revision)).toEqual([2, 1]);
+        expect(unnamed).toHaveLength(50);
+        // The newest unnamed run is contiguous and ends at the head.
+        expect(unnamed[0]?.revision).toBe(61);
+        expect(unnamed.at(-1)?.revision).toBe(12);
+        // Descending order across the whole list.
+        const all = history.map((entry) => entry.revision);
+        expect(all).toEqual([...all].sort((a, b) => b - a));
+
+        // A pruned entry cannot be restored; a kept old one still can.
+        await expect(lib.restoreHistory(id, 3, head)).rejects.toMatchObject({ code: 'not_found' });
+        const back = await lib.restoreHistory(id, 1, head);
+        expect(back.fragment).toBe(TEMPLATE_FRAGMENT);
+      });
+
+      it('lets a cleared checkpoint age out on the next save', async () => {
+        const { id } = await lib.create({ name: 'Aging' });
+        await lib.setCheckpoint(id, 1, 'Temporary');
+        for (let n = 0; n < 50; n += 1) await lib.update(id, { fragment: `${FRAGMENT} // ${n}` });
+        expect((await lib.listHistory(id)).at(-1)?.revision).toBe(1);
+
+        await lib.setCheckpoint(id, 1, null);
+        expect((await lib.listHistory(id)).at(-1)?.revision).toBe(1); // clearing never deletes
+        await lib.update(id, { fragment: `${FRAGMENT} // last` });
+        const history = await lib.listHistory(id);
+        expect(history).toHaveLength(50);
+        expect(history.at(-1)?.revision).toBe(3);
+      });
+
+      it('restores into a new head, linked to its source, without rewriting history', async () => {
+        const { id } = await lib.create({ name: 'Restorable' });
+        await lib.update(id, { fragment: SECOND });
+        await lib.update(id, { fragment: THIRD });
+        await lib.setCheckpoint(id, 1, 'Original');
+        const before = await lib.listHistory(id);
+
+        const restored = await lib.restoreHistory(id, 1, 3);
+        expect(restored.revision).toBe(4);
+        expect(restored.fragment).toBe(TEMPLATE_FRAGMENT);
+
+        const after = await lib.listHistory(id);
+        expect(after).toHaveLength(before.length + 1);
+        expect(after[0]).toMatchObject({
+          revision: 4,
+          cause: 'restore',
+          restoredFromRevision: 1,
+          checkpointName: null,
+        });
+        // Everything that existed is untouched, newest-first order included.
+        expect(after.slice(1)).toEqual(before);
+        expect((await lib.read(id)).revision).toBe(4);
+
+        // The source can still be restored again later.
+        const again = await lib.restoreHistory(id, 3, 4);
+        expect(again.fragment).toBe(THIRD);
+      });
+
+      it('keeps identity, metadata, channels, texture bytes and thumbnail across a restore', async () => {
+        const { id } = await lib.create({ name: 'Keeper' });
+        await lib.update(id, { fragment: SECOND });
+        await lib.update(id, { name: 'Renamed', description: 'later' });
+        await lib.update(id, { channels: [{ wrap: 'repeat', filter: 'nearest' }, {}, {}, {}] });
+        await lib.setTexture(id, 2, {
+          ext: 'png',
+          bytes: Buffer.from('bytes'),
+          width: 3,
+          height: 3,
+        });
+        await lib.setThumbnail(id, { ext: 'png', bytes: Buffer.from('thumb') });
+        const current = await lib.read(id);
+
+        const restored = await lib.restoreHistory(id, 1, current.revision);
+        expect(restored.fragment).toBe(TEMPLATE_FRAGMENT);
+        expect(restored.id).toBe(id);
+        expect(restored.name).toBe('Renamed');
+        expect(restored.description).toBe('later');
+        expect(restored.createdAt).toBe(current.createdAt);
+        expect(restored.channels).toEqual(current.channels);
+        expect(restored.thumbnail).toEqual(current.thumbnail);
+        expect(restored.revision).toBe(current.revision + 1);
+        expect((await lib.readTexture(id, 2))?.bytes).toEqual(new Uint8Array(Buffer.from('bytes')));
+        expect((await lib.readThumbnail(id))?.bytes).toEqual(new Uint8Array(Buffer.from('thumb')));
+      });
+
+      it('restores controls with the presets that matched them', async () => {
+        const speed = { key: 'speed', type: 'number', default: 1, min: 0, max: 2 } as const;
+        const { id } = await lib.create({ name: 'Matching', controls: [speed] });
+        await lib.savePreset(id, { name: 'Fast', values: { speed: 2 } });
+        await lib.update(id, { controls: [{ ...speed, key: 'zoom' }] });
+        expect((await lib.read(id)).presets[0]?.values).toEqual({ zoom: 1 });
+
+        const restored = await lib.restoreHistory(id, 2, (await lib.read(id)).revision);
+        expect(restored.controls.map((control) => control.key)).toEqual(['speed']);
+        expect(restored.presets.map((preset) => [preset.name, preset.values])).toEqual([
+          ['Fast', { speed: 2 }],
+        ]);
+      });
+
+      it('refuses a stale or missing expectedRevision and changes nothing', async () => {
+        const { id } = await lib.create({ name: 'Guarded' });
+        await lib.update(id, { fragment: SECOND });
+        const before = await lib.read(id);
+        const history = await lib.listHistory(id);
+
+        await expect(lib.restoreHistory(id, 1, 1)).rejects.toMatchObject({ code: 'conflict' });
+        await expect(lib.restoreHistory(id, 1, 99)).rejects.toMatchObject({ code: 'conflict' });
+        await expect(lib.restoreHistory(id, 1, undefined)).rejects.toMatchObject({
+          code: 'invalid',
+        });
+        await expect(lib.restoreHistory(id, 1, 'x')).rejects.toMatchObject({ code: 'invalid' });
+        await expect(lib.restoreHistory(id, 9, before.revision)).rejects.toMatchObject({
+          code: 'not_found',
+        });
+        await expect(lib.restoreHistory('nope', 1, 1)).rejects.toMatchObject({
+          code: 'not_found',
+        });
+
+        expect(await lib.read(id)).toEqual(before);
+        expect(await lib.listHistory(id)).toEqual(history);
+      });
+
+      it('refuses a corrupt entry without writing', async () => {
+        const { id } = await lib.create({ name: 'Corrupt Entry' });
+        await lib.update(id, { fragment: SECOND });
+        await harness.corruptHistory(id, 1);
+        const before = await lib.read(id);
+
+        await expect(lib.restoreHistory(id, 1, before.revision)).rejects.toMatchObject({
+          code: 'io',
+        });
+        expect(await lib.read(id)).toEqual(before);
+        expect(await revisions(id)).toEqual([2, 1]);
+      });
+
+      it('deletes history with its shader', async () => {
+        const { id } = await lib.create({ name: 'Cascade' });
+        await lib.update(id, { fragment: SECOND });
+        await lib.setCheckpoint(id, 1, 'Named');
+        expect(await harness.countHistory(id)).toBe(2);
+
+        await lib.remove(id);
+        expect(await harness.countHistory(id)).toBe(0);
+        await expect(lib.listHistory(id)).rejects.toMatchObject({ code: 'not_found' });
+
+        // A new shader under the same id starts from revision 1 again.
+        const again = await lib.create({ name: 'Cascade' });
+        expect(again.id).toBe(id);
+        expect(await revisions(id)).toEqual([1]);
+      });
+
+      it('keeps history behind the owner', async () => {
+        const alice = lib.as({ userId: 'history-alice' });
+        const bob = lib.as({ userId: 'history-bob' });
+        const { id } = await alice.create({ name: 'Private History' });
+        await alice.update(id, { fragment: SECOND });
+
+        await expect(bob.listHistory(id)).rejects.toMatchObject({ code: 'not_found' });
+        await expect(bob.setCheckpoint(id, 1, 'Mine')).rejects.toMatchObject({
+          code: 'not_found',
+        });
+        await expect(bob.restoreHistory(id, 1, 2)).rejects.toMatchObject({ code: 'not_found' });
+        expect((await alice.listHistory(id)).map((entry) => entry.checkpointName)).toEqual([
+          null,
+          null,
+        ]);
+        expect((await alice.read(id)).revision).toBe(2);
+      });
+
+      it('lists a shared template read-only and refuses to name or restore it', async () => {
+        const source: PayloadSource = {
+          listIds: async () => ['history-example'],
+          exportOne: async () => payloadOf('history-example', 'History Example'),
+        };
+        await lib.as({ userId: 'system' }).installExamples(source, true, 'template');
+        const viewer = lib.as({ userId: 'history-viewer' });
+
+        expect((await viewer.listHistory('history-example')).map((e) => e.revision)).toEqual([1]);
+        await expect(viewer.setCheckpoint('history-example', 1, 'Mine')).rejects.toMatchObject({
+          code: 'not_found',
+        });
+        await expect(viewer.restoreHistory('history-example', 1, 1)).rejects.toMatchObject({
+          code: 'invalid',
+        });
+      });
+
+      it('gives a template fork its own history', async () => {
+        const source: PayloadSource = {
+          listIds: async () => ['fork-example'],
+          exportOne: async () => payloadOf('fork-example', 'Fork Example'),
+        };
+        await lib.as({ userId: 'system' }).installExamples(source, true, 'template');
+        const forked = await lib.as({ userId: 'history-forker' }).update('fork-example', {
+          fragment: SECOND,
+        });
+
+        const history = await lib.as({ userId: 'history-forker' }).listHistory(forked.id);
+        expect(history.map((entry) => entry.cause)).toEqual(['update', 'duplicate']);
+      });
     });
 
     // 22 — ownership: two users share a store and never see each other
