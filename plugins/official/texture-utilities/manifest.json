@@ -1,0 +1,19 @@
+{
+  "id": "dev.shadergrove.texture-utilities",
+  "version": "1.0.0",
+  "protocolVersion": 4,
+  "appVersionRange": ">=2.6.0 <3.0.0",
+  "name": "Texture Utilities",
+  "publisher": "Shadergrove",
+  "license": "Apache-2.0",
+  "contributions": [
+    {
+      "kind": "assetTool",
+      "id": "texture-utilities",
+      "name": "Texture Utilities",
+      "workflow": "texture-utilities/v1",
+      "inputs": ["image"],
+      "outputs": ["image"]
+    }
+  ]
+}
