@@ -1182,7 +1182,18 @@ describe('ShaderStore: history', () => {
   });
 
   it('keeps edits typed while the restore was out for the recovery prompt', async () => {
-    const { store, api } = setup(makeRecord());
+    // Explicit storage, as the sync-reload spec above: the recovery prompt reads it, and
+    // the environment's own localStorage may not exist on every runner.
+    const api = new FakeApi(makeRecord());
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: ShaderApi, useValue: api },
+        { provide: Preferences, useValue: new FakePreferences() },
+        { provide: PLATFORM_ID, useValue: 'browser' },
+        { provide: DOCUMENT, useValue: documentWith(new MemoryStorage()) },
+      ],
+    });
+    const store = TestBed.inject(ShaderStore);
     await store.initialize();
     const original = api.restoreHistory.bind(api);
     vi.spyOn(api, 'restoreHistory').mockImplementationOnce(async (...args) => {
