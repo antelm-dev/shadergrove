@@ -37,10 +37,11 @@ if (!url) {
     await sidePool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
   };
 
-  // The shared suite runs as the single-user `local` scope. A server store only
-  // seeds `system` and owns rows by real accounts, so the account the suite acts
-  // as has to exist before the library bootstraps, or every owned write fails
-  // `fk_shaders_owner`.
+  // The shared suite runs as the single-user `local` scope, and its ownership
+  // tests act as two more users. A server store only seeds `system` and owns rows
+  // by real accounts, so every account the suite acts as has to exist before the
+  // library bootstraps, or each owned write fails `fk_shaders_owner`.
+  const SUITE_USERS = [LOCAL_SCOPE.userId, 'user-alice', 'user-bob'];
   const localRepository = (): PostgresRepository => {
     const repo = new PostgresRepository({ connectionString: url });
     const migrate = repo.init.bind(repo);
@@ -48,8 +49,9 @@ if (!url) {
       await migrate();
       await sidePool.query(
         `INSERT INTO users (id, name, email, email_verified)
-         VALUES ($1, $1, $2, true) ON CONFLICT (id) DO NOTHING`,
-        [LOCAL_SCOPE.userId, 'local@shader-studio.invalid'],
+         SELECT id, id, id || '@shader-studio.invalid', true FROM unnest($1::text[]) AS id
+         ON CONFLICT (id) DO NOTHING`,
+        [SUITE_USERS],
       );
     };
     return repo;
