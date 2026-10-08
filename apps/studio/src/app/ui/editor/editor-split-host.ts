@@ -59,6 +59,21 @@ export interface EditorSplitFrame extends Box {
   id: SplitNodeId;
   axis: SplitAxis;
   ratio: number;
+  /** Pixels each side needs along the axis so every group inside it keeps its minimum. */
+  minFirst: number;
+  minSecond: number;
+}
+
+/**
+ * Pixels `node` needs along `axis` so every group inside it keeps its minimum
+ * at the nested splits' stored ratios.
+ */
+export function minEditorExtent(node: EditorLayoutNode, axis: SplitAxis): number {
+  if (node.kind === 'leaf') return MIN_EDITOR_GROUP_PX[axis];
+  const first = minEditorExtent(node.first, axis);
+  const second = minEditorExtent(node.second, axis);
+  if (node.axis !== axis) return Math.max(first, second);
+  return Math.max(first / node.ratio, second / (1 - node.ratio));
 }
 
 /**
@@ -76,7 +91,14 @@ export function layoutEditorTree(
     return out;
   }
   const ratio = live?.id === node.id ? live.ratio : node.ratio;
-  out.splits.push({ id: node.id, axis: node.axis, ratio, ...box });
+  out.splits.push({
+    id: node.id,
+    axis: node.axis,
+    ratio,
+    minFirst: minEditorExtent(node.first, node.axis),
+    minSecond: minEditorExtent(node.second, node.axis),
+    ...box,
+  });
   const across = node.axis === 'horizontal';
   const first = across
     ? { ...box, width: box.width * ratio }
@@ -91,17 +113,24 @@ export function layoutEditorTree(
 
 /**
  * The ratio a split may take: within the layout contract's fraction bounds and
- * leaving both children at least `minPx` along an axis `sizePx` long. A split
- * too small for both minimums sits at the middle.
+ * leaving its first and second sides at least `minFirstPx` / `minSecondPx`
+ * along an axis `sizePx` long. A split too small for both sits at the middle.
  */
-export function clampGroupRatio(ratio: number, sizePx: number, minPx: number): number {
-  const floor = sizePx > 0 ? minPx / sizePx : 0;
-  const low = Math.max(SPLIT_RATIO_MIN, floor);
-  const high = Math.min(SPLIT_RATIO_MAX, 1 - floor);
+export function clampGroupRatio(
+  ratio: number,
+  sizePx: number,
+  minFirstPx: number,
+  minSecondPx: number,
+): number {
+  const low = Math.max(SPLIT_RATIO_MIN, sizePx > 0 ? minFirstPx / sizePx : 0);
+  const high = Math.min(SPLIT_RATIO_MAX, sizePx > 0 ? 1 - minSecondPx / sizePx : 1);
   return low > high ? DEFAULT_SPLIT_RATIO : clamp(ratio, low, high);
 }
 
-/** Whether every split leaves both its sides their minimum pixel size; true until measured. */
+/**
+ * Whether every split leaves both its sides their minimum pixel size; true until
+ * measured. Half a pixel of slack absorbs a ratio clamped to exactly the minimum.
+ */
 export function splitsFit(
   splits: readonly EditorSplitFrame[],
   size: { width: number; height: number },
@@ -110,7 +139,7 @@ export function splitsFit(
   return splits.every((split) => {
     const across = split.axis === 'horizontal';
     const length = across ? split.width * size.width : split.height * size.height;
-    const min = MIN_EDITOR_GROUP_PX[split.axis];
+    const min = MIN_EDITOR_GROUP_PX[split.axis] - 0.5;
     return length * split.ratio >= min && length * (1 - split.ratio) >= min;
   });
 }
@@ -120,6 +149,8 @@ interface Drag {
   axis: SplitAxis;
   start: number;
   size: number;
+  minFirst: number;
+  minSecond: number;
 }
 
 /**
@@ -184,6 +215,7 @@ interface Drag {
           (pointermove)="moveDrag($event)"
           (pointerup)="endDrag($event, true)"
           (pointercancel)="endDrag($event, false)"
+          (lostpointercapture)="cancelDrag()"
           (keydown)="onSplitterKey($event, bar)"
         ></div>
       }
@@ -319,12 +351,13 @@ export class EditorSplitHost {
   /**
    * One column on a compact workspace, in a minimized frame, or whenever the
    * frame is too small to give every group its minimum size side by side.
+   * Decided from the committed tree, so a drag preview never changes the mode.
    */
   protected readonly stacked = computed(() => {
     if (!this.split() || this.collapsed()) return true;
     const { width } = this.registry.viewport();
     if (width > 0 && width < COMPACT_VIEWPORT_WIDTH) return true;
-    return !splitsFit(this.frames().splits, this.size());
+    return !splitsFit(layoutEditorTree(this.registry.editorLayout()).splits, this.size());
   });
 
   private readonly frames = computed(() =>
@@ -354,6 +387,14 @@ export class EditorSplitHost {
       });
       observer.observe(element);
       this.destroyRef.onDestroy(() => observer.disconnect());
+    });
+
+    // A drag ends with its splitter, so a preview never outlives the gesture.
+    effect(() => {
+      const shown = this.split() && !this.stacked() ? this.splits().map((bar) => bar.id) : [];
+      untracked(() => {
+        if (this.drag && !shown.includes(this.drag.id)) this.cancelDrag();
+      });
     });
 
     // A new group takes focus once its panel and editor are on screen.
@@ -408,6 +449,8 @@ export class EditorSplitHost {
       axis: bar.axis,
       start: across ? rect.left + bar.x * rect.width : rect.top + bar.y * rect.height,
       size: across ? bar.width * rect.width : bar.height * rect.height,
+      minFirst: bar.minFirst,
+      minSecond: bar.minSecond,
     };
     (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
     this.liveRatio.set({ id: bar.id, ratio: bar.ratio });
@@ -421,7 +464,8 @@ export class EditorSplitHost {
     const ratio = clampGroupRatio(
       (position - drag.start) / drag.size,
       drag.size,
-      MIN_EDITOR_GROUP_PX[drag.axis],
+      drag.minFirst,
+      drag.minSecond,
     );
     this.liveRatio.set({ id: drag.id, ratio });
   }
@@ -438,12 +482,19 @@ export class EditorSplitHost {
     this.scheduleRelayout();
   }
 
+  /** Drops a drag whose pointer capture or splitter went away, committing nothing. */
+  protected cancelDrag(): void {
+    if (!this.drag) return;
+    this.drag = null;
+    this.liveRatio.set(null);
+    this.scheduleRelayout();
+  }
+
   protected onSplitterKey(event: KeyboardEvent, bar: EditorSplitFrame): void {
     const across = bar.axis === 'horizontal';
     const step = event.shiftKey ? RATIO_STEP * 2 : RATIO_STEP;
     const rect = (this.host.nativeElement as HTMLElement).getBoundingClientRect();
     const size = across ? bar.width * rect.width : bar.height * rect.height;
-    const min = MIN_EDITOR_GROUP_PX[bar.axis];
     const keys: Record<string, number> = across
       ? { ArrowLeft: bar.ratio - step, ArrowRight: bar.ratio + step }
       : { ArrowUp: bar.ratio - step, ArrowDown: bar.ratio + step };
@@ -452,7 +503,7 @@ export class EditorSplitHost {
     const next = keys[event.key];
     if (next === undefined) return;
     event.preventDefault();
-    this.groups.commitRatio(bar.id, clampGroupRatio(next, size, min));
+    this.groups.commitRatio(bar.id, clampGroupRatio(next, size, bar.minFirst, bar.minSecond));
     this.scheduleRelayout();
   }
 

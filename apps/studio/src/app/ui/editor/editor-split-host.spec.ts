@@ -24,7 +24,13 @@ import { I18n } from '../../i18n/i18n';
 import { SurfaceRegistry } from '../../surfaces/surface-registry';
 import { EditorGroups } from './editor-groups';
 import { EditorPanel } from './editor-panel';
-import { EditorSplitHost, clampGroupRatio, layoutEditorTree, splitsFit } from './editor-split-host';
+import {
+  EditorSplitHost,
+  clampGroupRatio,
+  layoutEditorTree,
+  minEditorExtent,
+  splitsFit,
+} from './editor-split-host';
 
 const A = DEFAULT_EDITOR_GROUP_ID;
 const B = asEditorGroupId('editor-group:1');
@@ -39,6 +45,19 @@ const TWO: EditorLayoutNode = {
   ratio: 0.5,
   first: leaf(A_SURFACE),
   second: leaf(B_SURFACE),
+};
+const C_SURFACE = editorSurfaceId(asEditorGroupId('editor-group:2'));
+// [A | [B | C]]
+const NESTED: EditorLayoutNode = {
+  ...TWO,
+  second: {
+    kind: 'split',
+    id: asSplitNodeId('split:c'),
+    axis: 'horizontal',
+    ratio: 0.5,
+    first: leaf(B_SURFACE),
+    second: leaf(C_SURFACE),
+  },
 };
 
 // Provided as EditorPanel so the host's panel query finds it.
@@ -89,12 +108,27 @@ describe('layoutEditorTree', () => {
 
 describe('clampGroupRatio', () => {
   it('keeps both groups at the pixel minimum as well as the fraction bounds', () => {
-    expect(clampGroupRatio(0.05, 1000, 220)).toBe(0.22);
-    expect(clampGroupRatio(0.95, 1000, 220)).toBe(0.78);
-    expect(clampGroupRatio(0.95, 2000, 220)).toBe(0.8);
-    expect(clampGroupRatio(0.4, 1000, 220)).toBe(0.4);
+    expect(clampGroupRatio(0.05, 1000, 220, 220)).toBe(0.22);
+    expect(clampGroupRatio(0.95, 1000, 220, 220)).toBe(0.78);
+    expect(clampGroupRatio(0.95, 2000, 220, 220)).toBe(0.8);
+    expect(clampGroupRatio(0.4, 1000, 220, 220)).toBe(0.4);
     // Too small for two minimums: the middle.
-    expect(clampGroupRatio(0.3, 300, 220)).toBe(0.5);
+    expect(clampGroupRatio(0.3, 300, 220, 220)).toBe(0.5);
+  });
+
+  it('keeps a nested split side at the sum of its groups minimums', () => {
+    const outer = layoutEditorTree(NESTED).splits[0]!;
+    expect([outer.minFirst, outer.minSecond]).toEqual([220, 440]);
+    // [A | [B | C]] in 1000px: the right side cannot go below 2 x 220.
+    expect(clampGroupRatio(0.95, 1000, outer.minFirst, outer.minSecond)).toBe(0.56);
+  });
+
+  it('keeps every nested group at its minimum at an uneven nested ratio', () => {
+    const uneven = { ...NESTED, second: { ...NESTED.second, ratio: 0.25 } } as EditorLayoutNode;
+    // B at a quarter of the right side needs that side at 4 x 220.
+    expect(layoutEditorTree(uneven).splits[0]!.minSecond).toBe(880);
+    // Across the other axis a split needs only its larger side.
+    expect(minEditorExtent(uneven, 'vertical')).toBe(120);
   });
 });
 
@@ -109,6 +143,12 @@ describe('splitsFit', () => {
   it('does not fit a frame too narrow for two groups side by side', () => {
     // A right-docked editor: 340px cannot hold two 220px groups.
     expect(splitsFit(splits, { width: 340, height: 900 })).toBe(false);
+  });
+
+  it('fits a ratio clamped to exactly the minimum despite floating point', () => {
+    const down = layoutEditorTree({ ...TWO, axis: 'vertical', ratio: 120 / 440 });
+    expect(440 * (120 / 440)).toBeLessThan(120);
+    expect(splitsFit(down.splits, { width: 1000, height: 440 })).toBe(true);
   });
 });
 
@@ -258,6 +298,79 @@ describe('EditorSplitHost', () => {
     expect(groups.commitRatio).toHaveBeenCalledTimes(1);
     // 220px minimum for the right group in 1000px.
     expect(groups.commitRatio).toHaveBeenCalledWith(SPLIT, 0.78);
+  });
+
+  it('clamps a drag against a nested split and never stacks while dragging', () => {
+    showSplit();
+    registry.setEditorLayout(NESTED);
+    const { fixture, host } = mount();
+    vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 600,
+    } as DOMRect);
+    const bar = host.querySelector('[data-split-id="split:b"]') as HTMLElement;
+    const pointer = (type: string, clientX: number) =>
+      bar.dispatchEvent(
+        Object.assign(new MouseEvent(type, { clientX, button: 0, bubbles: true }), {
+          pointerId: 1,
+        }),
+      );
+
+    pointer('pointerdown', 500);
+    pointer('pointermove', 990);
+    fixture.detectChanges();
+    expect(host.classList.contains('stacked')).toBe(false);
+    expect(bar.getAttribute('aria-valuenow')).toBe('56');
+
+    pointer('pointerup', 990);
+    expect(groups.commitRatio).toHaveBeenCalledExactlyOnceWith(SPLIT, 0.56);
+  });
+
+  it('drops the preview, committing nothing, when the pointer capture is lost', () => {
+    showSplit();
+    const { fixture, host } = mount();
+    vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 600,
+    } as DOMRect);
+    const bar = host.querySelector('[role="separator"]') as HTMLElement;
+    const pointer = (type: string, clientX: number) =>
+      bar.dispatchEvent(
+        Object.assign(new MouseEvent(type, { clientX, button: 0, bubbles: true }), {
+          pointerId: 1,
+        }),
+      );
+
+    pointer('pointerdown', 500);
+    pointer('pointermove', 700);
+    bar.dispatchEvent(new Event('lostpointercapture'));
+    pointer('pointerup', 700);
+    fixture.detectChanges();
+
+    expect(groups.commitRatio).not.toHaveBeenCalled();
+    expect(bar.getAttribute('aria-valuenow')).toBe('50');
+  });
+
+  it('drops a drag whose splitter goes away with the split', () => {
+    showSplit();
+    const { fixture, host } = mount();
+    const bar = host.querySelector('[role="separator"]') as HTMLElement;
+    bar.dispatchEvent(
+      Object.assign(new MouseEvent('pointerdown', { clientX: 500, button: 0 }), { pointerId: 1 }),
+    );
+
+    registry.setViewport({ width: 600, height: 800 });
+    fixture.detectChanges();
+    expect(host.querySelector('[role="separator"]')).toBeNull();
+    registry.setViewport({ width: 1200, height: 800 });
+    fixture.detectChanges();
+
+    expect(host.querySelector('.splitter.dragging')).toBeNull();
+    expect(groups.commitRatio).not.toHaveBeenCalled();
   });
 
   it('resizes from the keyboard, committing each step', () => {
