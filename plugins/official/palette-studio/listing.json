@@ -1,0 +1,3 @@
+{
+  "description": "Extract 4–8 colours from an image, edit a gradient, save it as palette JSON and add it to a shader as a luminance-mapping effect — computed on your device; the effect stays in the shader after the plugin is removed."
+}
