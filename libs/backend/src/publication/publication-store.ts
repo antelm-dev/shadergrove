@@ -642,8 +642,16 @@ function toAsset(row: Record<string, unknown>): PublicationAsset {
     extension: String(row['extension']),
     width: row['width'] === null ? null : Number(row['width']),
     height: row['height'] === null ? null : Number(row['height']),
-    data: row['data'] as Uint8Array,
+    data: plainBytes(row['data'] as Uint8Array),
   };
+}
+
+/**
+ * node-postgres hands `bytea` back as a Node `Buffer`; the contract (and SQLite)
+ * is a plain `Uint8Array`. A view over the same memory, not a copy.
+ */
+function plainBytes(bytes: Uint8Array): Uint8Array {
+  return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 }
 
 function toReportRow(row: Record<string, unknown>): ReportRow {
