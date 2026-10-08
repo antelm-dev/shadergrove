@@ -11,11 +11,16 @@ import { DesktopAccount } from '../desktop/desktop-account';
 import { DesktopPlatform } from '../desktop/desktop-platform';
 import { DesktopSync } from '../desktop/desktop-sync';
 import { DesktopUpdater } from '../desktop/desktop-updater';
-import { ShaderStore, type EditorDocument } from '../workspace/shader-store';
+import {
+  ShaderStore,
+  type EditorDocument,
+  type HistoryRestoreOutcome,
+} from '../workspace/shader-store';
 import { I18n } from '../i18n/i18n';
 import { buildFullGlsl } from '@shadergrove/shared/glsl-export';
 import type { ConfirmDialogData } from './dialogs/confirm-dialog';
 import type { DeleteLinkedDialogData } from './dialogs/delete-linked-dialog';
+import type { HistoryDialogData } from './dialogs/history-dialog';
 import type { NewShaderDialogResult } from './dialogs/new-shader-dialog';
 import type { PromptDialogData, PromptDialogResult } from './dialogs/prompt-dialog';
 import type { UnsavedChoice } from './dialogs/unsaved-changes-dialog';
@@ -24,6 +29,10 @@ import { OpenDocuments } from './editor/open-documents';
 
 const ABOUT_DIALOG_ID = 'about-shader-studio';
 const SHORTCUTS_DIALOG_ID = 'keyboard-shortcuts';
+const HISTORY_DIALOG_ID = 'shader-history';
+
+/** `'cancelled'`: the unsaved-changes guard kept the draft, or another transition was running. */
+export type RestoreOutcome = HistoryRestoreOutcome | 'cancelled';
 
 /**
  * The user-facing verbs of the app: the flows that need a dialog or a file
@@ -269,6 +278,39 @@ export class WorkspaceActions {
         )
         .afterClosed(),
     );
+  }
+
+  // --- History ------------------------------------------------------------
+
+  /** The open shader's history. Reading it changes nothing, so a dirty draft is no reason to ask. */
+  async openHistory(): Promise<void> {
+    const record = this.store.record();
+    if (!record || this.dialog.getDialogById(HISTORY_DIALOG_ID)) return;
+    const { HistoryDialog } = await import('./dialogs/history-dialog');
+    this.dialog.open<InstanceType<typeof HistoryDialog>, HistoryDialogData>(HistoryDialog, {
+      id: HISTORY_DIALOG_ID,
+      data: { shaderId: record.id, name: record.name },
+      maxWidth: '92vw',
+    });
+  }
+
+  /**
+   * Restores a history entry as the new head, behind the same unsaved-changes
+   * guard as switching shaders: Cancel keeps the draft and writes nothing.
+   */
+  async restoreHistory(shaderId: string, revision: number): Promise<RestoreOutcome> {
+    let outcome = 'cancelled' as RestoreOutcome;
+    await this.guardedTransition(async () => {
+      outcome = await this.store.restoreHistory(shaderId, revision);
+    });
+    if (outcome === 'restored') {
+      this.store.notice.set({ text: this.i18n.t('history.restored', { revision }), error: false });
+      // Anything typed while the restore was out is offered back here.
+      await this.resolveStaleRecovery();
+    } else if (outcome === 'conflict') {
+      this.store.notice.set({ text: this.i18n.t('history.conflict'), error: true });
+    }
+    return outcome;
   }
 
   /** Publish, update or unpublish a shader's public snapshot. Web only. */
