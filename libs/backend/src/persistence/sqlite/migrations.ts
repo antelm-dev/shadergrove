@@ -152,4 +152,31 @@ export const SQLITE_MIGRATIONS: readonly Migration[] = [
       exec(publicationSchemaSql('BLOB'));
     },
   },
+  {
+    version: 5,
+    name: 'shader-history',
+    up(exec) {
+      // Additive: shaders that predate it simply have no rows until their first
+      // versioned edit captures a baseline. `revision` is the shader's own
+      // counter, so gaps are normal. Content is frozen as the same JSON the
+      // `shaders` columns hold; only `checkpoint_name` is ever updated.
+      exec(`
+        CREATE TABLE shader_history (
+          shader_id              TEXT NOT NULL REFERENCES shaders(id) ON DELETE CASCADE,
+          revision               INTEGER NOT NULL,
+          created_at             TEXT NOT NULL,
+          checkpoint_name        TEXT,
+          cause                  TEXT NOT NULL,
+          restored_from_revision INTEGER,
+          project_json           TEXT NOT NULL,
+          controls_json          TEXT NOT NULL,
+          render_json            TEXT NOT NULL,
+          presets_json           TEXT NOT NULL,
+          PRIMARY KEY (shader_id, revision)
+        );
+
+        CREATE INDEX idx_shader_history_newest ON shader_history(shader_id, revision DESC);
+      `);
+    },
+  },
 ];
