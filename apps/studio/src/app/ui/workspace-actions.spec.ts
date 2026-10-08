@@ -7,7 +7,7 @@ import { of } from 'rxjs';
 import type { SyncRemoveResult } from '../../desktop/contracts/contracts';
 import { DEFAULT_CHANNELS, DEFAULT_RENDER, type ShaderRecord } from '@shadergrove/shared/model';
 import { migrateLegacyProject } from '@shadergrove/shared/project';
-import { ShaderApi } from '../api/shader-api';
+import { ApiError, ShaderApi } from '../api/shader-api';
 import { AuthService } from '../auth/auth.service';
 import { DesktopAccount } from '../desktop/desktop-account';
 import { DesktopPlatform } from '../desktop/desktop-platform';
@@ -404,5 +404,110 @@ describe('WorkspaceActions.deleteShader', () => {
     expect(opened).toEqual([ConfirmDialog]);
     expect(sync.remove).not.toHaveBeenCalled();
     expect(api.remove).toHaveBeenCalledWith('waves');
+  });
+});
+
+describe('WorkspaceActions history', () => {
+  const RESTORED = 'void main() { gl_FragColor = vec4(0.25); }';
+  const api = Object.assign(new FakeApi(), {
+    restoreHistory: vi.fn(
+      async (_id: string, _revision: number, expectedRevision: number): Promise<ShaderRecord> => ({
+        ...makeRecord(),
+        revision: expectedRevision + 1,
+        updatedAt: '2024-04-04T00:00:00.000Z',
+        fragment: RESTORED,
+        project: migrateLegacyProject(RESTORED, VERTEX),
+      }),
+    ),
+  });
+  let choices: unknown[];
+  let opened: { component: unknown; config: unknown }[];
+  let actions: WorkspaceActions;
+  let store: ShaderStore;
+
+  beforeEach(async () => {
+    TestBed.resetTestingModule();
+    vi.clearAllMocks();
+    choices = [];
+    opened = [];
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: ShaderApi, useValue: api },
+        { provide: Preferences, useValue: new FakePreferences() },
+        { provide: DesktopPlatform, useValue: { available: false } },
+        {
+          provide: I18n,
+          useValue: {
+            locale: () => 'en',
+            t: (key: string, params?: Record<string, unknown>) =>
+              params ? `${key} ${JSON.stringify(params)}` : key,
+          },
+        },
+        {
+          provide: MatDialog,
+          useValue: {
+            open: (component: unknown, config: unknown) => {
+              opened.push({ component, config });
+              return { afterClosed: () => of(choices.shift()) };
+            },
+            getDialogById: (id: string) =>
+              opened.some(({ config }) => (config as { id?: string })?.id === id) ? {} : undefined,
+          },
+        },
+      ],
+    });
+    actions = TestBed.inject(WorkspaceActions);
+    store = TestBed.inject(ShaderStore);
+    await store.initialize();
+  });
+
+  it('opens History over a dirty draft without asking, once', async () => {
+    store.setFragment('void main() {}');
+
+    await actions.openHistory();
+    await actions.openHistory();
+
+    expect(opened).toHaveLength(1);
+    expect(String((opened[0].component as { name: string }).name)).toContain('HistoryDialog');
+    expect(opened[0].config).toMatchObject({ data: { shaderId: 'waves', name: 'Waves' } });
+    expect(store.dirty()).toBe(true);
+  });
+
+  it('keeps the draft and writes nothing when the guard is cancelled', async () => {
+    store.setFragment('void main() {}');
+    choices = ['cancel'];
+
+    expect(await actions.restoreHistory('waves', 1)).toBe('cancelled');
+
+    expect(api.restoreHistory).not.toHaveBeenCalled();
+    expect(store.fragment()).toBe('void main() {}');
+    expect(store.dirty()).toBe(true);
+  });
+
+  it('discards, then restores as a clean new head and says so', async () => {
+    store.setFragment('void main() {}');
+    choices = ['discard'];
+
+    expect(await actions.restoreHistory('waves', 1)).toBe('restored');
+
+    expect(api.restoreHistory).toHaveBeenCalledWith('waves', 1, 1);
+    expect(store.fragment()).toBe(RESTORED);
+    expect(store.record()?.revision).toBe(2);
+    expect(store.dirty()).toBe(false);
+    expect(store.notice()).toEqual({ text: 'history.restored {"revision":1}', error: false });
+  });
+
+  it('restores a clean document without asking', async () => {
+    expect(await actions.restoreHistory('waves', 1)).toBe('restored');
+    expect(opened).toHaveLength(0);
+  });
+
+  it('tells the user about a stale head and keeps the document', async () => {
+    api.restoreHistory.mockRejectedValueOnce(new ApiError('modified by another write', [], 409));
+
+    expect(await actions.restoreHistory('waves', 1)).toBe('conflict');
+
+    expect(store.fragment()).toBe(FRAGMENT);
+    expect(store.notice()).toEqual({ text: 'history.conflict', error: true });
   });
 });

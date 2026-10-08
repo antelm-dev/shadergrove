@@ -154,6 +154,15 @@ type ConfigView = 'builder' | 'json';
         <mat-icon>undo</mat-icon>
         <span>{{ 'action.revert' | translate }}</span>
       </button>
+      <button
+        mat-menu-item
+        type="button"
+        [disabled]="!store.draft()"
+        (click)="workspace.openHistory()"
+      >
+        <mat-icon>history</mat-icon>
+        <span>{{ 'history.menu' | translate }}</span>
+      </button>
       <mat-divider />
       <button
         mat-menu-item
