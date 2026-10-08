@@ -81,6 +81,21 @@ function withTexture(payload: ShaderPayload, channel: number, data = PNG): Shade
   return { ...payload, channels };
 }
 
+/**
+ * Every account this suite acts as. A store that enforces shader ownership
+ * (PostgreSQL) must have them before the library bootstraps; add any new
+ * `lib.as({ userId })` here.
+ */
+export const CONFORMANCE_USER_IDS = [
+  LOCAL_USER_ID,
+  'user-alice',
+  'user-bob',
+  'history-alice',
+  'history-bob',
+  'history-forker',
+  'history-viewer',
+] as const;
+
 export function runShaderLibraryConformance(
   engine: string,
   newHarness: () => ConformanceHarness,
