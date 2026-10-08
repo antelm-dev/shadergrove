@@ -60,10 +60,7 @@ async function openStudio(page: Page): Promise<void> {
 
 async function menuItem(page: Page, name: RegExp): Promise<void> {
   await page.getByRole('button', { name: 'More actions' }).click();
-  const direct = page.getByRole('menuitem', { name });
-  if (!(await direct.isVisible())) {
-    await page.getByRole('menuitem', { name: /Import & export/ }).click();
-  }
+  // Import & export is a heading in this menu, not a submenu: the item is listed directly.
   await page.getByRole('menuitem', { name }).click();
 }
 
@@ -319,6 +316,14 @@ test('Shadertoy Import: leaving with browser Back while a fetch runs cancels it 
   });
   await openStudio(page);
   await openPlugins(page);
+  // isVisible() does not wait: decide only once the catalogue shows the package, as
+  // either an Install action or an installed card.
+  await expect(
+    page
+      .getByTestId(`install-available-${SHADERTOY}`)
+      .or(page.getByTestId(`plugin-${SHADERTOY}`))
+      .first(),
+  ).toBeVisible();
   if (await page.getByTestId(`install-available-${SHADERTOY}`).isVisible()) {
     await installAvailable(page, SHADERTOY);
   }

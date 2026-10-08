@@ -35,6 +35,7 @@ import {
 } from '@shadergrove/shared/surfaces';
 import { CodeEditor, type EditorDoc } from '../../editor/code-editor';
 import { EditorSettings } from '../../editor/editor-settings';
+import { ProjectAnalysis } from '../../editor/glsl-analysis';
 import {
   EditorNavigation,
   resolveNavigationTarget,
@@ -99,6 +100,20 @@ type ConfigView = 'builder' | 'json';
 
       @if (status.state() === 'unsaved' || status.state() === 'saving') {
         <span class="dirty" aria-live="polite">{{ status.label() }}</span>
+      }
+
+      @if (analysisChip(); as chip) {
+        <button
+          type="button"
+          class="analysis-chip"
+          [class.failed]="chip.failed"
+          [attr.data-analysis]="chip.state"
+          [matTooltip]="chip.tooltip"
+          [attr.aria-label]="chip.tooltip"
+          (click)="onAnalysisChip()"
+        >
+          {{ chip.label }}
+        </button>
       }
 
       @if (activePass() && !collapsed()) {
@@ -278,6 +293,7 @@ type ConfigView = 'builder' | 'json';
                 [liveIds]="liveIds()"
                 [appearance]="settings.effective()"
                 [diagnostics]="activeDiagnostics()"
+                [analysis]="analysis"
                 (valueChange)="store.setDocSource($event.id, $event.value)"
               />
 
@@ -370,6 +386,25 @@ type ConfigView = 'builder' | 'json';
       color: var(--mat-sys-tertiary);
       font: var(--mat-sys-label-medium);
       white-space: nowrap;
+    }
+
+    .analysis-chip {
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 0 6px;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--mat-sys-on-surface-variant);
+      font: var(--mat-sys-label-small);
+      cursor: pointer;
+    }
+
+    .analysis-chip.failed {
+      color: var(--mat-sys-error);
     }
 
     .config-toggle {
@@ -676,8 +711,58 @@ export class EditorPanel {
 
   private readonly editorNavigation = inject(EditorNavigation);
 
+  /**
+   * Front-end analysis of the current project. Browser only, and idle until the
+   * first project reaches the effect below: no Worker, WASM or fetch exists for
+   * server rendering, a collapsed panel or a page that never shows code.
+   */
+  protected readonly analysis = this.isBrowser ? new ProjectAnalysis() : null;
+
+  /** Analysis is its own status: a failure here is never a shader error. */
+  protected readonly analysisChip = computed(() => {
+    const health = this.analysis?.health();
+    const snapshot = this.analysis?.snapshot();
+    if (!health || health.state === 'idle') return null;
+    if (health.state === 'unavailable') {
+      return {
+        state: 'unavailable',
+        failed: true,
+        label: 'Analysis unavailable — retry',
+        tooltip: `GLSL analysis is unavailable (${health.failure.reason}): ${health.failure.message}. Rendering is unaffected. Click to retry.`,
+      };
+    }
+    const problems = snapshot?.diagnostics.filter((d) => d.severity === 'error').length ?? 0;
+    if (health.state === 'ready' && problems) {
+      return {
+        state: 'problems',
+        failed: false,
+        label: `Analysis: ${problems} ${problems === 1 ? 'problem' : 'problems'}`,
+        tooltip: 'Go to the first GLSL analysis problem',
+      };
+    }
+    return {
+      state: health.state,
+      failed: false,
+      label: health.state === 'ready' ? 'Analysis ready' : 'Analysing…',
+      tooltip: 'GLSL analysis (glslang), separate from the renderer’s compile diagnostics',
+    };
+  });
+
   constructor() {
     afterNextRender(() => this.observeEditorWidth());
+
+    effect(() => {
+      const analysis = this.analysis;
+      if (!analysis || this.collapsed() || this.store.loading()) return;
+
+      const projectId = this.store.selectedId();
+      const project = this.store.project();
+      const revision = this.store.draftRevision();
+      if (!projectId || !project) return;
+      untracked(() => analysis.update({ projectId, revision, project }));
+    });
+
+    this.destroyRef.onDestroy(() => this.analysis?.dispose());
 
     // A newly selected shader opens its Config in the builder when the builder
     // can edit it, and in JSON when it first needs repairing. Declared before the
@@ -869,6 +954,18 @@ export class EditorPanel {
     else this.focusEditor();
 
     queueMicrotask(() => this.relayout());
+  }
+
+  protected onAnalysisChip(): void {
+    const analysis = this.analysis;
+    if (!analysis) return;
+    if (analysis.health().state === 'unavailable') {
+      void analysis.retry();
+      return;
+    }
+    const open = this.activeDoc();
+    const next = analysis.firstProblem(open ? { docId: open.id, line: 0 } : undefined);
+    if (next) this.editorNavigation.reveal(next.docId, next.line ?? 1);
   }
 
   /**

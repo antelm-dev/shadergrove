@@ -11,7 +11,8 @@ import {
 } from '@shadergrove/shared/plugin';
 import { DesktopPlatform } from '../desktop/desktop-platform';
 import { I18n } from '../i18n/i18n';
-import { installedPackage, officialPackageText } from '../i18n/testing/languages';
+import { installedPackage } from '../i18n/testing/languages';
+import { officialPackageText } from './testing/official-packages';
 import { Preferences, type WorkspacePreferences } from '../prefs/preferences';
 import { AppThemes } from '../themes/app-themes';
 import { ShaderStore } from '../workspace/shader-store';

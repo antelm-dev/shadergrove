@@ -29,6 +29,109 @@ export interface AnalysisRequest {
   readonly stage: GlslStage;
   readonly profile: EsslProfile;
   readonly source: string;
+  /**
+   * Private opt-in: also return a verified observation catalogue (see
+   * `ObservationCatalogue`) with an `ok` reply. Absent or false leaves the
+   * request and reply exactly as for ordinary analysis.
+   */
+  readonly observe?: boolean;
+}
+
+export type ObservationType = 'float' | 'vec2' | 'vec3' | 'vec4';
+
+/** Half-open UTF-16 offsets into the exact prepared source. */
+export interface SourceRange {
+  readonly start: number;
+  readonly end: number;
+}
+
+/** Binds a catalogue to one exact prepared source; any difference is stale. */
+export interface ObservationSourceIdentity {
+  /** UTF-16 code units. */
+  readonly length: number;
+  /** Two independent 32-bit FNV-1a lanes over the UTF-16 code units, 16 lowercase hex digits. */
+  readonly hash: string;
+}
+
+/**
+ * One verified point: the statement `type name = expr;` or `name = expr;` is
+ * complete at `insertAt`, directly inside a braced block. Only this statement
+ * shape is ever offered; everything else is refused with a reason.
+ */
+export interface ObservationPoint {
+  /** Stable within this catalogue: `<source hash>:<ordinal>`. */
+  readonly id: string;
+  readonly kind: 'initialized-declaration' | 'assignment';
+  readonly name: string;
+  /** The compiler's symbol id; valid only for this reply (distinguishes shadowed names). */
+  readonly symbolId: number;
+  readonly function: string;
+  readonly type: ObservationType;
+  /** Effective precision from the compiler, not necessarily as written. */
+  readonly precision: 'lowp' | 'mediump' | 'highp';
+  readonly scope: {
+    /** Brace-block ordinals (source order, 0-based) from the function body inwards. */
+    readonly path: readonly number[];
+    readonly loopDepth: number;
+    readonly conditionalDepth: number;
+  };
+  /** Executions of this point per invocation can be selected from 1 to this bound. */
+  readonly maxVisits: number;
+  readonly span: {
+    /** The whole statement including its terminating `;`. */
+    readonly statement: SourceRange;
+    readonly name: SourceRange;
+    /** The `=` token. */
+    readonly operator: SourceRange;
+    /** Offset directly after the `;`: the only place a capture may be inserted. */
+    readonly insertAt: number;
+    /** First token of the enclosing function definition; where declarations may be inserted. */
+    readonly functionStart: number;
+  };
+  /** The compiler's own location hint (1-based line, UTF-16 column), never proof by itself. */
+  readonly compilerLocation: CompilerLocation;
+}
+
+export type ObservationRefusalReason =
+  | 'user-line-directive'
+  | 'macro'
+  | 'conditional-compilation'
+  | 'location-mismatch'
+  | 'statement-shape'
+  | 'compound-declaration'
+  | 'loop-header'
+  | 'ambiguous-name'
+  | 'ambiguous-statement'
+  | 'ambiguous-function'
+  | 'unsupported-type'
+  | 'unsupported-storage'
+  | 'unsupported-precision'
+  | 'unsupported-lvalue'
+  | 'unsupported-compound-assignment'
+  | 'unsupported-increment';
+
+export interface ObservationRefusal {
+  readonly reason: ObservationRefusalReason;
+  /** Compiler hint, when the compiler reported one. */
+  readonly line: number | null;
+  readonly column: number | null;
+  readonly message: string;
+}
+
+/** The unique `void main()` definition, needed only for a verified entry wrapper. */
+export interface ObservationEntry {
+  readonly name: SourceRange;
+  /** Offset after the closing brace of `main`. */
+  readonly end: number;
+}
+
+export interface ObservationCatalogue {
+  readonly source: ObservationSourceIdentity;
+  readonly points: readonly ObservationPoint[];
+  readonly refusals: readonly ObservationRefusal[];
+  /** True when more than `MAX_OBSERVATION_POINTS` points existed. */
+  readonly truncated: boolean;
+  readonly entry: ObservationEntry | null;
 }
 
 export type AnalysisStatus =
@@ -193,6 +296,8 @@ export interface OkReply extends ReplyIdentity {
   readonly diagnostics: readonly AnalysisDiagnostic[];
   /** Valid only for this exact revision. */
   readonly symbols: AnalysisSymbols;
+  /** Present only when the request opted in with `observe`. */
+  readonly observation?: ObservationCatalogue;
   readonly capabilities: AnalysisCapabilities;
   readonly timing: AnalysisTiming;
 }

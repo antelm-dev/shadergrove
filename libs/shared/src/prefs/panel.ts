@@ -71,9 +71,14 @@ export function sanitizeBrowserView(value: unknown): BrowserView {
 // ---------------------------------------------------------------------------
 
 /** Which tab of the bottom panel is showing. */
-export type BottomPanelTab = 'problems' | 'output' | 'profiler';
+export type BottomPanelTab = 'problems' | 'output' | 'profiler' | 'inspection';
 
-export const BOTTOM_PANEL_TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler'];
+export const BOTTOM_PANEL_TABS: readonly BottomPanelTab[] = [
+  'problems',
+  'output',
+  'profiler',
+  'inspection',
+];
 
 /**
  * How tall the bottom panel may be dragged, in pixels.

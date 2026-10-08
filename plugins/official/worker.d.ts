@@ -6,3 +6,9 @@ declare const shaderStudio: {
   handle(method: string, fn: (params: unknown) => unknown): void;
   notify(data: unknown): void;
 };
+// Worker globals the code may use; `lib` stays ES2022 so DOM and network APIs do not type-check.
+declare const TextEncoder: new () => { encode(input: string): Uint8Array };
+declare const TextDecoder: new (
+  label: string,
+  options?: { fatal?: boolean },
+) => { decode(input: ArrayBuffer | ArrayBufferView): string };

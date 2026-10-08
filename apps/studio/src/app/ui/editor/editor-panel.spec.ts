@@ -61,6 +61,7 @@ class CodeEditorStub {
   readonly liveIds = input<readonly string[] | null>(null);
   readonly diagnostics = input<readonly unknown[]>([]);
   readonly appearance = input(DEFAULT_EDITOR_APPEARANCE);
+  readonly analysis = input<unknown>(null);
   readonly valueChange = output<{ id: string; value: string }>();
 
   layoutCalls = 0;
@@ -205,6 +206,7 @@ class FakeStore implements Partial<ShaderStore> {
   private readonly renderOrderState = signal(resolvePassOrder(this.projectState()!).order);
   readonly selectedId = signal('waves').asReadonly() as ShaderStore['selectedId'];
   readonly loading = signal(false) as ShaderStore['loading'];
+  readonly draftRevision = signal(0) as unknown as ShaderStore['draftRevision'];
   readonly dirty = signal(false) as ShaderStore['dirty'];
   readonly saving = signal(false) as ShaderStore['saving'];
   readonly draft = signal({}) as unknown as ShaderStore['draft'];

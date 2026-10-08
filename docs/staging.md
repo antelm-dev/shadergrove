@@ -46,6 +46,12 @@ forced command and the OpenSSH `restrict` option, so that key can only execute
 the same VPS path when updating it. The Dokploy deploy token lives only in
 `/root/.config/shadergrove-staging-deploy-token` (mode 600), not in GitHub.
 
+The application's **Build-time Arguments** contain `VERSION_REF=develop`. The
+Dockerfile then labels the build with `git describe --tags` of `develop` (for
+example `2.2.0-beta.15-1-g7593d1a`), which the About dialog and plugin
+compatibility checks report, instead of the last stable version committed in
+`package.json`.
+
 The GitHub job confirms that Dokploy accepted the deployment request. Check the
 Dokploy **Deployments** tab for the final build and rollout result. To deploy
 manually, use the application's **Deploy** button. To verify the running app:

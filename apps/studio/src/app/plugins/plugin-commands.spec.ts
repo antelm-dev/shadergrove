@@ -2,8 +2,6 @@ import { computed, provideZonelessChangeDetection, signal } from '@angular/core'
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { of } from 'rxjs';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -25,6 +23,7 @@ import { EffectAdoption } from './effect-adoption';
 import { SOURCE_PROVIDERS, provideHostAdapters, type SourceProvider } from './host-adapters';
 import { PluginCommands } from './plugin-commands';
 import { PLUGIN_STORE, PluginInstallations } from './plugin-installations';
+import { officialPackageText } from './testing/official-packages';
 import type { StoredPlugin } from './plugin-store';
 import { ProjectPluginActions } from './project-actions';
 
@@ -34,18 +33,9 @@ import { ProjectPluginActions } from './project-actions';
  * switched on and valid for the current profile — whichever way that stops
  * being true.
  */
-const generated = resolve(import.meta.dirname, '../../plugins');
 const SHADERTOY = 'dev.shadergrove.shadertoy';
 const WALLPAPER = 'dev.shadergrove.wallpaper-engine';
-const text = (id: string) => {
-  const catalogue = JSON.parse(readFileSync(resolve(generated, 'catalogue.json'), 'utf8')) as {
-    packages: { id: string; file: string }[];
-  };
-  return readFileSync(
-    resolve(generated, catalogue.packages.find((p) => p.id === id)!.file),
-    'utf8',
-  );
-};
+const text = officialPackageText;
 
 /** A package that is not one of the official ones, doing the same job as Shadertoy Import. */
 function rival(): string {
