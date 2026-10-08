@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.0](https://github.com/antelm-dev/shadergrove/compare/v2.6.0...v2.7.0) (2026-10-08)
+
+
+### Features
+
+* **studio:** history timeline with checkpoints and guarded restore ([#217](https://github.com/antelm-dev/shadergrove/issues/217)) ([3722af7](https://github.com/antelm-dev/shadergrove/commit/3722af7358d1a1aa08b7b7406bc02627ba22157d))
+
 ## [2.6.0](https://github.com/antelm-dev/shadergrove/compare/v2.5.0...v2.6.0) (2026-10-08)
 
 
