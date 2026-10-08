@@ -1,0 +1,133 @@
+{
+  "project": {
+    "version": 1,
+    "vertex": "varying vec2 vUv;\n\nvoid main() {\n  vUv = uv;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}\n",
+    "passes": [
+      {
+        "id": "image",
+        "kind": "image",
+        "name": "Image",
+        "slot": null,
+        "enabled": true,
+        "source": "precision highp float;\n\nuniform vec2 iResolution;\nuniform float iTime;\n\nuniform float u_count;\nuniform float u_size;\nuniform float u_speed;\nuniform vec3 u_colorA;\nuniform vec3 u_colorB;\n\n// A stable pseudo-random number in 0..1 for every input: the particle's identity.\nfloat hash(float n) {\n  return fract(sin(n * 127.1) * 43758.5453);\n}\n\nvoid main() {\n  vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution) / iResolution.y;\n  vec3 color = vec3(0.015, 0.015, 0.04);\n\n  // No state: every particle's position is a function of its index and the time.\n  // GLSL ES loops need a constant bound, so the count control stops the loop early.\n  for (int i = 0; i < 64; i++) {\n    float id = float(i);\n    if (id >= u_count) break;\n    float life = 2.0 + 3.0 * hash(id);\n    float age = fract((iTime * u_speed + hash(id + 7.0) * life) / life);\n    vec2 start = vec2((hash(id + 1.0) - 0.5) * 1.6, -0.65);\n    vec2 drift = vec2(0.15 * sin(age * 6.2831 + id), 1.3 * age);\n    vec2 offset = uv - (start + drift);\n    float fade = sin(age * 3.14159);\n    float glow = exp(-dot(offset, offset) / (u_size * u_size));\n    color += mix(u_colorA, u_colorB, hash(id + 3.0)) * glow * fade;\n  }\n\n  // Additive light can exceed 1: map it back smoothly instead of clipping.\n  gl_FragColor = vec4(1.0 - exp(-color * 1.5), 1.0);\n}\n",
+        "channels": [
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          }
+        ],
+        "resolution": {
+          "mode": "viewport",
+          "scale": 1,
+          "width": 512,
+          "height": 512
+        },
+        "filter": "linear",
+        "wrap": "clamp"
+      },
+      {
+        "id": "common",
+        "kind": "common",
+        "name": "Common",
+        "slot": null,
+        "enabled": true,
+        "source": "",
+        "channels": [
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          }
+        ],
+        "resolution": {
+          "mode": "viewport",
+          "scale": 1,
+          "width": 512,
+          "height": 512
+        },
+        "filter": "linear",
+        "wrap": "clamp"
+      }
+    ],
+    "files": []
+  },
+  "controls": [
+    {
+      "key": "count",
+      "type": "number",
+      "label": "Particles",
+      "folder": "Particles",
+      "default": 40,
+      "min": 1,
+      "max": 64,
+      "step": 1
+    },
+    {
+      "key": "size",
+      "type": "number",
+      "label": "Size",
+      "folder": "Particles",
+      "default": 0.025,
+      "min": 0.005,
+      "max": 0.08,
+      "step": 0.001
+    },
+    {
+      "key": "speed",
+      "type": "number",
+      "label": "Speed",
+      "folder": "Motion",
+      "default": 0.6,
+      "min": 0,
+      "max": 3,
+      "step": 0.01
+    },
+    {
+      "key": "colorA",
+      "type": "color",
+      "label": "Color A",
+      "folder": "Palette",
+      "default": "#ff8a3d"
+    },
+    {
+      "key": "colorB",
+      "type": "color",
+      "label": "Color B",
+      "folder": "Palette",
+      "default": "#5ad1c8"
+    }
+  ],
+  "render": {
+    "postProcessing": {
+      "enabled": true,
+      "effects": [
+        {
+          "type": "bloom",
+          "instanceId": "bloom",
+          "enabled": true,
+          "settings": {
+            "strength": 0.6,
+            "radius": 0.4,
+            "threshold": 0.5
+          }
+        }
+      ]
+    }
+  },
+  "presets": []
+}
