@@ -240,7 +240,12 @@ function sameText(actual: string | null, expected: string): boolean {
 
         <section class="form-pane" [attr.aria-label]="'builder.field.type' | translate">
           @if (tx(); as t) {
-            <form class="form" novalidate (submit)="$event.preventDefault(); apply()">
+            <form
+              class="form"
+              novalidate
+              (submit)="$event.preventDefault(); apply()"
+              (keydown.enter)="applyFromField($event)"
+            >
               <header class="form-header">
                 <button
                   matButton
@@ -1177,6 +1182,20 @@ export class ControlsBuilder {
   }
 
   // --- Applying ---------------------------------------------------------------
+
+  /**
+   * Enter in a text field applies, as the form's implicit submission would. The
+   * browser decides that from the Apply button as last rendered, and a key typed
+   * before change detection has enabled it — a quick "x, Enter" on a busy page —
+   * would be dropped without a word. `pending()` is never behind the keyboard.
+   */
+  protected applyFromField(event: Event): void {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || target.type !== 'text') return;
+    if ((event as KeyboardEvent).isComposing || !this.pending()) return;
+    event.preventDefault();
+    this.apply();
+  }
 
   /** Write the form into the Config. Returns whether the buffer now matches it. */
   protected apply(): boolean {

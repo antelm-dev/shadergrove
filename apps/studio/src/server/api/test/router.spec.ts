@@ -323,6 +323,143 @@ describe('shader REST API', () => {
     expect((await authFetch(alice, `/api/shaders/${id}`)).status).toBe(404);
   });
 
+  describe('history', () => {
+    const FRAGMENT = 'void main() { gl_FragColor = vec4(0.5); }';
+    const history = async (user: TestUser, id: string) =>
+      (
+        (await (await authFetch(user, `/api/shaders/${id}/history`)).json()) as {
+          history: { revision: number; cause: string; checkpointName: string | null }[];
+        }
+      ).history;
+    const put = (user: TestUser, id: string, body: object) =>
+      postJson(user, `/api/shaders/${id}`, body, 'PUT');
+
+    it('lists newest first, names and clears a checkpoint, and restores into a new head', async () => {
+      const id = await createShader(alice, 'Timeline');
+      await put(alice, id, { fragment: FRAGMENT, expectedRevision: 1 });
+      expect((await history(alice, id)).map((entry) => [entry.revision, entry.cause])).toEqual([
+        [2, 'update'],
+        [1, 'create'],
+      ]);
+
+      const named = await postJson(
+        alice,
+        `/api/shaders/${id}/history/1/checkpoint`,
+        { name: 'Original' },
+        'PUT',
+      );
+      expect(named.status).toBe(200);
+      expect(await named.json()).toEqual({
+        entry: {
+          revision: 1,
+          createdAt: expect.any(String),
+          cause: 'create',
+          checkpointName: 'Original',
+          restoredFromRevision: null,
+        },
+      });
+      // Naming never moves the head.
+      const head = (await (await authFetch(alice, `/api/shaders/${id}`)).json()) as {
+        shader: { revision: number };
+      };
+      expect(head.shader.revision).toBe(2);
+
+      const restored = await postJson(alice, `/api/shaders/${id}/history/1/restore`, {
+        expectedRevision: 2,
+      });
+      expect(restored.status).toBe(200);
+      const { shader } = (await restored.json()) as {
+        shader: { revision: number; fragment: string };
+      };
+      expect(shader.revision).toBe(3);
+      expect(shader.fragment).not.toBe(FRAGMENT);
+      expect(await history(alice, id)).toEqual([
+        expect.objectContaining({ revision: 3, cause: 'restore', restoredFromRevision: 1 }),
+        expect.objectContaining({ revision: 2, cause: 'update' }),
+        expect.objectContaining({ revision: 1, checkpointName: 'Original' }),
+      ]);
+
+      const cleared = await postJson(
+        alice,
+        `/api/shaders/${id}/history/1/checkpoint`,
+        { name: null },
+        'PUT',
+      );
+      expect(((await cleared.json()) as { entry: { checkpointName: null } }).entry).toMatchObject({
+        checkpointName: null,
+      });
+    });
+
+    it('rejects a stale expectedRevision with 409 and changes neither head nor history', async () => {
+      const id = await createShader(alice, 'Stale');
+      await put(alice, id, { fragment: FRAGMENT });
+      const before = await history(alice, id);
+
+      const stale = await postJson(alice, `/api/shaders/${id}/history/1/restore`, {
+        expectedRevision: 1,
+      });
+      expect(stale.status).toBe(409);
+      expect(((await stale.json()) as { error: { code: string } }).error.code).toBe('conflict');
+      expect(await history(alice, id)).toEqual(before);
+      const head = (await (await authFetch(alice, `/api/shaders/${id}`)).json()) as {
+        shader: { revision: number; fragment: string };
+      };
+      expect(head.shader).toMatchObject({ revision: 2, fragment: FRAGMENT });
+    });
+
+    it('answers invalid input with 400 and unknown shaders or entries with 404', async () => {
+      const id = await createShader(alice, 'Errors');
+      const restore = (path: string, body: object) =>
+        postJson(alice, `/api/shaders/${id}/history/${path}`, body);
+
+      expect((await restore('1/restore', {})).status).toBe(400);
+      expect((await restore('1/restore', { expectedRevision: 'x' })).status).toBe(400);
+      for (const bad of ['0', '-1', '1.5', 'abc']) {
+        expect((await restore(`${bad}/restore`, { expectedRevision: 1 })).status).toBe(400);
+        const response = await postJson(
+          alice,
+          `/api/shaders/${id}/history/${bad}/checkpoint`,
+          { name: 'x' },
+          'PUT',
+        );
+        expect(response.status).toBe(400);
+      }
+      for (const name of [undefined, '', '   ', 7]) {
+        const response = await postJson(
+          alice,
+          `/api/shaders/${id}/history/1/checkpoint`,
+          { name },
+          'PUT',
+        );
+        expect(response.status).toBe(400);
+      }
+      expect((await restore('9/restore', { expectedRevision: 1 })).status).toBe(404);
+      expect(
+        (await postJson(alice, `/api/shaders/${id}/history/9/checkpoint`, { name: 'x' }, 'PUT'))
+          .status,
+      ).toBe(404);
+      expect((await authFetch(alice, '/api/shaders/nope/history')).status).toBe(404);
+    });
+
+    it('404s another user’s history on every route', async () => {
+      const id = await createShader(alice, 'Private History');
+      expect((await authFetch(bob, `/api/shaders/${id}/history`)).status).toBe(404);
+      expect(
+        (await postJson(bob, `/api/shaders/${id}/history/1/checkpoint`, { name: 'x' }, 'PUT'))
+          .status,
+      ).toBe(404);
+      expect(
+        (await postJson(bob, `/api/shaders/${id}/history/1/restore`, { expectedRevision: 1 }))
+          .status,
+      ).toBe(404);
+      expect(await history(alice, id)).toHaveLength(1);
+    });
+
+    it('requires a session', async () => {
+      expect((await fetch(`${base}/api/shaders/anything/history`)).status).toBe(401);
+    });
+  });
+
   it('404s an unknown shader and 400s an invalid body', async () => {
     expect((await authFetch(alice, '/api/shaders/nope')).status).toBe(404);
 

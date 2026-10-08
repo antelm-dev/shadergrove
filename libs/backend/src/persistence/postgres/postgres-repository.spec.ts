@@ -1,7 +1,11 @@
 import { Pool } from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { runShaderLibraryConformance, type ConformanceHarness } from '../../library/conformance';
+import {
+  CONFORMANCE_USER_IDS,
+  runShaderLibraryConformance,
+  type ConformanceHarness,
+} from '../../library/conformance';
 import { ShaderLibrary } from '../../library/shader-library';
 import { runPublicationConformance } from '../../publication/conformance';
 import type { AssetKey } from '../shader-repository';
@@ -37,8 +41,27 @@ if (!url) {
     await sidePool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
   };
 
+  // The shared suite runs as the single-user `local` scope and several other
+  // users. A server store only seeds `system` and owns rows by real accounts, so
+  // every account the suite acts as has to exist before the library bootstraps,
+  // or each owned write fails `fk_shaders_owner`.
+  const localRepository = (): PostgresRepository => {
+    const repo = new PostgresRepository({ connectionString: url });
+    const migrate = repo.init.bind(repo);
+    repo.init = async () => {
+      await migrate();
+      await sidePool.query(
+        `INSERT INTO users (id, name, email, email_verified)
+         SELECT id, id, id || '@shader-studio.invalid', true FROM unnest($1::text[]) AS id
+         ON CONFLICT (id) DO NOTHING`,
+        [CONFORMANCE_USER_IDS],
+      );
+    };
+    return repo;
+  };
+
   const newHarness = (): ConformanceHarness => ({
-    makeRepository: () => new PostgresRepository({ connectionString: url }),
+    makeRepository: () => localRepository(),
     cleanup,
     corruptProjectJson: async (id: string) => {
       // jsonb cannot hold invalid JSON, so store a degenerate-but-valid value;
@@ -48,6 +71,24 @@ if (!url) {
     removeAssetRow: async (id: string, key: AssetKey) => {
       await sidePool.query('DELETE FROM assets WHERE shader_id = $1 AND asset_key = $2', [id, key]);
     },
+    clearHistory: async (id: string) => {
+      await sidePool.query('DELETE FROM shader_history WHERE shader_id = $1', [id]);
+    },
+    countHistory: async (id: string) => {
+      const result = await sidePool.query(
+        'SELECT COUNT(*)::int AS n FROM shader_history WHERE shader_id = $1',
+        [id],
+      );
+      return Number(result.rows[0].n);
+    },
+    corruptHistory: async (id: string, revision: number) => {
+      // jsonb cannot hold invalid JSON; a string is a valid value that is not a control list.
+      await sidePool.query(
+        `UPDATE shader_history SET controls_json = '"not controls"'::jsonb
+         WHERE shader_id = $1 AND revision = $2`,
+        [id, revision],
+      );
+    },
   });
 
   runShaderLibraryConformance('postgres', newHarness);
@@ -55,7 +96,7 @@ if (!url) {
   // In this file rather than beside the SQLite run: test files run in parallel,
   // and two of them dropping the same database's schema would trip each other.
   runPublicationConformance('postgres', () => ({
-    makeRepository: () => new PostgresRepository({ connectionString: url }),
+    makeRepository: () => localRepository(),
     cleanup,
     addUser: async (id) => {
       await sidePool.query(
@@ -72,7 +113,7 @@ if (!url) {
   describe('conditional delete vs a concurrent thumbnail write (postgres)', () => {
     it('conflicts instead of deleting over a thumbnail committed meanwhile', async () => {
       await newHarness().cleanup();
-      const repo = new PostgresRepository({ connectionString: url });
+      const repo = localRepository();
       const lib = new ShaderLibrary(repo, LOCAL_SCOPE);
       await lib.init();
       try {
@@ -112,7 +153,7 @@ if (!url) {
 
     it('never deadlocks a preset delete against a conditional delete', async () => {
       await newHarness().cleanup();
-      const lib = new ShaderLibrary(new PostgresRepository({ connectionString: url }), LOCAL_SCOPE);
+      const lib = new ShaderLibrary(localRepository(), LOCAL_SCOPE);
       await lib.init();
       try {
         for (let round = 0; round < 20; round++) {
