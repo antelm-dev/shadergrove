@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/antelm-dev/shadergrove/compare/v2.4.0...v2.4.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **studio:** apply on Enter in a Controls builder field typed into before the view updates ([#208](https://github.com/antelm-dev/shadergrove/issues/208)) ([655f137](https://github.com/antelm-dev/shadergrove/commit/655f137b8be55f1e2caba04f4226730076f6fefb))
+
 ## [2.4.0](https://github.com/antelm-dev/shadergrove/compare/v2.3.0...v2.4.0) (2026-10-07)
 
 
