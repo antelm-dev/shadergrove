@@ -184,6 +184,29 @@ describe('ControlsBuilder', () => {
       expect((query(fixture, '.apply') as HTMLButtonElement).disabled).toBe(true);
     });
 
+    it('applies on Enter in a field typed into before the view has caught up', async () => {
+      const fixture = mount([SPEED]);
+      await click(fixture, '[data-key="speed"]');
+      const enter = () =>
+        query(fixture, '.f-label')!.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+        );
+
+      expect(enter()).toBe(true);
+      expect(committed).toEqual([]);
+      expect(query(fixture, '.notice')).toBeNull();
+
+      // No change detection between the keystrokes: Apply is still rendered disabled.
+      const input = query<HTMLInputElement>(fixture, '.f-label')!;
+      input.value = 'Pace';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      expect((query(fixture, '.apply') as HTMLButtonElement).disabled).toBe(true);
+      expect(enter()).toBe(false);
+
+      expect(committed).toHaveLength(1);
+      expect(schema()).toEqual([{ ...SPEED, label: 'Pace' }]);
+    });
+
     it('keeps an existing key read-only and shows its uniform and GLSL type', async () => {
       const fixture = mount([SPEED]);
       await click(fixture, '[data-key="speed"]');
