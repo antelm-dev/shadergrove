@@ -60,10 +60,7 @@ async function openStudio(page: Page): Promise<void> {
 
 async function menuItem(page: Page, name: RegExp): Promise<void> {
   await page.getByRole('button', { name: 'More actions' }).click();
-  const direct = page.getByRole('menuitem', { name });
-  if (!(await direct.isVisible())) {
-    await page.getByRole('menuitem', { name: /Import & export/ }).click();
-  }
+  // Import & export is a heading in this menu, not a submenu: the item is listed directly.
   await page.getByRole('menuitem', { name }).click();
 }
 
