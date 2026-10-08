@@ -1,0 +1,633 @@
+{
+  "manifest": {
+    "id": "dev.shadergrove.project-recipes",
+    "version": "1.0.0",
+    "protocolVersion": 4,
+    "appVersionRange": ">=2.6.0 <3.0.0",
+    "name": "Project Recipes",
+    "publisher": "Shadergrove",
+    "license": "Apache-2.0",
+    "contributions": [
+      {
+        "kind": "projectTemplate",
+        "id": "raymarching",
+        "name": "Raymarched shape",
+        "description": "A sphere melting into a rounded box over a checkered floor, found by sphere tracing and lit with soft shadows. Distance functions live in an included file.",
+        "difficulty": "intermediate",
+        "notes": [
+          "A signed distance function says how far a point is from the surface; sphere tracing steps along each ray by that distance.",
+          "The normal is the gradient of the distance, taken by central differences.",
+          "A smooth union blends two shapes; Blend sets how far the melt reaches.",
+          "sdf.glsl is a file the Image pass pulls in with #include."
+        ],
+        "provenance": {
+          "author": "Shadergrove",
+          "license": "Apache-2.0"
+        }
+      },
+      {
+        "kind": "projectTemplate",
+        "id": "particles",
+        "name": "Procedural particles",
+        "description": "Glowing particles rising and swaying, drawn in a single Image pass with no stored state: each one's position is a function of its index and the time.",
+        "difficulty": "beginner",
+        "notes": [
+          "A hash turns a particle's index into stable random numbers: its lifetime, start and colour.",
+          "GLSL loops need a constant bound, so the Particles control stops the loop early instead.",
+          "Light is added up, then mapped back below 1 so bright overlaps do not clip."
+        ],
+        "provenance": {
+          "author": "Shadergrove",
+          "license": "Apache-2.0"
+        }
+      },
+      {
+        "kind": "projectTemplate",
+        "id": "feedback-trails",
+        "name": "Feedback trails",
+        "description": "Buffer A reads the frame it drew last tick, fades it and paints a moving brush on top; the Image pass displays the trail. Press on the canvas to paint with the pointer.",
+        "difficulty": "intermediate",
+        "notes": [
+          "iChannel0 of Buffer A is bound to Buffer A itself with feedback: last tick's frame, not this one's.",
+          "A buffer starts out all zeros; every written texel has alpha 1, so alpha 0 means start clean.",
+          "Clear wipes the trail while it is on.",
+          "The Image pass samples Buffer A without feedback: the frame drawn this tick."
+        ],
+        "provenance": {
+          "author": "Shadergrove",
+          "license": "Apache-2.0"
+        }
+      },
+      {
+        "kind": "projectTemplate",
+        "id": "interactive-ui",
+        "name": "Interactive UI",
+        "description": "A slider and a switch drawn with distance functions and driven by the pointer. Buffer A remembers their state from one frame to the next; the Common pass holds the layout both passes share.",
+        "difficulty": "advanced",
+        "notes": [
+          "iMouse holds the pointer in pixels; its z is above 0 while a button is pressed.",
+          "A shader has no variables that last, so Buffer A stores the UI state and reads it back with feedback.",
+          "The switch flips only on the frame a press starts, by remembering whether the pointer was down.",
+          "Code in the Common pass is shared by every pass."
+        ],
+        "provenance": {
+          "author": "Shadergrove",
+          "license": "Apache-2.0"
+        }
+      }
+    ]
+  },
+  "templates": {
+    "feedback-trails": {
+      "project": {
+        "version": 1,
+        "vertex": "varying vec2 vUv;\n\nvoid main() {\n  vUv = uv;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}\n",
+        "passes": [
+          {
+            "id": "trails",
+            "kind": "buffer",
+            "name": "Trails",
+            "slot": "A",
+            "enabled": true,
+            "source": "precision highp float;\n\nuniform vec2 iResolution;\nuniform float iTime;\nuniform vec4 iMouse;\n\n// Bound with feedback: the frame this buffer drew last tick.\nuniform sampler2D iChannel0;\n\nuniform float u_fade;\nuniform float u_speed;\nuniform vec3 u_ink;\nuniform bool u_reset;\n\nvoid main() {\n  vec2 uv = gl_FragCoord.xy / iResolution;\n  vec4 last = texture2D(iChannel0, uv);\n\n  // A buffer starts out (and restarts after a resize) all zeros, alpha included.\n  // Every texel this pass writes has alpha 1, so alpha 0 means \"never drawn\": start clean.\n  if (u_reset || last.a < 0.5) last = vec4(0.0, 0.0, 0.0, 1.0);\n\n  // The brush follows a Lissajous curve, or the pointer while it is pressed.\n  vec2 p = (gl_FragCoord.xy - 0.5 * iResolution) / iResolution.y;\n  float t = iTime * u_speed;\n  vec2 brush = 0.35 * vec2(sin(t * 1.3), sin(t * 2.1));\n  if (iMouse.z > 0.0) brush = (iMouse.xy - 0.5 * iResolution) / iResolution.y;\n  float ink = smoothstep(0.05, 0.0, length(p - brush));\n\n  // Fade what was there, add what is new: the trail is the history of the brush.\n  vec3 color = last.rgb * u_fade + u_ink * ink;\n  gl_FragColor = vec4(min(color, vec3(4.0)), 1.0);\n}\n",
+            "channels": [
+              {
+                "kind": "buffer",
+                "passId": "trails",
+                "feedback": true
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              }
+            ],
+            "resolution": {
+              "mode": "viewport",
+              "scale": 1,
+              "width": 512,
+              "height": 512
+            },
+            "filter": "linear",
+            "wrap": "clamp"
+          },
+          {
+            "id": "image",
+            "kind": "image",
+            "name": "Image",
+            "slot": null,
+            "enabled": true,
+            "source": "precision highp float;\n\nuniform vec2 iResolution;\n\n// Buffer A, without feedback: the frame it drew this tick.\nuniform sampler2D iChannel0;\n\nuniform vec3 u_background;\n\nvoid main() {\n  vec2 uv = gl_FragCoord.xy / iResolution;\n  vec3 trail = texture2D(iChannel0, uv).rgb;\n  // The buffer stores unbounded light; compress it for display.\n  gl_FragColor = vec4(u_background + trail / (1.0 + trail), 1.0);\n}\n",
+            "channels": [
+              {
+                "kind": "buffer",
+                "passId": "trails",
+                "feedback": false
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              }
+            ],
+            "resolution": {
+              "mode": "viewport",
+              "scale": 1,
+              "width": 512,
+              "height": 512
+            },
+            "filter": "linear",
+            "wrap": "clamp"
+          },
+          {
+            "id": "common",
+            "kind": "common",
+            "name": "Common",
+            "slot": null,
+            "enabled": true,
+            "source": "",
+            "channels": [
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              }
+            ],
+            "resolution": {
+              "mode": "viewport",
+              "scale": 1,
+              "width": 512,
+              "height": 512
+            },
+            "filter": "linear",
+            "wrap": "clamp"
+          }
+        ],
+        "files": []
+      },
+      "controls": [
+        {
+          "key": "fade",
+          "type": "number",
+          "label": "Fade",
+          "folder": "Trail",
+          "default": 0.96,
+          "min": 0.8,
+          "max": 0.995,
+          "step": 0.001
+        },
+        {
+          "key": "speed",
+          "type": "number",
+          "label": "Speed",
+          "folder": "Trail",
+          "default": 1,
+          "min": 0,
+          "max": 3,
+          "step": 0.01
+        },
+        {
+          "key": "ink",
+          "type": "color",
+          "label": "Ink",
+          "folder": "Palette",
+          "default": "#5ad1c8"
+        },
+        {
+          "key": "background",
+          "type": "color",
+          "label": "Background",
+          "folder": "Palette",
+          "default": "#0b0d14"
+        },
+        {
+          "key": "reset",
+          "type": "boolean",
+          "label": "Clear",
+          "folder": "Trail",
+          "default": false
+        }
+      ],
+      "render": {
+        "postProcessing": {
+          "enabled": true,
+          "effects": []
+        }
+      },
+      "presets": []
+    },
+    "interactive-ui": {
+      "project": {
+        "version": 1,
+        "vertex": "varying vec2 vUv;\n\nvoid main() {\n  vUv = uv;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}\n",
+        "passes": [
+          {
+            "id": "state",
+            "kind": "buffer",
+            "name": "State",
+            "slot": "A",
+            "enabled": true,
+            "source": "precision highp float;\n\nuniform vec2 iResolution;\nuniform vec4 iMouse;\n\n// Bound with feedback: the state this buffer wrote last tick.\nuniform sampler2D iChannel0;\n\nuniform float u_startValue;\n\n// The UI's memory. Every texel holds the same state:\n// r = slider value, g = switch (0 or 1), b = pointer was down last tick, a = 1 once written.\nvoid main() {\n  vec4 state = texture2D(iChannel0, gl_FragCoord.xy / iResolution);\n  // A buffer starts out all zeros; alpha 0 means nothing was written yet.\n  if (state.a < 0.5) state = vec4(u_startValue, 0.0, 0.0, 1.0);\n\n  bool down = iMouse.z > 0.0;\n  bool wasDown = state.b > 0.5;\n  vec2 pointer = toUi(iMouse.xy, iResolution);\n\n  // Dragging along the track moves the slider.\n  if (down && overSlider(pointer)) {\n    state.r = clamp((pointer.x + SLIDER_HALF) / (2.0 * SLIDER_HALF), 0.0, 1.0);\n  }\n  // A press that starts on the switch flips it: once per press, not once per frame.\n  if (down && !wasDown && overSwitch(pointer)) state.g = 1.0 - state.g;\n  state.b = down ? 1.0 : 0.0;\n\n  gl_FragColor = state;\n}\n",
+            "channels": [
+              {
+                "kind": "buffer",
+                "passId": "state",
+                "feedback": true
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              }
+            ],
+            "resolution": {
+              "mode": "viewport",
+              "scale": 1,
+              "width": 512,
+              "height": 512
+            },
+            "filter": "linear",
+            "wrap": "clamp"
+          },
+          {
+            "id": "image",
+            "kind": "image",
+            "name": "Image",
+            "slot": null,
+            "enabled": true,
+            "source": "precision highp float;\n\nuniform vec2 iResolution;\nuniform float iTime;\nuniform vec4 iMouse;\n\n// Buffer A: the UI state (see that pass).\nuniform sampler2D iChannel0;\n\nuniform vec3 u_accent;\nuniform vec3 u_panel;\nuniform float u_startValue;\n\n// Paint the shape at distance d in ink, with an edge one pixel soft.\nvec3 paint(vec3 color, float d, vec3 ink, float pixel) {\n  return mix(color, ink, smoothstep(pixel, -pixel, d));\n}\n\nvoid main() {\n  float pixel = 1.0 / iResolution.y;\n  vec2 p = toUi(gl_FragCoord.xy, iResolution);\n  vec2 pointer = toUi(iMouse.xy, iResolution);\n  bool down = iMouse.z > 0.0;\n\n  vec4 state = texture2D(iChannel0, vec2(0.5));\n  float value = state.a > 0.5 ? state.r : u_startValue;\n  float on = state.g;\n\n  vec3 color = mix(vec3(0.05, 0.06, 0.09), vec3(0.1, 0.11, 0.16), p.y + 0.5);\n  color = paint(color, sdBox(p, vec2(0.45, 0.33), 0.04), u_panel, pixel);\n\n  // Slider: the track, the part up to the knob, and the knob, which grows under the pointer.\n  vec2 start = vec2(-SLIDER_HALF, SLIDER_Y);\n  vec2 knob = vec2(-SLIDER_HALF + 2.0 * SLIDER_HALF * value, SLIDER_Y);\n  bool overTrack = overSlider(pointer);\n  color = paint(color, sdSegment(p, start, vec2(SLIDER_HALF, SLIDER_Y)) - 0.012, vec3(0.26, 0.28, 0.34), pixel);\n  color = paint(color, sdSegment(p, start, knob) - 0.012, u_accent, pixel);\n  color = paint(color, length(p - knob) - (overTrack ? 0.034 : 0.028), (overTrack && down) ? u_accent : vec3(0.95), pixel);\n\n  // Switch: a pill whose knob slides to the lit side when it is on.\n  vec3 pill = mix(vec3(0.26, 0.28, 0.34), u_accent, on);\n  if (overSwitch(pointer)) pill += 0.08;\n  color = paint(color, sdBox(p - SWITCH_CENTER, SWITCH_HALF, SWITCH_HALF.y), pill, pixel);\n  vec2 switchKnob = SWITCH_CENTER + vec2(mix(-1.0, 1.0, on) * (SWITCH_HALF.x - SWITCH_HALF.y), 0.0);\n  color = paint(color, length(p - switchKnob) - (SWITCH_HALF.y - 0.008), vec3(0.97), pixel);\n\n  // What the controls drive: the slider sets the orb's size, the switch its colour and pulse.\n  float radius = 0.03 + 0.09 * value * (1.0 + 0.08 * on * sin(iTime * 4.0));\n  float orb = length(p - vec2(0.22, 0.13)) - radius;\n  vec3 orbColor = mix(vec3(0.55, 0.57, 0.62), u_accent, on);\n  color += orbColor * 0.25 * exp(-max(orb, 0.0) * 30.0);\n  color = paint(color, orb, orbColor, pixel);\n\n  // The pointer, as a ring.\n  color = paint(color, abs(length(p - pointer) - 0.012) - 0.002, vec3(1.0), pixel);\n\n  gl_FragColor = vec4(color, 1.0);\n}\n",
+            "channels": [
+              {
+                "kind": "buffer",
+                "passId": "state",
+                "feedback": false
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              }
+            ],
+            "resolution": {
+              "mode": "viewport",
+              "scale": 1,
+              "width": 512,
+              "height": 512
+            },
+            "filter": "linear",
+            "wrap": "clamp"
+          },
+          {
+            "id": "common",
+            "kind": "common",
+            "name": "Common",
+            "slot": null,
+            "enabled": true,
+            "source": "// Shared by Buffer A and the Image pass, so both agree on where every control is.\n// UI space: the canvas centre is (0, 0) and its height runs from -0.5 to 0.5.\n\nconst float SLIDER_Y = -0.17;\nconst float SLIDER_HALF = 0.32;\nconst vec2 SWITCH_CENTER = vec2(-0.22, 0.13);\nconst vec2 SWITCH_HALF = vec2(0.09, 0.045);\n\nvec2 toUi(vec2 pixel, vec2 resolution) {\n  return (pixel - 0.5 * resolution) / resolution.y;\n}\n\nfloat sdBox(vec2 p, vec2 halfSize, float radius) {\n  vec2 q = abs(p) - halfSize + radius;\n  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;\n}\n\nfloat sdSegment(vec2 p, vec2 a, vec2 b) {\n  vec2 pa = p - a;\n  vec2 ba = b - a;\n  return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));\n}\n\nbool overSlider(vec2 p) {\n  return abs(p.y - SLIDER_Y) < 0.05 && abs(p.x) < SLIDER_HALF + 0.03;\n}\n\nbool overSwitch(vec2 p) {\n  return sdBox(p - SWITCH_CENTER, SWITCH_HALF, SWITCH_HALF.y) < 0.0;\n}\n",
+            "channels": [
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              }
+            ],
+            "resolution": {
+              "mode": "viewport",
+              "scale": 1,
+              "width": 512,
+              "height": 512
+            },
+            "filter": "linear",
+            "wrap": "clamp"
+          }
+        ],
+        "files": []
+      },
+      "controls": [
+        {
+          "key": "accent",
+          "type": "color",
+          "label": "Accent",
+          "folder": "Style",
+          "default": "#5ad1c8"
+        },
+        {
+          "key": "panel",
+          "type": "color",
+          "label": "Panel",
+          "folder": "Style",
+          "default": "#1b2030"
+        },
+        {
+          "key": "startValue",
+          "type": "number",
+          "label": "Starting value",
+          "folder": "State",
+          "default": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "render": {
+        "postProcessing": {
+          "enabled": true,
+          "effects": []
+        }
+      },
+      "presets": []
+    },
+    "particles": {
+      "project": {
+        "version": 1,
+        "vertex": "varying vec2 vUv;\n\nvoid main() {\n  vUv = uv;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}\n",
+        "passes": [
+          {
+            "id": "image",
+            "kind": "image",
+            "name": "Image",
+            "slot": null,
+            "enabled": true,
+            "source": "precision highp float;\n\nuniform vec2 iResolution;\nuniform float iTime;\n\nuniform float u_count;\nuniform float u_size;\nuniform float u_speed;\nuniform vec3 u_colorA;\nuniform vec3 u_colorB;\n\n// A stable pseudo-random number in 0..1 for every input: the particle's identity.\nfloat hash(float n) {\n  return fract(sin(n * 127.1) * 43758.5453);\n}\n\nvoid main() {\n  vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution) / iResolution.y;\n  vec3 color = vec3(0.015, 0.015, 0.04);\n\n  // No state: every particle's position is a function of its index and the time.\n  // GLSL ES loops need a constant bound, so the count control stops the loop early.\n  for (int i = 0; i < 64; i++) {\n    float id = float(i);\n    if (id >= u_count) break;\n    float life = 2.0 + 3.0 * hash(id);\n    float age = fract((iTime * u_speed + hash(id + 7.0) * life) / life);\n    vec2 start = vec2((hash(id + 1.0) - 0.5) * 1.6, -0.65);\n    vec2 drift = vec2(0.15 * sin(age * 6.2831 + id), 1.3 * age);\n    vec2 offset = uv - (start + drift);\n    float fade = sin(age * 3.14159);\n    float glow = exp(-dot(offset, offset) / (u_size * u_size));\n    color += mix(u_colorA, u_colorB, hash(id + 3.0)) * glow * fade;\n  }\n\n  // Additive light can exceed 1: map it back smoothly instead of clipping.\n  gl_FragColor = vec4(1.0 - exp(-color * 1.5), 1.0);\n}\n",
+            "channels": [
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              }
+            ],
+            "resolution": {
+              "mode": "viewport",
+              "scale": 1,
+              "width": 512,
+              "height": 512
+            },
+            "filter": "linear",
+            "wrap": "clamp"
+          },
+          {
+            "id": "common",
+            "kind": "common",
+            "name": "Common",
+            "slot": null,
+            "enabled": true,
+            "source": "",
+            "channels": [
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              }
+            ],
+            "resolution": {
+              "mode": "viewport",
+              "scale": 1,
+              "width": 512,
+              "height": 512
+            },
+            "filter": "linear",
+            "wrap": "clamp"
+          }
+        ],
+        "files": []
+      },
+      "controls": [
+        {
+          "key": "count",
+          "type": "number",
+          "label": "Particles",
+          "folder": "Particles",
+          "default": 40,
+          "min": 1,
+          "max": 64,
+          "step": 1
+        },
+        {
+          "key": "size",
+          "type": "number",
+          "label": "Size",
+          "folder": "Particles",
+          "default": 0.025,
+          "min": 0.005,
+          "max": 0.08,
+          "step": 0.001
+        },
+        {
+          "key": "speed",
+          "type": "number",
+          "label": "Speed",
+          "folder": "Motion",
+          "default": 0.6,
+          "min": 0,
+          "max": 3,
+          "step": 0.01
+        },
+        {
+          "key": "colorA",
+          "type": "color",
+          "label": "Color A",
+          "folder": "Palette",
+          "default": "#ff8a3d"
+        },
+        {
+          "key": "colorB",
+          "type": "color",
+          "label": "Color B",
+          "folder": "Palette",
+          "default": "#5ad1c8"
+        }
+      ],
+      "render": {
+        "postProcessing": {
+          "enabled": true,
+          "effects": [
+            {
+              "type": "bloom",
+              "instanceId": "bloom",
+              "enabled": true,
+              "settings": {
+                "strength": 0.6,
+                "radius": 0.4,
+                "threshold": 0.5
+              }
+            }
+          ]
+        }
+      },
+      "presets": []
+    },
+    "raymarching": {
+      "project": {
+        "version": 1,
+        "vertex": "varying vec2 vUv;\n\nvoid main() {\n  vUv = uv;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}\n",
+        "passes": [
+          {
+            "id": "image",
+            "kind": "image",
+            "name": "Image",
+            "slot": null,
+            "enabled": true,
+            "source": "precision highp float;\n\nuniform vec2 iResolution;\nuniform float iTime;\n\n// One uniform per control, named u_<key>.\nuniform float u_speed;\nuniform float u_blend;\nuniform vec3 u_baseColor;\nuniform vec3 u_lightColor;\n\n#include \"sdf.glsl\"\n\n// The whole scene as one distance: a sphere melting into a rounded box, over a floor.\nfloat scene(vec3 p) {\n  float t = iTime * u_speed;\n  vec3 q = p - vec3(0.0, 0.08 * sin(t * 2.0), 0.0);\n  float sphere = sdSphere(q - vec3(0.5 * sin(t), 0.0, 0.0), 0.42);\n  float box = sdRoundBox(q, vec3(0.32), 0.06);\n  return min(smoothUnion(sphere, box, u_blend), p.y + 0.6);\n}\n\n// The surface normal is the gradient of the distance, by central differences.\nvec3 normalAt(vec3 p) {\n  vec2 e = vec2(0.001, 0.0);\n  return normalize(vec3(\n    scene(p + e.xyy) - scene(p - e.xyy),\n    scene(p + e.yxy) - scene(p - e.yxy),\n    scene(p + e.yyx) - scene(p - e.yyx)\n  ));\n}\n\n// March towards the light: the closest miss along the way darkens the point.\nfloat softShadow(vec3 origin, vec3 toLight) {\n  float shade = 1.0;\n  float travelled = 0.02;\n  for (int i = 0; i < 32; i++) {\n    float d = scene(origin + toLight * travelled);\n    shade = min(shade, 8.0 * d / travelled);\n    travelled += clamp(d, 0.02, 0.25);\n    if (shade < 0.001 || travelled > 6.0) break;\n  }\n  return clamp(shade, 0.0, 1.0);\n}\n\nvoid main() {\n  vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution) / iResolution.y;\n  vec3 origin = vec3(0.0, 0.35, 2.6);\n  vec3 ray = normalize(vec3(uv, -1.6));\n\n  // Sphere tracing: step by the distance to the nearest surface until it is tiny.\n  float travelled = 0.0;\n  bool hit = false;\n  for (int i = 0; i < 96; i++) {\n    float d = scene(origin + ray * travelled);\n    if (d < 0.001) {\n      hit = true;\n      break;\n    }\n    travelled += d;\n    if (travelled > 12.0) break;\n  }\n\n  vec3 sky = mix(vec3(0.04, 0.05, 0.08), vec3(0.16, 0.19, 0.27), clamp(uv.y + 0.5, 0.0, 1.0));\n  vec3 color = sky;\n  if (hit) {\n    vec3 p = origin + ray * travelled;\n    vec3 n = normalAt(p);\n    vec3 toLight = normalize(vec3(0.6, 0.8, 0.35));\n    float diffuse = max(dot(n, toLight), 0.0) * softShadow(p + n * 0.002, toLight);\n    float rim = pow(1.0 - max(dot(n, -ray), 0.0), 3.0);\n    float checker = mod(floor(p.x * 2.0) + floor(p.z * 2.0), 2.0);\n    vec3 albedo = p.y < -0.59 ? vec3(0.22 + 0.08 * checker) : u_baseColor;\n    color = albedo * (0.12 + diffuse * u_lightColor) + rim * 0.25 * u_lightColor;\n    color = mix(color, sky, 1.0 - exp(-0.015 * travelled * travelled));\n  }\n\n  // Lighting is computed in linear light; the screen expects gamma-encoded values.\n  gl_FragColor = vec4(pow(color, vec3(0.4545)), 1.0);\n}\n",
+            "channels": [
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              }
+            ],
+            "resolution": {
+              "mode": "viewport",
+              "scale": 1,
+              "width": 512,
+              "height": 512
+            },
+            "filter": "linear",
+            "wrap": "clamp"
+          },
+          {
+            "id": "common",
+            "kind": "common",
+            "name": "Common",
+            "slot": null,
+            "enabled": true,
+            "source": "",
+            "channels": [
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              },
+              {
+                "kind": "none"
+              }
+            ],
+            "resolution": {
+              "mode": "viewport",
+              "scale": 1,
+              "width": 512,
+              "height": 512
+            },
+            "filter": "linear",
+            "wrap": "clamp"
+          }
+        ],
+        "files": [
+          {
+            "id": "sdf",
+            "name": "sdf.glsl",
+            "source": "// Signed distance functions: negative inside a shape, zero on it, positive outside.\n// Included by the Image pass with  #include \"sdf.glsl\"\n\nfloat sdSphere(vec3 p, float radius) {\n  return length(p) - radius;\n}\n\nfloat sdRoundBox(vec3 p, vec3 halfSize, float rounding) {\n  vec3 q = abs(p) - halfSize + rounding;\n  return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - rounding;\n}\n\n// A union that melts two shapes together; k is how far the blend reaches.\nfloat smoothUnion(float a, float b, float k) {\n  float h = clamp(0.5 + 0.5 * (b - a) / max(k, 0.0001), 0.0, 1.0);\n  return mix(b, a, h) - k * h * (1.0 - h);\n}\n"
+          }
+        ]
+      },
+      "controls": [
+        {
+          "key": "speed",
+          "type": "number",
+          "label": "Speed",
+          "folder": "Motion",
+          "default": 0.5,
+          "min": 0,
+          "max": 2,
+          "step": 0.01
+        },
+        {
+          "key": "blend",
+          "type": "number",
+          "label": "Blend",
+          "folder": "Shape",
+          "default": 0.25,
+          "min": 0,
+          "max": 0.6,
+          "step": 0.01
+        },
+        {
+          "key": "baseColor",
+          "type": "color",
+          "label": "Surface",
+          "folder": "Light",
+          "default": "#4f9dff"
+        },
+        {
+          "key": "lightColor",
+          "type": "color",
+          "label": "Light",
+          "folder": "Light",
+          "default": "#ffe2b8"
+        }
+      ],
+      "render": {
+        "postProcessing": {
+          "enabled": true,
+          "effects": [
+            {
+              "type": "vignette",
+              "instanceId": "vignette",
+              "enabled": true,
+              "settings": {
+                "intensity": 0.35,
+                "softness": 0.55,
+                "roundness": 1
+              }
+            }
+          ]
+        }
+      },
+      "presets": []
+    }
+  }
+}

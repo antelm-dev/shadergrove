@@ -1,0 +1,136 @@
+{
+  "project": {
+    "version": 1,
+    "vertex": "varying vec2 vUv;\n\nvoid main() {\n  vUv = uv;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}\n",
+    "passes": [
+      {
+        "id": "state",
+        "kind": "buffer",
+        "name": "State",
+        "slot": "A",
+        "enabled": true,
+        "source": "precision highp float;\n\nuniform vec2 iResolution;\nuniform vec4 iMouse;\n\n// Bound with feedback: the state this buffer wrote last tick.\nuniform sampler2D iChannel0;\n\nuniform float u_startValue;\n\n// The UI's memory. Every texel holds the same state:\n// r = slider value, g = switch (0 or 1), b = pointer was down last tick, a = 1 once written.\nvoid main() {\n  vec4 state = texture2D(iChannel0, gl_FragCoord.xy / iResolution);\n  // A buffer starts out all zeros; alpha 0 means nothing was written yet.\n  if (state.a < 0.5) state = vec4(u_startValue, 0.0, 0.0, 1.0);\n\n  bool down = iMouse.z > 0.0;\n  bool wasDown = state.b > 0.5;\n  vec2 pointer = toUi(iMouse.xy, iResolution);\n\n  // Dragging along the track moves the slider.\n  if (down && overSlider(pointer)) {\n    state.r = clamp((pointer.x + SLIDER_HALF) / (2.0 * SLIDER_HALF), 0.0, 1.0);\n  }\n  // A press that starts on the switch flips it: once per press, not once per frame.\n  if (down && !wasDown && overSwitch(pointer)) state.g = 1.0 - state.g;\n  state.b = down ? 1.0 : 0.0;\n\n  gl_FragColor = state;\n}\n",
+        "channels": [
+          {
+            "kind": "buffer",
+            "passId": "state",
+            "feedback": true
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          }
+        ],
+        "resolution": {
+          "mode": "viewport",
+          "scale": 1,
+          "width": 512,
+          "height": 512
+        },
+        "filter": "linear",
+        "wrap": "clamp"
+      },
+      {
+        "id": "image",
+        "kind": "image",
+        "name": "Image",
+        "slot": null,
+        "enabled": true,
+        "source": "precision highp float;\n\nuniform vec2 iResolution;\nuniform float iTime;\nuniform vec4 iMouse;\n\n// Buffer A: the UI state (see that pass).\nuniform sampler2D iChannel0;\n\nuniform vec3 u_accent;\nuniform vec3 u_panel;\nuniform float u_startValue;\n\n// Paint the shape at distance d in ink, with an edge one pixel soft.\nvec3 paint(vec3 color, float d, vec3 ink, float pixel) {\n  return mix(color, ink, smoothstep(pixel, -pixel, d));\n}\n\nvoid main() {\n  float pixel = 1.0 / iResolution.y;\n  vec2 p = toUi(gl_FragCoord.xy, iResolution);\n  vec2 pointer = toUi(iMouse.xy, iResolution);\n  bool down = iMouse.z > 0.0;\n\n  vec4 state = texture2D(iChannel0, vec2(0.5));\n  float value = state.a > 0.5 ? state.r : u_startValue;\n  float on = state.g;\n\n  vec3 color = mix(vec3(0.05, 0.06, 0.09), vec3(0.1, 0.11, 0.16), p.y + 0.5);\n  color = paint(color, sdBox(p, vec2(0.45, 0.33), 0.04), u_panel, pixel);\n\n  // Slider: the track, the part up to the knob, and the knob, which grows under the pointer.\n  vec2 start = vec2(-SLIDER_HALF, SLIDER_Y);\n  vec2 knob = vec2(-SLIDER_HALF + 2.0 * SLIDER_HALF * value, SLIDER_Y);\n  bool overTrack = overSlider(pointer);\n  color = paint(color, sdSegment(p, start, vec2(SLIDER_HALF, SLIDER_Y)) - 0.012, vec3(0.26, 0.28, 0.34), pixel);\n  color = paint(color, sdSegment(p, start, knob) - 0.012, u_accent, pixel);\n  color = paint(color, length(p - knob) - (overTrack ? 0.034 : 0.028), (overTrack && down) ? u_accent : vec3(0.95), pixel);\n\n  // Switch: a pill whose knob slides to the lit side when it is on.\n  vec3 pill = mix(vec3(0.26, 0.28, 0.34), u_accent, on);\n  if (overSwitch(pointer)) pill += 0.08;\n  color = paint(color, sdBox(p - SWITCH_CENTER, SWITCH_HALF, SWITCH_HALF.y), pill, pixel);\n  vec2 switchKnob = SWITCH_CENTER + vec2(mix(-1.0, 1.0, on) * (SWITCH_HALF.x - SWITCH_HALF.y), 0.0);\n  color = paint(color, length(p - switchKnob) - (SWITCH_HALF.y - 0.008), vec3(0.97), pixel);\n\n  // What the controls drive: the slider sets the orb's size, the switch its colour and pulse.\n  float radius = 0.03 + 0.09 * value * (1.0 + 0.08 * on * sin(iTime * 4.0));\n  float orb = length(p - vec2(0.22, 0.13)) - radius;\n  vec3 orbColor = mix(vec3(0.55, 0.57, 0.62), u_accent, on);\n  color += orbColor * 0.25 * exp(-max(orb, 0.0) * 30.0);\n  color = paint(color, orb, orbColor, pixel);\n\n  // The pointer, as a ring.\n  color = paint(color, abs(length(p - pointer) - 0.012) - 0.002, vec3(1.0), pixel);\n\n  gl_FragColor = vec4(color, 1.0);\n}\n",
+        "channels": [
+          {
+            "kind": "buffer",
+            "passId": "state",
+            "feedback": false
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          }
+        ],
+        "resolution": {
+          "mode": "viewport",
+          "scale": 1,
+          "width": 512,
+          "height": 512
+        },
+        "filter": "linear",
+        "wrap": "clamp"
+      },
+      {
+        "id": "common",
+        "kind": "common",
+        "name": "Common",
+        "slot": null,
+        "enabled": true,
+        "source": "// Shared by Buffer A and the Image pass, so both agree on where every control is.\n// UI space: the canvas centre is (0, 0) and its height runs from -0.5 to 0.5.\n\nconst float SLIDER_Y = -0.17;\nconst float SLIDER_HALF = 0.32;\nconst vec2 SWITCH_CENTER = vec2(-0.22, 0.13);\nconst vec2 SWITCH_HALF = vec2(0.09, 0.045);\n\nvec2 toUi(vec2 pixel, vec2 resolution) {\n  return (pixel - 0.5 * resolution) / resolution.y;\n}\n\nfloat sdBox(vec2 p, vec2 halfSize, float radius) {\n  vec2 q = abs(p) - halfSize + radius;\n  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;\n}\n\nfloat sdSegment(vec2 p, vec2 a, vec2 b) {\n  vec2 pa = p - a;\n  vec2 ba = b - a;\n  return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));\n}\n\nbool overSlider(vec2 p) {\n  return abs(p.y - SLIDER_Y) < 0.05 && abs(p.x) < SLIDER_HALF + 0.03;\n}\n\nbool overSwitch(vec2 p) {\n  return sdBox(p - SWITCH_CENTER, SWITCH_HALF, SWITCH_HALF.y) < 0.0;\n}\n",
+        "channels": [
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          }
+        ],
+        "resolution": {
+          "mode": "viewport",
+          "scale": 1,
+          "width": 512,
+          "height": 512
+        },
+        "filter": "linear",
+        "wrap": "clamp"
+      }
+    ],
+    "files": []
+  },
+  "controls": [
+    {
+      "key": "accent",
+      "type": "color",
+      "label": "Accent",
+      "folder": "Style",
+      "default": "#5ad1c8"
+    },
+    {
+      "key": "panel",
+      "type": "color",
+      "label": "Panel",
+      "folder": "Style",
+      "default": "#1b2030"
+    },
+    {
+      "key": "startValue",
+      "type": "number",
+      "label": "Starting value",
+      "folder": "State",
+      "default": 0.5,
+      "min": 0,
+      "max": 1,
+      "step": 0.01
+    }
+  ],
+  "render": {
+    "postProcessing": {
+      "enabled": true,
+      "effects": []
+    }
+  },
+  "presets": []
+}
