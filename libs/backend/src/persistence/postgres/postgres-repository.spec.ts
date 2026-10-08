@@ -1,7 +1,11 @@
 import { Pool } from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { runShaderLibraryConformance, type ConformanceHarness } from '../../library/conformance';
+import {
+  CONFORMANCE_USER_IDS,
+  runShaderLibraryConformance,
+  type ConformanceHarness,
+} from '../../library/conformance';
 import { ShaderLibrary } from '../../library/shader-library';
 import { runPublicationConformance } from '../../publication/conformance';
 import type { AssetKey } from '../shader-repository';
@@ -37,11 +41,10 @@ if (!url) {
     await sidePool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
   };
 
-  // The shared suite runs as the single-user `local` scope, and its ownership
-  // tests act as two more users. A server store only seeds `system` and owns rows
-  // by real accounts, so every account the suite acts as has to exist before the
-  // library bootstraps, or each owned write fails `fk_shaders_owner`.
-  const SUITE_USERS = [LOCAL_SCOPE.userId, 'user-alice', 'user-bob'];
+  // The shared suite runs as the single-user `local` scope and several other
+  // users. A server store only seeds `system` and owns rows by real accounts, so
+  // every account the suite acts as has to exist before the library bootstraps,
+  // or each owned write fails `fk_shaders_owner`.
   const localRepository = (): PostgresRepository => {
     const repo = new PostgresRepository({ connectionString: url });
     const migrate = repo.init.bind(repo);
@@ -51,7 +54,7 @@ if (!url) {
         `INSERT INTO users (id, name, email, email_verified)
          SELECT id, id, id || '@shader-studio.invalid', true FROM unnest($1::text[]) AS id
          ON CONFLICT (id) DO NOTHING`,
-        [SUITE_USERS],
+        [CONFORMANCE_USER_IDS],
       );
     };
     return repo;
@@ -67,6 +70,24 @@ if (!url) {
     },
     removeAssetRow: async (id: string, key: AssetKey) => {
       await sidePool.query('DELETE FROM assets WHERE shader_id = $1 AND asset_key = $2', [id, key]);
+    },
+    clearHistory: async (id: string) => {
+      await sidePool.query('DELETE FROM shader_history WHERE shader_id = $1', [id]);
+    },
+    countHistory: async (id: string) => {
+      const result = await sidePool.query(
+        'SELECT COUNT(*)::int AS n FROM shader_history WHERE shader_id = $1',
+        [id],
+      );
+      return Number(result.rows[0].n);
+    },
+    corruptHistory: async (id: string, revision: number) => {
+      // jsonb cannot hold invalid JSON; a string is a valid value that is not a control list.
+      await sidePool.query(
+        `UPDATE shader_history SET controls_json = '"not controls"'::jsonb
+         WHERE shader_id = $1 AND revision = $2`,
+        [id, revision],
+      );
     },
   });
 

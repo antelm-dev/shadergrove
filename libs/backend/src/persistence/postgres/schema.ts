@@ -1,5 +1,7 @@
 import { index, integer, jsonb, pgTable, primaryKey, text, customType } from 'drizzle-orm/pg-core';
 
+import type { ShaderHistoryCause } from '@shadergrove/shared/model';
+
 import type { ShaderKind } from '../user-scope';
 
 const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
@@ -72,6 +74,28 @@ export const assets = pgTable(
   ],
 );
 
+export const shaderHistory = pgTable(
+  'shader_history',
+  {
+    shaderId: text('shader_id')
+      .notNull()
+      .references(() => shaders.id, { onDelete: 'cascade' }),
+    revision: integer('revision').notNull(),
+    createdAt: text('created_at').notNull(),
+    checkpointName: text('checkpoint_name'),
+    cause: text('cause').$type<ShaderHistoryCause>().notNull(),
+    restoredFromRevision: integer('restored_from_revision'),
+    projectJson: jsonb('project_json').notNull(),
+    controlsJson: jsonb('controls_json').notNull(),
+    renderJson: jsonb('render_json').notNull(),
+    presetsJson: jsonb('presets_json').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.shaderId, table.revision] }),
+    index('idx_shader_history_newest').on(table.shaderId, table.revision.desc()),
+  ],
+);
+
 export const storageMetadata = pgTable('storage_metadata', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
@@ -80,6 +104,7 @@ export const storageMetadata = pgTable('storage_metadata', {
 export const postgresSchema = {
   assets,
   presets,
+  shaderHistory,
   shaders,
   storageMetadata,
 };
