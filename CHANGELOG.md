@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.0](https://github.com/antelm-dev/shadergrove/compare/v2.4.1...v2.5.0) (2026-10-08)
+
+
+### Features
+
+* transactional shader history domain and transports ([#167](https://github.com/antelm-dev/shadergrove/issues/167)) ([19d2e05](https://github.com/antelm-dev/shadergrove/commit/19d2e0521fe546caf8c05085bc0efbdedf22b99b))
+
 ## [2.4.1](https://github.com/antelm-dev/shadergrove/compare/v2.4.0...v2.4.1) (2026-10-08)
 
 
