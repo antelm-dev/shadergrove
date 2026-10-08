@@ -394,9 +394,13 @@ class PgOps implements ShaderTx {
   }
 
   /**
-   * Locks the shader row, then, when conditional, reads the revision and
-   * thumbnail in a new statement (a fresh snapshot under READ COMMITTED), then
-   * deletes. Every child-row write holds the same lock first (see `PgOps`).
+   * Locks the shader row, then, when conditional, compares the revision it
+   * locked and the thumbnail, itself read `FOR UPDATE`, then deletes. Locking
+   * the asset row matters: under READ COMMITTED a plain read would see the
+   * last committed stamp while an uncommitted thumbnail write still holds that
+   * row, and the delete's cascade would then wait it out and drop the newer
+   * thumbnail. `FOR UPDATE` waits too, and returns the row as committed. Same
+   * lock order as every child-row write (see `PgOps`): shader row, then assets.
    */
   async deleteShader(
     scope: UserScope,
@@ -406,26 +410,20 @@ class PgOps implements ShaderTx {
   ): Promise<boolean> {
     const owned = and(eq(shaders.id, id), eq(shaders.ownerUserId, scope.userId));
     const [locked] = await this.db
-      .select({ id: shaders.id })
+      .select({ revision: shaders.revision })
       .from(shaders)
       .where(owned)
       .for('update');
     if (!locked) return false;
-    if (expectedRevision === undefined && expectedThumbnail === undefined) {
-      await this.db.delete(shaders).where(owned);
-      return true;
+    let matches = expectedRevision === undefined || locked.revision === expectedRevision;
+    if (matches && expectedThumbnail !== undefined) {
+      const [thumbnail] = await this.db
+        .select({ updatedAt: assets.updatedAt })
+        .from(assets)
+        .where(and(eq(assets.shaderId, id), eq(assets.assetKey, THUMBNAIL_ASSET_KEY)))
+        .for('update');
+      matches = (thumbnail?.updatedAt ?? null) === expectedThumbnail;
     }
-    const [current] = await this.db
-      .select({
-        revision: shaders.revision,
-        thumbnail: sql<string | null>`(SELECT ${assets.updatedAt} FROM ${assets}
-          WHERE ${assets.shaderId} = ${shaders.id} AND ${assets.assetKey} = ${THUMBNAIL_ASSET_KEY})`,
-      })
-      .from(shaders)
-      .where(owned);
-    const matches =
-      (expectedRevision === undefined || current.revision === expectedRevision) &&
-      (expectedThumbnail === undefined || current.thumbnail === expectedThumbnail);
     if (!matches) {
       throw new StorageError('conflict', `Shader "${id}" was modified by another write`);
     }
