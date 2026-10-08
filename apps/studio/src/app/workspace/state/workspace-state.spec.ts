@@ -17,6 +17,7 @@ import {
 } from '@shadergrove/shared/project';
 import { CONFIG_DOC, VERTEX_DOC } from '@shadergrove/shared/diagnostic';
 import { CompilationService } from '../compilation.service';
+import { planCommit } from '../../ui/editor/controls-builder-state';
 import { DocumentState, type ShaderDraft } from './document-state';
 import { ProjectMutations } from './project-mutations';
 
@@ -423,6 +424,76 @@ describe('ProjectMutations', () => {
       mutations.setControlsText('[]');
 
       expect(state.diagnostics().map((entry) => entry.message)).toEqual(['boom']);
+    });
+  });
+
+  describe('commits from the config builder', () => {
+    const NEXT: ShaderControl[] = [
+      { key: 'speed', type: 'number', default: 1, min: 0, max: 2 },
+      { key: 'tint', type: 'color', default: '#336699' },
+    ];
+
+    /** What the builder does: plan against the buffer text, write through the store's path. */
+    function commit(next: readonly ShaderControl[]): void {
+      const plan = planCommit(state.draft()!.controlsText, next);
+      if (plan.status === 'commit') mutations.setDocSource(CONFIG_DOC, plan.text);
+    }
+
+    it('is one revision, and keeps compatible live values while the schema changes shape', () => {
+      mutations.setParam('speed', 9);
+      mutations.setParam('glow', true);
+
+      expect(bumps(() => commit(NEXT))).toBe(1);
+
+      // speed survives and is clamped into its new range; glow is gone; tint starts at its default.
+      expect(state.params()).toEqual({ speed: 2, tint: '#336699' });
+      expect(state.controls()).toEqual(NEXT);
+      expect(state.dirty()).toBe(true);
+    });
+
+    it('keeps a live value inside the range it was applied against', () => {
+      mutations.setParam('speed', 0.5);
+      commit(NEXT);
+      expect(state.params()['speed']).toBe(0.5);
+    });
+
+    it('previews a value without touching the schema, its defaults or the revision', () => {
+      const text = state.draft()!.controlsText;
+
+      expect(bumps(() => mutations.setParam('speed', 7))).toBe(0);
+
+      expect(state.params()['speed']).toBe(7);
+      expect(state.draft()!.controlsText).toBe(text);
+      expect(state.controls()[0]).toMatchObject({ key: 'speed', default: 1 });
+      expect(state.dirty()).toBe(false);
+    });
+
+    it('resets to the applied defaults', () => {
+      commit(NEXT);
+      mutations.setParam('speed', 1.5);
+      mutations.resetParams();
+      expect(state.params()).toEqual({ speed: 1, tint: '#336699' });
+    });
+
+    it('writes nothing for a proposal equal to the buffer', () => {
+      expect(bumps(() => commit(structuredClone(CONTROLS)))).toBe(0);
+      expect(planCommit(state.draft()!.controlsText, state.controls()).status).toBe('noop');
+    });
+
+    it('cannot be fooled by the fallback schema over invalid JSON', () => {
+      mutations.setControlsText('{ not json');
+      const broken = state.draft()!.controlsText;
+      const revision = compilation.draftRevision();
+
+      // The store still reports the last good schema ...
+      expect(state.controls()).toEqual(CONTROLS);
+      expect(state.configValid()).toBe(false);
+      // ... which is exactly what the builder must not write back over the buffer.
+      expect(planCommit(broken, state.controls())).toEqual({ status: 'blocked' });
+      commit(NEXT);
+
+      expect(state.draft()!.controlsText).toBe(broken);
+      expect(compilation.draftRevision()).toBe(revision);
     });
   });
 

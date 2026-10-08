@@ -1,6 +1,6 @@
 {
   "id": "dev.shadergrove.language-fr",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "protocolVersion": 3,
   "appVersionRange": ">=1.5.0 <3.0.0",
   "name": "French",

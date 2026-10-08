@@ -280,4 +280,41 @@ describe('EditorTabs open-document strip', () => {
     expect(openDocs.openIds()).toEqual([bufferId, imageId]);
     expect(tabs.currentProject().passes.map((pass) => pass.id)).toEqual(before);
   });
+
+  it('lists and closes tabs per explicit group, reporting that group active document', () => {
+    const groups = TestBed.inject(EditorGroups);
+    const imageId = tabs.activeId()!;
+    const bufferId = bufferPasses(tabs.currentProject())[0]!.id;
+    const second = groups.createGroup()!;
+    groups.activate(bufferId, second);
+    groups.activate(VERTEX_DOC, second);
+    TestBed.tick();
+
+    const primary = mountTabs();
+    const other = mountTabs(VERTEX_DOC);
+    other.componentRef.setInput('groupId', second);
+    other.detectChanges();
+
+    const ids = (fixture: typeof primary) =>
+      fixture.debugElement
+        .queryAll(By.css('[role="tab"]'))
+        .map((el) => el.nativeElement.getAttribute('data-doc-id'));
+    expect(ids(primary)).toEqual([imageId]);
+    expect(ids(other)).toEqual([bufferId, VERTEX_DOC]);
+
+    // The global pick is the vertex tab, but closing the buffer tab in the
+    // second group must not disturb the first group.
+    let next: string | null | undefined;
+    other.componentInstance.closed.subscribe((id) => (next = id));
+    (
+      other.debugElement.queryAll(By.css('.tab-close'))[0].nativeElement as HTMLButtonElement
+    ).click();
+    TestBed.tick();
+    other.detectChanges();
+
+    expect(groups.openIds(second)).toEqual([VERTEX_DOC]);
+    expect(groups.openIds()).toEqual([imageId]);
+    expect(next).toBe(groups.activeDocumentId(second));
+    expect(next).toBe(VERTEX_DOC);
+  });
 });
