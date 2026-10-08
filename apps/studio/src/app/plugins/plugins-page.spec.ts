@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,7 +17,9 @@ import { Preferences, type WorkspacePreferences } from '../prefs/preferences';
 import { AppThemes } from '../themes/app-themes';
 import { ShaderStore } from '../workspace/shader-store';
 import { EffectAdoption } from './effect-adoption';
+import { SOURCE_PROVIDERS, type SourceProvider } from './host-adapters';
 import { PluginCatalogueService } from './plugin-catalogue';
+import { PluginCommands } from './plugin-commands';
 import { PluginInstallations } from './plugin-installations';
 import { PluginsPage } from './plugins-page';
 import { ProjectPluginActions } from './project-actions';
@@ -204,5 +206,116 @@ describe('PluginsPage language packs', () => {
     expect(page.querySelector(`[data-testid="language-in-use-${key}"]`)?.textContent?.trim()).toBe(
       'Langue actuelle de l’app',
     );
+  });
+});
+
+/**
+ * A project importer on the Installed page no longer carries a form of its
+ * own: it opens the dialog the editor's commands open, for that importer and
+ * the installation shown.
+ */
+describe('PluginsPage project importers', () => {
+  const SHADERTOY = 'dev.shadergrove.shadertoy';
+  const shadertoy = installedPackage(officialPackageText(SHADERTOY));
+  const context = { profile: 'anonymous', id: SHADERTOY, version: '1.0.0', installedAt: '' };
+  const openImport = vi.fn();
+  const provider: SourceProvider = {
+    id: 'shadertoy-api/v1',
+    fields: [],
+    fetchSource: async () => ({ sourceId: 'x', source: {} }),
+    fetchAsset: async () => new Uint8Array(),
+  };
+
+  beforeEach(() => {
+    openImport.mockReset();
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([
+          { path: 'plugins', component: PluginsPage },
+          { path: '', children: [] },
+        ]),
+        I18n,
+        { provide: Preferences, useValue: { value: signal({ language: 'en' }).asReadonly() } },
+        {
+          provide: PluginInstallations,
+          useValue: {
+            loading: signal(false),
+            defaultsSettled: signal(false),
+            plugins: signal([shadertoy]),
+            profile: signal('anonymous'),
+            find: (id: string) => (id === SHADERTOY ? shadertoy : undefined),
+            context: (id: string) => (id === SHADERTOY ? context : null),
+          },
+        },
+        {
+          provide: PluginCatalogueService,
+          useValue: {
+            state: signal({ status: 'ready', packages: [] }),
+            load: async () => undefined,
+          },
+        },
+        {
+          provide: ProjectPluginActions,
+          useValue: { running: signal(null), importers: signal([]), exporters: signal([]) },
+        },
+        { provide: SOURCE_PROVIDERS, useValue: provider, multi: true },
+        { provide: PluginCommands, useValue: { openImport } },
+        { provide: AppThemes, useValue: { entries: signal([]) } },
+        { provide: EffectAdoption, useValue: {} },
+        { provide: ShaderStore, useValue: { draft: signal(null) } },
+        { provide: DesktopPlatform, useValue: { available: false } },
+      ],
+    });
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  async function show() {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/plugins', PluginsPage);
+    harness.detectChanges();
+    return harness;
+  }
+
+  const page = (harness: RouterTestingHarness) => harness.routeNativeElement as HTMLElement;
+  const button = (harness: RouterTestingHarness) =>
+    page(harness).querySelector<HTMLButtonElement>(
+      `[data-testid="open-import-${SHADERTOY}/shadertoy"]`,
+    );
+
+  it('offers an Import action instead of a form, and opens the shared dialog with it', async () => {
+    openImport.mockResolvedValue(undefined);
+    const harness = await show();
+    expect(page(harness).querySelector('textarea, [data-testid^="field-"]')).toBeNull();
+    expect(button(harness)?.textContent?.trim()).toBe('Import…');
+
+    button(harness)!.click();
+    expect(openImport).toHaveBeenCalledWith(context, 'shadertoy');
+  });
+
+  it('reports a successful import here, warnings included, and goes to the editor on request', async () => {
+    openImport.mockResolvedValueOnce({
+      imported: { name: 'Parity', warnings: ['No sound pass.'] },
+      toEditor: false,
+    });
+    const harness = await show();
+    button(harness)!.click();
+    await new Promise((done) => setTimeout(done, 0));
+    harness.detectChanges();
+    expect(page(harness).querySelector('[data-testid="plugin-message"]')?.textContent).toContain(
+      'Imported “Parity”.',
+    );
+    expect(page(harness).querySelector('[data-testid="plugin-warnings"]')?.textContent).toContain(
+      'No sound pass.',
+    );
+
+    openImport.mockResolvedValueOnce({
+      imported: { name: 'Parity', warnings: ['No sound pass.'] },
+      toEditor: true,
+    });
+    button(harness)!.click();
+    await new Promise((done) => setTimeout(done, 0));
+    expect(TestBed.inject(Router).url).toBe('/');
   });
 });

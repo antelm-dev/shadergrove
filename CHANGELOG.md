@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.4.0](https://github.com/antelm-dev/shadergrove/compare/v2.3.0...v2.4.0) (2026-10-07)
+
+
+### Features
+
+* **studio:** make editor shell, panel and controls group-aware ([#204](https://github.com/antelm-dev/shadergrove/issues/204)) ([460de78](https://github.com/antelm-dev/shadergrove/commit/460de789eb8717ac6af76f17cf82730899c5c5af))
+
+## [2.3.0](https://github.com/antelm-dev/shadergrove/compare/v2.2.0...v2.3.0) (2026-10-07)
+
+
+### Features
+
+* **shared:** versioned contained-editor split-tree layout contract ([#170](https://github.com/antelm-dev/shadergrove/issues/170)) ([ebc238a](https://github.com/antelm-dev/shadergrove/commit/ebc238a44b939589624ad5d8b589c70ab479d0a7))
+* **studio:** visual Controls builder for the Config document ([#202](https://github.com/antelm-dev/shadergrove/issues/202)) ([3dab184](https://github.com/antelm-dev/shadergrove/commit/3dab18447793eccc31e955259d49029b0e93694d))
+
+## [2.2.0](https://github.com/antelm-dev/shadergrove/compare/v2.1.1...v2.2.0) (2026-10-07)
+
+
+### Features
+
+* **plugins:** open project importers in a generic import dialog ([#171](https://github.com/antelm-dev/shadergrove/issues/171)) ([b338450](https://github.com/antelm-dev/shadergrove/commit/b3384503375aeeb39770fb48dd0c4edf4aa96b26))
+* **studio:** keep Explore searches in the URL and restore browsing ([#169](https://github.com/antelm-dev/shadergrove/issues/169)) ([0fd00e0](https://github.com/antelm-dev/shadergrove/commit/0fd00e08a7bef05a4a7913d46e0731c3dd51f4f3))
+
+## [2.1.1](https://github.com/antelm-dev/shadergrove/compare/v2.1.0...v2.1.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **deps:** align Angular on 22.2 and patch axios and js-yaml advisories ([#163](https://github.com/antelm-dev/shadergrove/issues/163)) ([d46635d](https://github.com/antelm-dev/shadergrove/commit/d46635d8934329345af0e2b6efcebcf74bcc9fb5))
+
 ## [2.1.0](https://github.com/antelm-dev/shadergrove/compare/v2.0.0...v2.1.0) (2026-10-07)
 
 

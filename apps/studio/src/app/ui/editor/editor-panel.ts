@@ -25,7 +25,14 @@ import {
   FILE_EXPLORER_OVERLAY_BREAKPOINT,
   clampFileExplorerWidth,
 } from '@shadergrove/shared/panel-prefs';
+import { CONFIG_DOC } from '@shadergrove/shared/diagnostic';
 import { findPass } from '@shadergrove/shared/project';
+import {
+  DEFAULT_EDITOR_GROUP_ID,
+  editorSurfaceId,
+  type EditorGroupId,
+  type SurfaceId,
+} from '@shadergrove/shared/surfaces';
 import { CodeEditor, type EditorDoc } from '../../editor/code-editor';
 import { EditorSettings } from '../../editor/editor-settings';
 import { ProjectAnalysis } from '../../editor/glsl-analysis';
@@ -35,11 +42,12 @@ import {
   type EditorLocationRequest,
 } from '../../editor/editor-navigation';
 import { Preferences } from '../../prefs/preferences';
-import { ShaderStore } from '../../workspace/shader-store';
+import { ShaderStore, type EditorDocument } from '../../workspace/shader-store';
 import { DocumentStatus } from './document-status';
 import { EditorTabs } from './editor-tabs';
 import { EditorWindowControls } from './editor-window-controls';
 import { EditorGroups } from './editor-groups';
+import { ControlsBuilder } from './controls-builder';
 import { PassConfigPanel } from '../inspector/pass-config-panel';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 import { WorkspaceActions } from '../workspace-actions';
@@ -52,12 +60,16 @@ import {
   type ExplorerViewMode,
 } from '../file-explorer';
 
-type EditorSurface = Pick<CodeEditor, 'focus' | 'format' | 'layout' | 'revealIn'>;
+type EditorSurface = Pick<CodeEditor, 'applyEdit' | 'focus' | 'format' | 'layout' | 'revealIn'>;
+
+/** How the Config document is shown: the visual builder, or its JSON. */
+type ConfigView = 'builder' | 'json';
 
 @Component({
   selector: 'app-editor-panel',
   imports: [
     CodeEditor,
+    ControlsBuilder,
     EditorTabs,
     EditorWindowControls,
     ExplorerPanel,
@@ -78,7 +90,8 @@ type EditorSurface = Pick<CodeEditor, 'focus' | 'format' | 'layout' | 'revealIn'
     >
       <app-editor-tabs
         class="tabs"
-        [activeId]="store.activeDoc()?.id ?? null"
+        [activeId]="activeDoc()?.id ?? null"
+        [groupId]="ownGroupId()"
         (select)="selectDoc($event)"
         (closed)="onTabClosed($event)"
       />
@@ -117,7 +130,7 @@ type EditorSurface = Pick<CodeEditor, 'focus' | 'format' | 'layout' | 'revealIn'
         </button>
       }
 
-      <app-editor-window-controls />
+      <app-editor-window-controls [surfaceId]="surfaceId()" />
     </div>
 
     <mat-menu #editorMenu="matMenu">
@@ -242,16 +255,59 @@ type EditorSurface = Pick<CodeEditor, 'focus' | 'format' | 'layout' | 'revealIn'
 
       <div class="editor-main">
         @if (editorDoc(); as doc) {
-          <app-code-editor
-            #editorSurface
-            class="editor"
-            [doc]="doc"
-            [liveIds]="liveIds()"
-            [appearance]="settings.effective()"
-            [diagnostics]="activeDiagnostics()"
-            [analysis]="analysis"
-            (valueChange)="store.setDocSource($event.id, $event.value)"
-          />
+          <div class="editor-stack">
+            @if (isConfig()) {
+              <div
+                class="view-bar"
+                [class.reopen-gap]="showExplorerReopen()"
+                role="group"
+                [attr.aria-label]="'builder.viewLabel' | translate"
+              >
+                <button
+                  type="button"
+                  class="view-builder"
+                  [matButton]="showBuilder() ? 'tonal' : 'text'"
+                  [attr.aria-pressed]="showBuilder()"
+                  (click)="setConfigView('builder')"
+                >
+                  {{ 'builder.viewBuilder' | translate }}
+                </button>
+                <button
+                  type="button"
+                  class="view-json"
+                  [matButton]="showBuilder() ? 'text' : 'tonal'"
+                  [attr.aria-pressed]="!showBuilder()"
+                  (click)="setConfigView('json')"
+                >
+                  {{ 'builder.viewJson' | translate }}
+                </button>
+              </div>
+            }
+
+            <div class="editor-area">
+              <app-code-editor
+                #editorSurface
+                class="editor"
+                [hidden]="showBuilder()"
+                [doc]="doc"
+                [liveIds]="liveIds()"
+                [appearance]="settings.effective()"
+                [diagnostics]="activeDiagnostics()"
+                [analysis]="analysis"
+                (valueChange)="store.setDocSource($event.id, $event.value)"
+              />
+
+              <!-- Kept alive while hidden, like the editor: a selected control and
+                   a half-edited form survive a look at the JSON. -->
+              <app-controls-builder
+                #builder
+                class="builder-view"
+                [hidden]="!showBuilder()"
+                (commit)="commitConfig($event)"
+                (repair)="showJson(true)"
+              />
+            </div>
+          </div>
 
           @if (activePass(); as pass) {
             @if (configOpen()) {
@@ -421,9 +477,53 @@ type EditorSurface = Pick<CodeEditor, 'focus' | 'format' | 'layout' | 'revealIn'
       border-radius: 999px;
     }
 
+    .editor-stack {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .view-bar {
+      display: flex;
+      flex: 0 0 auto;
+      gap: 4px;
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--mat-sys-outline-variant);
+    }
+
+    /* The explorer's reopen button floats over the top-left corner of the body. */
+    .view-bar.reopen-gap {
+      padding-inline-start: 48px;
+    }
+
+    .view-bar button {
+      --mat-button-text-container-height: 32px;
+      --mat-button-tonal-container-height: 32px;
+    }
+
+    .editor-area {
+      position: relative;
+      display: flex;
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+    }
+
     .editor {
       flex: 1;
       min-width: 0;
+    }
+
+    .editor[hidden],
+    .builder-view[hidden] {
+      display: none;
+    }
+
+    .builder-view {
+      position: absolute;
+      inset: 0;
     }
 
     .config {
@@ -497,6 +597,14 @@ export class EditorPanel {
   protected readonly groups = inject(EditorGroups);
   protected readonly fileExplorerLimits = FILE_EXPLORER_LIMITS;
 
+  /**
+   * The group whose tabs and active document this panel shows. Absent means the
+   * legacy lone editor: the default group's tabs, `store.activeDoc()` and every
+   * navigation request, even for a document a group nobody renders owns.
+   */
+  readonly groupId = input<EditorGroupId | null>(null);
+  /** The surface framing this panel, for its window controls; default when absent. */
+  readonly surfaceId = input<SurfaceId>(editorSurfaceId(DEFAULT_EDITOR_GROUP_ID));
   readonly collapsed = input(false);
   readonly dragEnabled = input(false);
   readonly dragStart = output<PointerEvent>();
@@ -508,14 +616,25 @@ export class EditorPanel {
   private readonly editor = viewChild<EditorSurface>('editorSurface');
   private readonly explorerPanel = viewChild(ExplorerPanel);
   private readonly tabs = viewChild(EditorTabs);
+  private readonly builder = viewChild<ControlsBuilder>('builder');
 
   protected readonly configOpen = signal(false);
+  protected readonly configView = signal<ConfigView>('builder');
   private readonly narrow = signal(false);
   private readonly overlayDismissed = signal(false);
   private readonly liveExplorerWidth = signal<number | null>(null);
   private stopExplorerResize: (() => void) | null = null;
 
-  protected readonly activeDoc = computed(() => this.store.activeDoc());
+  protected readonly ownGroupId = computed(() => this.groupId() ?? DEFAULT_EDITOR_GROUP_ID);
+  /**
+   * With an explicit group, that group's document, not `store.activeDoc()`: the
+   * store's is one global pick, and every panel would otherwise show the same file.
+   */
+  protected readonly activeDoc = computed<EditorDocument | null>(() => {
+    if (this.groupId() === null) return this.store.activeDoc();
+    const id = this.groups.activeDocumentId(this.groupId()!);
+    return (id && this.store.documents().find((doc) => doc.id === id)) || null;
+  });
   protected readonly explorerPreferredOpen = computed(
     () => this.preferences.value().fileExplorerOpen,
   );
@@ -528,7 +647,7 @@ export class EditorPanel {
       loading: this.store.loading(),
       project: this.store.project(),
       documents: this.store.documents(),
-      activeDocId: this.store.activeDoc()?.id ?? null,
+      activeDocId: this.activeDoc()?.id ?? null,
       dirty: this.store.dirty(),
       compiling: this.store.compiling(),
       errorCountFor: (docId) => this.store.errorCountFor(docId),
@@ -555,8 +674,21 @@ export class EditorPanel {
   /** The open document, in the shape the editor wants. */
   protected readonly editorDoc = computed<EditorDoc | null>(() => {
     const doc = this.activeDoc();
-    return doc ? { id: doc.id, language: doc.language, value: doc.source } : null;
+    if (!doc) return null;
+    // The config tab's id outlives the shader it belongs to; its scope does not.
+    const scope = doc.id === CONFIG_DOC ? this.store.selectedId() : null;
+    return {
+      id: doc.id,
+      language: doc.language,
+      value: doc.source,
+      ...(scope ? { scope } : {}),
+    };
   });
+
+  protected readonly isConfig = computed(() => this.activeDoc()?.id === CONFIG_DOC);
+  protected readonly showBuilder = computed(
+    () => this.isConfig() && this.configView() === 'builder',
+  );
 
   /** Every document that still exists — the editor drops the models of the rest. */
   protected readonly liveIds = computed(() => this.store.documents().map((doc) => doc.id));
@@ -632,6 +764,14 @@ export class EditorPanel {
 
     this.destroyRef.onDestroy(() => this.analysis?.dispose());
 
+    // A newly selected shader opens its Config in the builder when the builder
+    // can edit it, and in JSON when it first needs repairing. Declared before the
+    // navigation below, which may be asking for the other view on this very render.
+    effect(() => {
+      this.store.selectedId();
+      untracked(() => this.configView.set(this.store.configValid() ? 'builder' : 'json'));
+    });
+
     // The Problems panel does not hold a reference to `CodeEditor` — it asks
     // through `EditorNavigation` instead, and this is the one place that picks
     // the request up and acts on it, the same way `reveal` below used to for a
@@ -648,6 +788,7 @@ export class EditorPanel {
       this.explorerOverlayOpen();
       this.explorerWidth();
       this.configOpen();
+      this.showBuilder();
       untracked(() => this.scheduleRelayout());
     });
 
@@ -669,7 +810,7 @@ export class EditorPanel {
   }
 
   protected selectDoc(id: string): void {
-    this.groups.activate(id);
+    this.groups.activate(id, this.ownGroupId());
     queueMicrotask(() => this.relayout());
   }
 
@@ -696,7 +837,7 @@ export class EditorPanel {
     await this.workspace.runExplorerCommand(event.command, event.docId);
     queueMicrotask(() => {
       if (this.explorerDocked() || this.explorerOverlayOpen()) {
-        this.explorerPanel()?.focusNode(event.docId ?? this.store.activeDoc()?.id ?? null);
+        this.explorerPanel()?.focusNode(event.docId ?? this.activeDoc()?.id ?? null);
       } else {
         this.focusEditor();
       }
@@ -722,7 +863,7 @@ export class EditorPanel {
     this.overlayDismissed.set(false);
     queueMicrotask(() => {
       if (this.explorerDocked() || this.explorerOverlayOpen()) {
-        this.explorerPanel()?.focusNode(this.store.activeDoc()?.id ?? null);
+        this.explorerPanel()?.focusNode(this.activeDoc()?.id ?? null);
       }
     });
   }
@@ -799,9 +940,15 @@ export class EditorPanel {
       this.store.documents().map((doc) => doc.id),
       this.activeDoc()?.id ?? null,
     );
-    if (!resolved) return;
+    if (!resolved || !this.ownsNavigation(resolved.docId)) return;
 
-    this.groups.activate(resolved.docId);
+    this.groups.activate(resolved.docId, this.ownGroupId());
+
+    // The Config has two views. A line to put the cursor on is JSON's; so is a
+    // buffer the builder cannot read. Merely opening it shows the builder.
+    if (resolved.docId === CONFIG_DOC) {
+      this.configView.set(resolved.reveal || !this.store.configValid() ? 'json' : 'builder');
+    }
 
     if (resolved.reveal) this.editor()?.revealIn(resolved.docId, resolved.line);
     else this.focusEditor();
@@ -819,6 +966,53 @@ export class EditorPanel {
     const open = this.activeDoc();
     const next = analysis.firstProblem(open ? { docId: open.id, line: 0 } : undefined);
     if (next) this.editorNavigation.reveal(next.docId, next.line ?? 1);
+  }
+
+  /**
+   * With explicit groups, every mounted panel sees every navigation request; only the one whose group
+   * holds the document (or, for a document no group holds, the active group)
+   * acts on it — the rest would pull the document's tab into their own strip.
+   */
+  private ownsNavigation(docId: string): boolean {
+    if (this.groupId() === null) return true;
+    const owner = this.groups.ownerGroupId(docId);
+    if (owner) return owner === this.groupId();
+    return (this.groups.activeGroupId() ?? this.groups.primaryGroupId) === this.groupId();
+  }
+
+  /**
+   * Switch the Config between the builder and its JSON. Leaving a builder form
+   * with unapplied edits asks first; the Monaco models are untouched either way,
+   * which is what keeps the JSON history, cursor and scroll across a toggle.
+   */
+  protected setConfigView(view: ConfigView): void {
+    if (view === this.configView()) return;
+    if (view === 'json') {
+      this.builder()?.guard(() => this.showJson(false));
+      return;
+    }
+    this.configView.set('builder');
+  }
+
+  protected showJson(focus: boolean): void {
+    this.configView.set('json');
+    if (!focus || !this.isBrowser) return;
+    requestAnimationFrame(() => {
+      this.relayout();
+      this.focusEditor();
+    });
+  }
+
+  /**
+   * Write a Builder edit into the Config. Through the open model when there is
+   * one, so it is a single step on the JSON undo stack; the model reports the
+   * text to the store like any other edit. With no model yet (Monaco still
+   * loading) the store is written directly and the model is built from it later.
+   */
+  protected commitConfig(text: string): void {
+    if (!this.editor()?.applyEdit(CONFIG_DOC, text)) {
+      this.store.setDocSource(CONFIG_DOC, text);
+    }
   }
 
   /** Format the source in the open tab. The config tab is JSON, and has none. */
