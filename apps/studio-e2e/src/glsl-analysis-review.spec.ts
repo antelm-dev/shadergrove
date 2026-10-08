@@ -176,21 +176,24 @@ test('driver and analysis markers coexist and switching during a pending reply d
     return canvas.engine().passMaterial(panel.store.activeDoc().id).uuid;
   });
   expect(afterInvalid).toBe(acceptedMaterial);
-  // Gate the real next Worker result on the host side, without fabricating it.
-  await page.evaluate(() => {
+  // Gate the real next Worker results on the host side, without fabricating them. Once
+  // opened the gate holds nothing more: a reply still computing when it opens passes too.
+  await page.evaluate(async () => {
     const analysis = (window as any).ng.getComponent(
       document.querySelector('app-editor-panel'),
     ).analysis;
-    (window as any).__reviewGate = { held: 0, release: [] };
-    void analysis.client.then((client: any) => {
-      const original = client.analyze.bind(client);
-      client.analyze = async (request: any) => {
-        const reply = await original(request);
-        (window as any).__reviewGate.held++;
-        await new Promise((resolve) => (window as any).__reviewGate.release.push(resolve));
-        return reply;
-      };
-    });
+    const client = await analysis.client;
+    const gate = { held: 0, open: false, waiting: [] as (() => void)[], client };
+    (window as any).__reviewGate = gate;
+    const original = client.analyze.bind(client);
+    client.analyze = async (request: any) => {
+      const reply = await original(request);
+      if (!gate.open) {
+        gate.held++;
+        await new Promise<void>((resolve) => gate.waiting.push(resolve));
+      }
+      return reply;
+    };
   });
   await page.keyboard.press('Control+End');
   await page.locator('.monaco-editor').first().click();
@@ -206,13 +209,10 @@ test('driver and analysis markers coexist and switching during a pending reply d
   await page.getByRole('button', { name: 'Discard' }).click();
   await expect(page).toHaveURL(`/shaders/${encodeURIComponent(other.id)}`);
   await page.evaluate(() => {
-    const analysis = (window as any).ng.getComponent(
-      document.querySelector('app-editor-panel'),
-    ).analysis;
-    void analysis.client.then((client: any) => {
-      delete client.analyze;
-    });
-    for (const release of (window as any).__reviewGate.release) release();
+    const gate = (window as any).__reviewGate;
+    gate.open = true;
+    delete gate.client.analyze;
+    for (const release of gate.waiting) release();
   });
   await expect(chip(page)).toHaveAttribute('data-analysis', 'ready');
   const snapshot = await page.evaluate(() => {

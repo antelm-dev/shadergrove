@@ -25,6 +25,10 @@ test('an existing French 1.0.2 profile can update to the observation translation
 }) => {
   await page.goto('/');
   await expect(page.locator('mat-toolbar.toolbar')).toBeVisible();
+  // Plugins is laid over the live preview: software-rendered, it would starve the default-pack
+  // seeding the install below waits for, as in the other plugin journeys. Kept across reloads.
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
   await page.getByTestId('open-plugins').click();
   await page.getByTestId('plugin-file').setInputFiles({
     name: 'language-fr-pre-observation-1.0.2.sgplugin.json',
