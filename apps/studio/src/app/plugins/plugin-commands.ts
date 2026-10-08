@@ -1,5 +1,6 @@
 import { Injectable, computed, inject } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
+import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import {
@@ -77,6 +78,7 @@ export class PluginCommands {
   private readonly themes = inject(AppThemes);
   private readonly store = inject(ShaderStore);
   private readonly dialog = inject(MatDialog);
+  private readonly router = inject(Router);
   private readonly i18n = inject(I18n);
 
   private readonly noShader = (): boolean => !this.store.record();
@@ -248,7 +250,8 @@ export class PluginCommands {
   /** Opens the tool's panel, if it is still offered: a kept palette entry cannot bring back a removed one. */
   private async openTool(packageId: string, contributionId: string): Promise<void> {
     if (!this.pluginTools.find(packageId, contributionId)) return this.stale();
-    await this.openInPlugins(packageId);
+    // Tool panels live on the installed card; `use` highlights it.
+    await this.router.navigate(['/plugins'], { queryParams: { use: packageId } });
   }
 
   /**
