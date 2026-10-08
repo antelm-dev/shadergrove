@@ -429,6 +429,9 @@ test('is reachable and usable from a closed, minimized or floating editor and a 
   await expect(field(page, 'Label')).toBeFocused();
   await builder(page).getByRole('button', { name: 'Back to the list' }).focus();
   await page.keyboard.press('Enter');
+  // The list is shown once the builder has rendered; until then its buttons
+  // cannot take focus, and the Enter below would go to Back again.
+  await expect(builder(page).locator('.select[data-key="enabled"]')).toBeFocused();
 
   // Move it with the keyboard; the focus stays on a move action.
   await builder(page).locator('[data-move="enabled:up"]').focus();
