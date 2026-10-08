@@ -1129,7 +1129,9 @@ describe('ShaderStore: captureMissingPreview', () => {
 
 describe('ShaderStore: history', () => {
   // Drafts and legacy projects other tests left in storage would be adopted here.
-  beforeEach(() => localStorage.clear());
+  // The jsdom window's storage, the one the store reads through DOCUMENT: Node's own
+  // global `localStorage` is not it, and is undefined without --localstorage-file.
+  beforeEach(() => window.localStorage.clear());
 
   it('restores an entry as the clean saved state, sending the head it holds', async () => {
     const { store, api } = setup(makeRecord({ revision: 4 }));
