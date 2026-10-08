@@ -169,6 +169,20 @@ describe('sanitizeEditorLayout', () => {
     const out = sanitizeEditorLayout(deep, context([A, B]));
     expect(editorLeafIds(out).sort()).toEqual([A, B].sort());
   });
+
+  it('stays idempotent when repair would push a tree past the depth limit', () => {
+    const ids = Array.from({ length: 18 }, (_, i) =>
+      editorSurfaceId(asEditorGroupId(`editor-group:${i}`)),
+    );
+    // A left-leaning chain of depth 16 over 17 surfaces, with one more open editor to append.
+    let chain: EditorLayoutNode = leaf(ids[0]!);
+    for (let i = 1; i < 17; i += 1) chain = split(`s${i}`, chain, leaf(ids[i]!));
+    const ctx = { known: ids, required: ids, fallback: ids[0]! };
+
+    const once = sanitizeEditorLayout(chain, ctx);
+    expect(editorLeafIds(once)).toEqual(ids);
+    expect(sanitizeEditorLayout(once, ctx)).toEqual(once);
+  });
 });
 
 describe('sanitizeLayoutPreferences editorLayout', () => {
