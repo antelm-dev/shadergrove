@@ -1,7 +1,7 @@
 {
   "manifest": {
     "id": "dev.shadergrove.language-fr",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "protocolVersion": 3,
     "appVersionRange": ">=1.5.0 <3.0.0",
     "name": "French",
@@ -982,7 +982,37 @@
           "builder.duplicated": "Dupliqué sous le nom {name}.",
           "builder.deleted": "{name} supprimé.",
           "builder.moved": "{name} déplacé.",
-          "builder.copySuffix": "copie"
+          "builder.copySuffix": "copie",
+          "history.menu": "Historique…",
+          "history.title": "Historique de {name}",
+          "history.scope": "Chaque entrée conserve le code source, les réglages et les préréglages du shader tels qu’ils ont été enregistrés. Les textures, les réglages des canaux et l’aperçu de la bibliothèque ne font pas partie de l’historique : une restauration conserve ceux d’aujourd’hui.",
+          "history.loading": "Chargement de l’historique…",
+          "history.empty": "Aucun état enregistré pour l’instant. Chaque enregistrement en ajoute un.",
+          "history.loadFailed": "Impossible de charger l’historique : {error}",
+          "history.retry": "Réessayer",
+          "history.revision": "Révision {revision}",
+          "history.current": "Actuelle",
+          "history.restoredFrom": "Restaurée depuis la révision {revision}",
+          "history.cause.create": "Création",
+          "history.cause.import": "Importation",
+          "history.cause.duplicate": "Duplication",
+          "history.cause.baseline": "Avant le début de l’historique",
+          "history.cause.update": "Enregistrement",
+          "history.cause.presetSave": "Préréglage enregistré",
+          "history.cause.presetDelete": "Préréglage supprimé",
+          "history.cause.sync": "Synchronisation",
+          "history.cause.restore": "Restauration",
+          "history.nameCheckpoint": "Nommer le point de contrôle",
+          "history.renameCheckpoint": "Renommer le point de contrôle",
+          "history.clearCheckpoint": "Effacer le nom du point de contrôle",
+          "history.checkpointName": "Nom du point de contrôle",
+          "history.checkpointHint": "Les points de contrôle nommés ne sont jamais supprimés.",
+          "history.checkpointInvalid": "Utilisez de 1 à {max} caractères, sans caractères de contrôle.",
+          "history.checkpointFailed": "Impossible de mettre à jour le point de contrôle : {error}",
+          "history.restoreRevision": "Restaurer la révision {revision}",
+          "history.restored": "Révision {revision} restaurée comme nouvel état enregistré",
+          "history.conflict": "Ce shader a changé depuis son ouverture : rien n’a été restauré. Rouvrez-le puis réessayez.",
+          "history.restoreFailed": "Impossible de restaurer la révision {revision}."
         }
       }
     ]
