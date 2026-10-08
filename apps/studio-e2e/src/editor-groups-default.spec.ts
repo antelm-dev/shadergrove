@@ -83,11 +83,11 @@ test('the default editor follows startup, tab, explorer, shader switch and deep 
   await expectShowing(page.locator('app-editor-shell'));
 });
 
-// Pre-existing tab menu action on the default path: "Move to new group" moves a
-// document into a group that no shell renders yet. Before task 02 the lone panel
-// still showed the store's pick, so the moved document stayed open and reachable
-// from the explorer; it must not become impossible to open.
-test('a document moved to a new group stays reachable in the single default editor', async ({
+// The tab menu's "Move to new group" used to move a document into a group no
+// shell rendered (task 02 kept it reachable in the lone editor). With contained
+// splits it opens a visible group beside the first, and the moved document stays
+// reachable there from the tab strip and the explorer.
+test('a document moved to a new group opens in a visible split and stays reachable', async ({
   page,
 }) => {
   const shell = await openStudio(page);
@@ -105,10 +105,18 @@ test('a document moved to a new group stays reachable in the single default edit
   await page.keyboard.press('Escape');
   await expect(page.locator('.cdk-overlay-pane .mat-mdc-menu-panel')).toHaveCount(0);
 
-  // The moved document must still be openable from the explorer.
-  const firstTab = shell.locator('app-editor-tabs [role="tab"]').first();
-  await firstTab.click();
-  await openConfigJson(shell);
-  await expect(shell.locator('.monaco-editor')).toBeVisible();
-  await expect(shell.locator('[data-mode-id]')).toHaveAttribute('data-mode-id', /^json/);
+  const groups = shell.locator('[role="region"][data-editor-group]');
+  await expect(groups).toHaveCount(2);
+  const moved = groups.nth(1);
+  // A Config arriving in a new group opens in the builder; its JSON is one click away.
+  await moved.locator('.view-json').click();
+  await expectShowing(moved, '@config');
+
+  // Another document in the first group, then the explorer: the Config shows where it lives.
+  await groups.nth(0).locator('app-editor-tabs [role="tab"]').first().click();
+  await explorerRow(shell, '@config').click();
+  await expectShowing(moved, '@config');
+  await expect(
+    groups.nth(0).locator('app-editor-tabs [role="tab"][data-doc-id="@config"]'),
+  ).toHaveCount(0);
 });

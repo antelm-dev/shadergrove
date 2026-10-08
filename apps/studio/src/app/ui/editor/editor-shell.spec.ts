@@ -15,6 +15,8 @@ import { SurfaceLayoutService, SurfaceRegistry } from '../../surfaces';
 import { EditorGroups } from './editor-groups';
 import { EditorPanel } from './editor-panel';
 import { EditorShell } from './editor-shell';
+import { EditorSplitHost } from './editor-split-host';
+import { I18n } from '../../i18n/i18n';
 
 const SECOND_GROUP = asEditorGroupId('editor-group:second');
 const DEFAULT_SURFACE = editorSurfaceId(DEFAULT_EDITOR_GROUP_ID);
@@ -26,6 +28,7 @@ class EditorPanelStub {
   readonly surfaceId = input<string>('');
   readonly collapsed = input(false);
   readonly dragEnabled = input(false);
+  readonly explorer = input(true);
   readonly dragStart = output<PointerEvent>();
 
   relayout(): void {}
@@ -35,7 +38,20 @@ class EditorPanelStub {
 describe('EditorShell group identity', () => {
   const groupIds = signal<readonly EditorGroupId[]>([DEFAULT_EDITOR_GROUP_ID]);
   const activeGroupId = signal<EditorGroupId | null>(DEFAULT_EDITOR_GROUP_ID);
-  const groups = { groupIds, activeGroupId, activateGroup: vi.fn() };
+  const groups = {
+    groupIds,
+    activeGroupId,
+    activateGroup: vi.fn(),
+    // One shown group: the shell's frame holds a lone panel, as in these tests.
+    visibleGroupIds: signal([DEFAULT_EDITOR_GROUP_ID]),
+    pendingFocus: signal(null),
+    clearFocusRequest: vi.fn(),
+    groupForSurface: () => DEFAULT_EDITOR_GROUP_ID,
+  };
+  const i18n = {
+    t: (key: string, params: { n?: number } = {}) =>
+      key === 'editor.groupLabel' ? `Source editor ${params.n}` : 'Source editor',
+  };
   const layout = { zIndex: () => 7, activate: vi.fn() };
   let registry: SurfaceRegistry;
 
@@ -53,7 +69,7 @@ describe('EditorShell group identity', () => {
     );
 
     TestBed.resetTestingModule();
-    TestBed.overrideComponent(EditorShell, {
+    TestBed.overrideComponent(EditorSplitHost, {
       remove: { imports: [EditorPanel] },
       add: { imports: [EditorPanelStub] },
     });
@@ -64,6 +80,7 @@ describe('EditorShell group identity', () => {
         { provide: EditorGroups, useValue: groups },
         { provide: SurfaceLayoutService, useValue: layout },
         { provide: ReducedMotion, useValue: { enabled: signal(true) } },
+        { provide: I18n, useValue: i18n },
       ],
     });
 

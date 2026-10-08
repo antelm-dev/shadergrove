@@ -12,11 +12,16 @@ import { Injectable, computed, signal } from '@angular/core';
 
 import type { Size } from '@shadergrove/shared/geometry';
 import {
+  DEFAULT_EDITOR_GROUP_ID,
   LAYOUT_VERSION,
   createDefaultSurface,
+  defaultEditorLayout,
+  editorSurfaceId,
+  sanitizeEditorLayout,
   isContainedPlacement,
   isNativePlacement,
   sanitizeLayoutPreferences,
+  type EditorLayoutNode,
   type LayoutPreferences,
   type SurfaceId,
   type SurfaceKind,
@@ -38,10 +43,13 @@ export class SurfaceRegistry {
   /** Contained activation order; last entry is foreground. */
   private readonly order = signal<SurfaceId[]>([]);
   private readonly viewportSize = signal<Size>({ width: 0, height: 0 });
+  private readonly layoutTree = signal<EditorLayoutNode>(defaultEditorLayout());
 
   readonly surfaces = computed(() => [...this.records().values()]);
   readonly zOrder = this.order.asReadonly();
   readonly viewport = this.viewportSize.asReadonly();
+  /** Contained editor split tree; leaves are editor surface ids. */
+  readonly editorLayout = this.layoutTree.asReadonly();
 
   /** Most recently activated contained stacked surface, if any. */
   readonly foreground = computed<SurfaceId | null>(() => {
@@ -63,6 +71,35 @@ export class SurfaceRegistry {
     }
     this.records.set(map);
     this.order.set(sanitized.zOrder.filter((id) => map.has(id)));
+    this.layoutTree.set(sanitized.editorLayout);
+  }
+
+  setEditorLayout(layout: EditorLayoutNode): void {
+    this.layoutTree.set(layout);
+  }
+
+  /**
+   * Re-check the split tree against the records as they are now (after
+   * `ensure`, say): every open contained editor appears once, and the default
+   * editor — the frame the split lives in — always does, open or not.
+   */
+  repairEditorLayout(): void {
+    const editors = this.surfaces().filter(
+      (surface) => surface.kind === 'editor' && isContainedPlacement(surface.placement),
+    );
+    const defaultId = editorSurfaceId(DEFAULT_EDITOR_GROUP_ID);
+    const hasDefault = editors.some((surface) => surface.id === defaultId);
+    const fallback = hasDefault ? defaultId : (editors[0]?.id ?? defaultId);
+    const repaired = sanitizeEditorLayout(this.layoutTree(), {
+      known: editors.map((surface) => surface.id),
+      required: [
+        ...(hasDefault ? [defaultId] : []),
+        ...editors.filter((surface) => surface.open).map((surface) => surface.id),
+      ],
+      fallback,
+    });
+    if (JSON.stringify(repaired) !== JSON.stringify(this.layoutTree()))
+      this.layoutTree.set(repaired);
   }
 
   /** Ensure a default instance exists for a kind (idempotent for singletons). */
@@ -160,6 +197,7 @@ export class SurfaceRegistry {
       version: LAYOUT_VERSION,
       surfaces: this.surfaces().map((surface) => ({ ...surface })),
       zOrder: [...this.order()],
+      editorLayout: this.layoutTree(),
     };
   }
 

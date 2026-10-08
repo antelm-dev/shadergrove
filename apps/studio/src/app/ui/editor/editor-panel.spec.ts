@@ -88,6 +88,17 @@ class CodeEditorStub {
   }
 
   async format(): Promise<void> {}
+
+  viewStates = new Map<string, unknown>();
+  adopted: Array<[string, unknown]> = [];
+
+  viewStateOf(docId: string): unknown {
+    return this.viewStates.get(docId) ?? null;
+  }
+
+  adoptViewState(docId: string, state: unknown): void {
+    this.adopted.push([docId, state]);
+  }
 }
 
 @Component({
@@ -130,6 +141,7 @@ class EditorTabsStub {
 })
 class EditorWindowControlsStub {
   readonly surfaceId = input<string>('');
+  readonly groupId = input<string | null>(null);
 }
 
 @Component({
@@ -589,6 +601,34 @@ describe('EditorPanel file explorer integration', () => {
       other.componentRef.setInput('surfaceId', editorSurfaceId(second));
       other.detectChanges();
       expect(controls.surfaceId()).toBe(editorSurfaceId(second));
+      expect(controls.groupId()).toBe(second);
+    });
+
+    it('hands view state over with a moved document, both ways', () => {
+      const session = TestBed.inject(EditorGroupSession);
+      const image = imagePass(store.project()!);
+      session.recordViewTransfer({ documentId: image.id, viewState: { scrollTop: 40 } });
+
+      const fixture = mountGroup();
+      fixture.detectChanges();
+      const editor = docsOf(fixture).editor;
+      expect(editor.adopted).toEqual([[image.id, { scrollTop: 40 }]]);
+      expect(session.viewTransfer(image.id)).toBeNull();
+
+      // Leaving this group, the document takes this editor's view state along.
+      editor.viewStates.set(image.id, { scrollTop: 7 });
+      session.captureViewTransfer(DEFAULT_EDITOR_GROUP_ID, image.id);
+      expect(session.viewTransfer(image.id)?.viewState).toEqual({ scrollTop: 7 });
+    });
+
+    it('offers the explorer only when asked to', () => {
+      const fixture = mountGroup();
+      fixture.componentRef.setInput('explorer', false);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('app-explorer-panel')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.explorer-resizer')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.explorer-reopen')).toBeNull();
     });
   });
 

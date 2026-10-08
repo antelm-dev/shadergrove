@@ -8,7 +8,12 @@ import {
   DEFAULT_EDITOR_GROUP_ID,
   LAYOUT_VERSION,
   WELL_KNOWN_SURFACE_IDS,
+  asEditorGroupId,
+  asSplitNodeId,
+  createDefaultSurface,
   editorSurfaceId,
+  splitEditorLeaf,
+  type EditorLayoutNode,
   isContainedPlacement,
   migrateLayoutFromPreferences,
 } from '@shadergrove/shared/surfaces';
@@ -270,6 +275,69 @@ describe('SurfaceLayoutService characterization', () => {
       expect(reloaded.surfaces).toEqual(saved.surfaces);
       expect(reloaded.zOrder).toEqual(saved.zOrder);
       expect(reloaded.editorLayout).toEqual({ kind: 'leaf', surfaceId: editorId });
+    });
+
+    const second = asEditorGroupId('editor-group:1');
+    const secondId = editorSurfaceId(second);
+
+    function splitRight(ratio = 0.5): EditorLayoutNode {
+      registry.upsert(
+        createDefaultSurface('editor', {
+          id: secondId,
+          chrome: { kind: 'editor', editorGroupId: second },
+        }),
+      );
+      const split = splitEditorLeaf(
+        registry.editorLayout(),
+        editorId,
+        secondId,
+        'horizontal',
+        asSplitNodeId('split:right'),
+      );
+      if (!split.ok) throw new Error(split.reason);
+      const tree = { ...(split.layout as Extract<EditorLayoutNode, { kind: 'split' }>), ratio };
+      registry.setEditorLayout(tree);
+      return tree;
+    }
+
+    it('persists a committed split tree and restores its geometry on reload', () => {
+      const tree = splitRight(0.65);
+      TestBed.tick();
+
+      const saved = preferences.value().surfacesLayout!;
+      expect(saved.editorLayout).toEqual(tree);
+
+      // A fresh workspace reading the same preferences gets the same split back.
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: Preferences, useValue: preferences }],
+      });
+      const reloaded = TestBed.inject(SurfaceRegistry);
+      TestBed.inject(SurfaceLayoutService).hydrateFromPreferences();
+      expect(reloaded.editorLayout()).toEqual(tree);
+      expect(reloaded.get(secondId)?.chrome).toEqual({ kind: 'editor', editorGroupId: second });
+    });
+
+    it('closing the default editor hides the whole split and keeps it', () => {
+      const tree = splitRight();
+      expect(layout.close(editorId)).toBe(true);
+
+      expect(layout.editorOpen()).toBe(false);
+      expect(registry.get(secondId)?.open).toBe(true);
+      expect(registry.editorLayout()).toEqual(tree);
+      expect(preferences.value().editorOpen).toBe(false);
+    });
+
+    it('puts the default editor back into a stored tree that lost it', () => {
+      preferences.patch({
+        surfacesLayout: {
+          ...preferences.value().surfacesLayout!,
+          editorLayout: { kind: 'leaf', surfaceId: secondId },
+        },
+      });
+      layout.hydrateFromPreferences();
+
+      expect(registry.editorLayout()).toEqual({ kind: 'leaf', surfaceId: editorId });
     });
   });
 });

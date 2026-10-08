@@ -106,7 +106,7 @@ export type TabState = 'idle' | 'compiling' | 'error' | 'ok';
         @for (targetGroup of groups.otherGroupIds(groupId()); track targetGroup) {
           <button mat-menu-item type="button" (click)="moveToGroup(doc, targetGroup)">
             <mat-icon>drive_file_move</mat-icon>
-            <span>{{ 'editor.moveToGroup' | translate: { id: targetGroup } }}</span>
+            <span>{{ 'editor.moveToGroup' | translate: { id: groupName(targetGroup) } }}</span>
           </button>
         }
         <button mat-menu-item type="button" disabled>
@@ -435,6 +435,10 @@ export class EditorTabs {
 
   protected moveToNewGroup(doc: EditorDocument): void {
     this.groups.moveToNewGroup(doc.id);
+  }
+
+  protected groupName(groupId: EditorGroupId): string {
+    return this.i18n.t('editor.groupLabel', { n: this.groups.groupNumber(groupId) });
   }
 
   protected moveToGroup(doc: EditorDocument, targetGroupId: EditorGroupId): void {
