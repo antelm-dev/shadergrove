@@ -1,0 +1,3 @@
+{
+  "description": "Pack channels from up to four images into one RGBA texture, turn a height map into a normal map, and check how a texture tiles — computed on your device, downloaded as PNG with a metadata sidecar or assigned to a channel you choose."
+}
