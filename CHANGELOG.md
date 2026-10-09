@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.2](https://github.com/antelm-dev/shadergrove/compare/v2.8.1...v2.8.2) (2026-10-09)
+
+
+### Bug Fixes
+
+* **studio:** keep the token on emailed auth links under SSR ([#227](https://github.com/antelm-dev/shadergrove/issues/227)) ([84e1297](https://github.com/antelm-dev/shadergrove/commit/84e12971be954d05d6860fdf06cac9f76a8a7358))
+
 ## [2.8.1](https://github.com/antelm-dev/shadergrove/compare/v2.8.0...v2.8.1) (2026-10-09)
 
 
