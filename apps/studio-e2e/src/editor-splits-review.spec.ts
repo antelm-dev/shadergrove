@@ -74,13 +74,19 @@ test('a splitter dragged past its end keeps the split and commits the clamped ra
 
   // Look for a frame width where the clamped end ratio does not multiply back
   // to the 220px minimum exactly (floating point); fall back to the last width.
+  // The frame tracks the viewport minus fixed chrome, so the width is found arithmetically
+  // and the viewport resized once: a resize per candidate re-lays out the whole studio and
+  // ran past the test timeout on CI.
   let frame = (await host(shell).boundingBox())!;
+  const chrome = 1600 - frame.width;
   for (let width = 1600; width < 1700; width += 1) {
-    await page.setViewportSize({ width, height: 1000 });
-    frame = (await host(shell).boundingBox())!;
-    const size = frame.width;
+    const size = width - chrome;
     const ratio = Math.min(0.8, 1 - 220 / size);
-    if (size * (1 - ratio) < 220) break;
+    if (size * (1 - ratio) < 220 || width === 1699) {
+      await page.setViewportSize({ width, height: 1000 });
+      frame = (await host(shell).boundingBox())!;
+      break;
+    }
   }
 
   await dragTo(page, bar, frame.x + frame.width + 40);
