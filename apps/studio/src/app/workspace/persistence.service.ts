@@ -99,6 +99,11 @@ export class PersistenceService {
     return this.api.update(id, { name });
   }
 
+  /** Copies a history entry into a new head, refused unless `expectedRevision` is still the head. */
+  restoreHistory(id: string, revision: number, expectedRevision: number): Promise<ShaderRecord> {
+    return this.api.restoreHistory(id, revision, expectedRevision);
+  }
+
   /** `removeRecord` deletes it another way (account sync); false when it deleted nothing. */
   async remove(id: string, removeRecord?: () => Promise<boolean>): Promise<boolean> {
     if (!removeRecord) await this.api.remove(id);

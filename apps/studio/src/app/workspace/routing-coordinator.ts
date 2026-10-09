@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { Injectable, afterNextRender, computed, effect, inject, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
@@ -23,6 +24,7 @@ const STANDALONE_PAGE = /^\/(?:desktop\/connect|explore|admin|plugins)(?:[/?#]|$
 @Injectable({ providedIn: 'root' })
 export class RoutingCoordinator {
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly store = inject(ShaderStore);
   private readonly workspace = inject(WorkspaceActions);
   private readonly i18n = inject(I18n);
@@ -89,7 +91,10 @@ export class RoutingCoordinator {
   }
 
   routeShaderId(): string | null {
-    const match = /^\/shaders\/([^/?#]+)\/?(?:[?#].*)?$/.exec(this.router.url);
+    // Startup reads this before the router's initial navigation has even begun, while
+    // `router.url` is still `/`: until then, the address the app was opened at is the route.
+    const url = this.router.navigated ? this.router.url : this.location.path();
+    const match = /^\/shaders\/([^/?#]+)\/?(?:[?#].*)?$/.exec(url);
     if (!match) return null;
     try {
       return decodeURIComponent(match[1]);

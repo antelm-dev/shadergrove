@@ -25,7 +25,8 @@ import {
 } from '@shadergrove/shared/surfaces';
 import type { ResizeEdge } from '@shadergrove/shared/geometry';
 import { EditorGroups } from './editor-groups';
-import { EditorPanel } from './editor-panel';
+import { EditorSplitHost } from './editor-split-host';
+import { I18n } from '../../i18n/i18n';
 import { ReducedMotion } from '../../prefs/reduced-motion';
 import {
   SurfaceGeometryGesture,
@@ -39,7 +40,7 @@ import {
 
 @Component({
   selector: 'app-editor-shell',
-  imports: [EditorPanel, SurfaceResizeHandles],
+  imports: [EditorSplitHost, SurfaceResizeHandles],
   template: `
     @if (projected().resizableDocked && projected().dockSide; as side) {
       <surface-resize-handles
@@ -55,8 +56,7 @@ import {
       />
     }
 
-    <app-editor-panel
-      #panel
+    <app-editor-split-host
       [groupId]="groupId()"
       [surfaceId]="editorId()"
       [collapsed]="mode() === 'minimized'"
@@ -187,7 +187,9 @@ export class EditorShell {
   private readonly reducedMotion = inject(ReducedMotion);
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
 
-  private readonly panel = viewChild.required(EditorPanel);
+  private readonly i18n = inject(I18n);
+  /** The panels: one, or one per group of the contained split. */
+  private readonly panel = viewChild.required(EditorSplitHost);
 
   /** The editor group this shell shows. Absent means the legacy lone editor (default group, store-driven). */
   readonly groupId = input<EditorGroupId | null>(null);
@@ -207,10 +209,11 @@ export class EditorShell {
   /** Unchanged for a lone group; numbered once several groups need telling apart. */
   protected readonly regionLabel = computed(() => {
     const groupId = this.groupId();
-    if (groupId === null) return 'Source editor';
     const ids = this.groups.groupIds();
-    const index = ids.indexOf(groupId);
-    return ids.length > 1 && index >= 0 ? `Source editor ${index + 1}` : 'Source editor';
+    const index = groupId === null ? -1 : ids.indexOf(groupId);
+    return ids.length > 1 && index >= 0
+      ? this.i18n.t('editor.groupLabel', { n: index + 1 })
+      : this.i18n.t('workspace.sourceEditor');
   });
 
   protected readonly projected = computed(() =>

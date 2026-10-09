@@ -20,6 +20,29 @@ export class EditorGroupSession {
     new Map(),
   );
 
+  /** Live view-state readers of the mounted panels, by the group each shows. */
+  private readonly viewSources = new Map<
+    EditorGroupId,
+    (documentId: string) => SessionEditorViewState | null
+  >();
+
+  /** A panel offers its editor's view state; the returned function withdraws it. */
+  registerViewSource(
+    groupId: EditorGroupId,
+    read: (documentId: string) => SessionEditorViewState | null,
+  ): () => void {
+    this.viewSources.set(groupId, read);
+    return () => {
+      if (this.viewSources.get(groupId) === read) this.viewSources.delete(groupId);
+    };
+  }
+
+  /** Record where a document was in the group it is leaving, for the group it moves to. */
+  captureViewTransfer(groupId: EditorGroupId, documentId: string): void {
+    const viewState = this.viewSources.get(groupId)?.(documentId) ?? null;
+    if (viewState) this.recordViewTransfer({ documentId, viewState });
+  }
+
   /** Last recorded view transfer for a document (Monaco metadata only). */
   viewTransfer(documentId: string): EditorDocumentViewTransfer | null {
     return this.pendingTransfers().get(documentId) ?? null;

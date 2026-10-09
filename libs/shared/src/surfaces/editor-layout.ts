@@ -171,7 +171,32 @@ export function sanitizeEditorLayout(
     root = root ? appendLeaf(root, surfaceId, usedIds) : createEditorLeaf(surfaceId);
   }
 
-  return root ?? createEditorLeaf(context.fallback);
+  if (!root) return createEditorLeaf(context.fallback);
+  // Appending can push a tree past what the parser accepts; a balanced rebuild
+  // keeps the next pass from truncating it again, so repair stays idempotent.
+  return editorLayoutDepth(root) > MAX_DEPTH ? balancedLayout(editorLeafIds(root)) : root;
+}
+
+function editorLayoutDepth(node: EditorLayoutNode): number {
+  return node.kind === 'leaf'
+    ? 0
+    : 1 + Math.max(editorLayoutDepth(node.first), editorLayoutDepth(node.second));
+}
+
+function balancedLayout(
+  leaves: readonly SurfaceId[],
+  usedIds = new Set<string>(),
+): EditorLayoutNode {
+  if (leaves.length === 1) return createEditorLeaf(leaves[0]!);
+  const middle = Math.ceil(leaves.length / 2);
+  return {
+    kind: 'split',
+    id: claimSplitId('', usedIds),
+    axis: 'horizontal',
+    ratio: DEFAULT_SPLIT_RATIO,
+    first: balancedLayout(leaves.slice(0, middle), usedIds),
+    second: balancedLayout(leaves.slice(middle), usedIds),
+  };
 }
 
 // ---------------------------------------------------------------------------
