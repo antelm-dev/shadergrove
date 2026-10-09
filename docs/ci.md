@@ -29,6 +29,16 @@ dependencies, typechecks the website and brand, runs brand tests and builds the
 static export and its Docker image. It also runs the release pages browser smoke
 against the static export before deployment.
 
+E2E runs as three Playwright shards (`E2E (1/3)` to `E2E (3/3)`, `pnpm e2e
+--shard=N/3`), each on its own runner with its own server, throwaway SQLite store
+and signed-up test account, and a 35-minute limit. Playwright splits the specs by
+test count in file order, so shards differ in length: about 16, 12 and 9 minutes
+including setup. A shard that fails uploads its report and test results as
+`playwright-report-shard-N-ATTEMPT`. The `E2E` job only gathers them: it fails
+unless every shard passed and is skipped with them, so the check name that
+deployment and readers depend on is unchanged. Run one shard locally with
+`pnpm e2e --shard=1/3`; a spec must not rely on another spec's data.
+
 On `develop`, `deploy-staging` waits for common checks plus studio validation,
 browser smoke, E2E and the studio image. `deploy-website` waits for common checks
 plus website validation and its image. Neither deployment waits for the other

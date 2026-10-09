@@ -104,7 +104,7 @@ async function openHistory(page: Page, label = 'History…'): Promise<void> {
 }
 
 async function type(page: Page, text: string): Promise<void> {
-  await page.locator('app-editor-shell .monaco-editor .view-lines').click();
+  await page.locator('app-editor-shell .monaco-editor').click();
   await page.keyboard.press('Control+End');
   await page.keyboard.type(text);
 }

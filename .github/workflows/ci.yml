@@ -203,14 +203,20 @@ jobs:
       - name: Smoke
         run: pnpm smoke
 
-  e2e:
-    name: E2E
+  e2e-shard:
+    name: E2E (${{ matrix.shard }}/3)
     needs: changes
     if: needs.changes.outputs.studio == 'true'
     runs-on: ubuntu-latest
-    # One worker runs every spec in turn: ~13 min before the GPU observation specs, ~16 slow
-    # Chromium tests more with them.
+    # Every spec in turn on one worker took ~27 min, so the specs are split across three
+    # runners. Each shard starts its own server and throwaway SQLite store (the
+    # webServer in playwright.config.ts) and signs up its own account (auth.setup.ts).
     timeout-minutes: 35
+    strategy:
+      # Let every shard finish, so a failure in one still reports the others.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -228,17 +234,32 @@ jobs:
       - name: Install Chromium
         run: pnpm --filter @shadergrove/studio-e2e exec playwright install chromium --with-deps
       - name: E2E
-        run: pnpm e2e
+        run: pnpm e2e --shard=${{ matrix.shard }}/3
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-report-${{ github.run_attempt }}
+          name: playwright-report-shard-${{ matrix.shard }}-${{ github.run_attempt }}
           path: |
             apps/studio-e2e/playwright-report/
             apps/studio-e2e/test-results/
           if-no-files-found: ignore
           retention-days: 14
+
+  # The one `E2E` check that deploy-staging and readers of the check list rely on.
+  e2e:
+    name: E2E
+    needs: [changes, e2e-shard]
+    if: ${{ !cancelled() && needs.changes.outputs.studio == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every shard to pass
+        env:
+          SHARDS: ${{ needs.e2e-shard.result }}
+        run: |
+          echo "E2E shards: $SHARDS"
+          test "$SHARDS" = success
 
   dependency-review:
     name: Dependency review
