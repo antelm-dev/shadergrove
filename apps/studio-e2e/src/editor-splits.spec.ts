@@ -57,7 +57,11 @@ async function tabIds(group: Locator): Promise<string[]> {
 }
 
 async function typeInto(page: Page, group: Locator, text: string): Promise<void> {
-  await group.locator('.monaco-editor .view-lines').click();
+  // Click the editor, never its full-document-height `.view-lines`: a retried click
+  // scrolls that into view natively, and a mousedown that lands before Monaco absorbs
+  // the scroll is not taken as text, so it blurs the editor and the keys hit shortcuts.
+  await group.locator('.monaco-editor').click();
+  await expect(group.locator('.monaco-editor')).toHaveClass(/\bfocused\b/);
   await page.keyboard.press('Control+End');
   await page.keyboard.type(text);
   await expect(group.locator('.monaco-editor .view-lines')).toContainText(text.trim());
