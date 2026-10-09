@@ -292,14 +292,16 @@ const ADJUSTMENT_LABEL = { contrast: 'adjustContrast', shift: 'adjustShift' } as
           </label>
           <label>
             {{ k('position') | translate }}
+            <!-- Committed when left or confirmed, not per keystroke: a stop re-sorts by position. -->
             <input
+              #position
               type="number"
               min="0"
               max="1"
               step="0.01"
               [attr.data-testid]="'palette-stop-position-' + i"
-              [ngModel]="stop.position"
-              (ngModelChange)="stops.set(setStopPosition(stops(), i, +$event))"
+              [value]="stop.position"
+              (change)="commitPosition(i, position)"
             />
           </label>
           <button
@@ -473,7 +475,6 @@ export class PalettePanel {
   protected readonly adjustmentLabel = ADJUSTMENT_LABEL;
   protected readonly evenStops = evenStops;
   protected readonly setStopColor = setStopColor;
-  protected readonly setStopPosition = setStopPosition;
   protected readonly moveStop = moveStop;
   protected readonly removeStop = removeStop;
   protected readonly addStop = addStop;
@@ -664,6 +665,8 @@ export class PalettePanel {
   }
 
   protected setThreshold(value: unknown): void {
+    // An emptied or partly typed number field reports `null`, which is not 0.
+    if (value === null || value === '') return;
     const number = Math.round(Number(value));
     if (Number.isFinite(number)) {
       this.threshold.set(Math.min(ALPHA_THRESHOLD.max, Math.max(ALPHA_THRESHOLD.min, number)));
@@ -704,8 +707,20 @@ export class PalettePanel {
   }
 
   protected setStrength(value: unknown): void {
+    if (value === null || value === '') return;
     const number = Number(value);
     if (Number.isFinite(number)) this.strength.set(Math.min(1, Math.max(0, number)));
+  }
+
+  /**
+   * Commits a typed stop position. An empty or partial value keeps the stop
+   * where it is; either way the field then shows the position of the stop now
+   * at its row (the rows follow position order).
+   */
+  protected commitPosition(index: number, input: HTMLInputElement): void {
+    const position = input.valueAsNumber;
+    if (Number.isFinite(position)) this.stops.set(setStopPosition(this.stops(), index, position));
+    input.value = String(this.stops()[index]?.position ?? '');
   }
 
   protected toggleAdjustment(adjustment: PaletteAdjustment, on: boolean): void {

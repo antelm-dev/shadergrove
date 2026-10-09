@@ -622,4 +622,44 @@ describe('palette studio lifecycle', () => {
     expect(element.querySelector('app-palette-panel')).toBeNull();
     fixture.destroy();
   });
+  it('commits a typed stop position when the field is left, never a partial value per keystroke', async () => {
+    const { installations } = setup();
+    await install(installations);
+    const fixture = TestBed.createComponent(PluginToolsOutlet);
+    fixture.componentRef.setInput('packageId', ID);
+    await fixture.whenStable();
+    const element: HTMLElement = fixture.nativeElement;
+    element.querySelector<HTMLButtonElement>('[data-testid="palette-add-stop"]')!.click();
+    await fixture.whenStable();
+    const field = (i: number) =>
+      element.querySelector<HTMLInputElement>(`[data-testid="palette-stop-position-${i}"]`)!;
+    const colors = () =>
+      [0, 1, 2].map(
+        (i) =>
+          element.querySelector<HTMLInputElement>(`[data-testid="palette-stop-color-${i}"]`)!.value,
+      );
+    expect([0, 1, 2].map((i) => field(i).value)).toEqual(['0', '0.5', '1']);
+    expect(colors()).toEqual(['#000000', '#000000', '#ffffff']);
+
+    // Typing "0.25" into the last stop: the keystrokes on their own move nothing.
+    for (const partial of ['', '0', '0.', '0.2', '0.25']) {
+      field(2).value = partial;
+      field(2).dispatchEvent(new Event('input'));
+      await fixture.whenStable();
+      expect(colors()).toEqual(['#000000', '#000000', '#ffffff']);
+    }
+    // Leaving the field commits it: the white stop moves into position order.
+    field(2).dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    expect([0, 1, 2].map((i) => field(i).value)).toEqual(['0', '0.25', '0.5']);
+    expect(colors()).toEqual(['#000000', '#ffffff', '#000000']);
+
+    // An emptied field is refused and shows the stop's position again.
+    field(1).value = '';
+    field(1).dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    expect(field(1).value).toBe('0.25');
+    expect(colors()).toEqual(['#000000', '#ffffff', '#000000']);
+    fixture.destroy();
+  });
 });
