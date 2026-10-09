@@ -111,6 +111,12 @@ if (!url) {
       await sidePool.query('DELETE FROM shaders WHERE owner_user_id = $1', [id]);
       await sidePool.query('DELETE FROM users WHERE id = $1', [id]);
     },
+    stamp: async (id, publishedAt, updatedAt) => {
+      await sidePool.query(
+        'UPDATE publications SET published_at = $1, updated_at = $2 WHERE id = $3',
+        [publishedAt, updatedAt, id],
+      );
+    },
   }));
 
   describe('first-publication index migration (postgres)', () => {

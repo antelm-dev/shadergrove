@@ -49,6 +49,14 @@ function sqliteHarness(): PublicationHarness & { file: string; exec(sql: string)
         db.prepare('DELETE FROM shaders WHERE owner_user_id = ?').run(id);
         db.prepare('DELETE FROM users WHERE id = ?').run(id);
       }),
+    stamp: async (id, publishedAt, updatedAt) =>
+      side((db) => {
+        db.prepare('UPDATE publications SET published_at = ?, updated_at = ? WHERE id = ?').run(
+          publishedAt,
+          updatedAt,
+          id,
+        );
+      }),
   };
 }
 
