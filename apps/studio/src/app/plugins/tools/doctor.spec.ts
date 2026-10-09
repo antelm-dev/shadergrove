@@ -339,7 +339,9 @@ describe('doctorSlotStates', () => {
     slots: unknown[] = [{}, {}, {}, {}],
   ): ShaderEngine {
     return {
-      textures: { placeholder, slots, slotState: (slot: number) => states[slot] },
+      // As the engine's TextureManager: a slot it holds nothing for is `empty`.
+      textureSlotState: (slot: number) => (slots[slot] == null ? 'empty' : states[slot]),
+      isPlaceholderTexture: (texture: unknown) => texture === placeholder,
       passChannelTexture: (_pass: string, index: number) => bound[index] ?? null,
     } as unknown as ShaderEngine;
   }
@@ -575,7 +577,8 @@ describe('Shader Doctor panel', () => {
     // … until the preview has the image decoded: the load changes what the report means.
     const image = imagePass(draft().project).id;
     engine.set({
-      textures: { placeholder: {}, slots: [{}], slotState: () => 'ready' },
+      textureSlotState: () => 'ready',
+      isPlaceholderTexture: () => false,
       passChannelTexture: (pass: string, index: number) =>
         pass === image && index === 1 ? { image: { width: 8 } } : null,
     } as unknown as ShaderEngine);

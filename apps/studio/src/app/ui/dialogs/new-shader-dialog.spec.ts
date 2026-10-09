@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18n } from '../../i18n/i18n';
 import { provideTestLanguages } from '../../i18n/testing/languages';
 import { PluginCommands, type PluginCommand } from '../../plugins/plugin-commands';
+import { ProjectRecipes } from '../../plugins/tools/recipes';
 import { Preferences } from '../../prefs/preferences';
 import { NewShaderDialog } from './new-shader-dialog';
 
@@ -25,6 +26,7 @@ describe('NewShaderDialog', () => {
         { provide: Preferences, useValue: { value: signal({ language: 'en' }).asReadonly() } },
         { provide: MatDialogRef, useValue: { close } },
         { provide: PluginCommands, useValue: { imports } },
+        { provide: ProjectRecipes, useValue: { commands: signal([]) } },
       ],
     });
   });

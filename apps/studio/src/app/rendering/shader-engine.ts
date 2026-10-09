@@ -533,6 +533,16 @@ export class ShaderEngine {
     return pass ? this.binder.textureOf(pass.uniforms, channel) : null;
   }
 
+  /** What is behind an image slot: nothing assigned, still decoding, failed, or usable. */
+  textureSlotState(slot: number): 'empty' | 'loading' | 'failed' | 'ready' {
+    return this.textures.slotState(slot);
+  }
+
+  /** Whether `texture` is the transparent stand-in a channel samples while it has no image. */
+  isPlaceholderTexture(texture: unknown): boolean {
+    return texture === this.textures.placeholder;
+  }
+
   /** The texture holding a buffer's most recently finished frame. */
   bufferTexture(passId: string): THREE.Texture | null {
     return this.targets.front(passId);

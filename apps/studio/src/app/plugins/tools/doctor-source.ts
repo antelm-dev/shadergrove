@@ -21,12 +21,6 @@ import type { ShaderStore } from '../../workspace/shader-store';
 import type { ToolSource } from '../plugin-tools';
 
 /** The decode bookkeeping the engine keeps for its four image slots (`TextureManager`). */
-interface ObservedSlots {
-  readonly placeholder: unknown;
-  readonly slots: readonly unknown[];
-  slotState(index: number): 'empty' | 'loading' | 'failed' | 'ready';
-}
-
 const decoded = (texture: unknown): boolean => {
   const image = (texture as { image?: { width?: unknown } } | null)?.image;
   return typeof image?.width === 'number' && image.width > 0;
@@ -42,14 +36,11 @@ export function doctorSlotStates(
   project: ShaderProject | null,
   engine: ShaderEngine | null,
 ): ResourceState[] {
-  // ponytail: the engine keeps its TextureManager private and exposes no per-slot state;
-  // this reads it structurally and falls back to `unknown`. Upgrade: a public
-  // `ShaderEngine.textureSlotState(slot)` (see the coordinator fragments).
-  const textures = (engine as unknown as { textures?: ObservedSlots } | null)?.textures;
   return channels.map((channel, slot): ResourceState => {
     if (channel.ext === null) return 'empty';
-    if (!engine || !textures || textures.slots[slot] == null) return 'unknown';
-    const state = textures.slotState(slot);
+    if (!engine) return 'unknown';
+    // `empty` here: the preview has not taken the slot's assignment up yet.
+    const state = engine.textureSlotState(slot);
     if (state === 'loading' || state === 'failed') return state;
     if (state !== 'ready') return 'unknown';
     // `ready` also covers a slot no pass has resolved yet: only a decoded image
@@ -58,7 +49,7 @@ export function doctorSlotStates(
       pass.channels.some((binding, index) => {
         if (binding.kind !== 'texture' || binding.slot !== slot) return false;
         const texture = engine.passChannelTexture(pass.id, index);
-        return texture !== textures.placeholder && decoded(texture);
+        return !engine.isPlaceholderTexture(texture) && decoded(texture);
       }),
     );
     return seen ? 'loaded' : 'unknown';

@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormField, form, maxLength, requiredError, validate } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -9,6 +9,7 @@ import { MatInputModule } from '@angular/material/input';
 import { LIMITS } from '@shadergrove/shared/validate';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 import { PluginCommands } from '../../plugins/plugin-commands';
+import { ProjectRecipes } from '../../plugins/tools/recipes';
 import type { MenuCommand } from '../menu-commands';
 
 /** A name to create, or the plugin importer to start instead. */
@@ -68,7 +69,10 @@ interface NewShaderModel {
 export class NewShaderDialog {
   private readonly dialogRef =
     inject<MatDialogRef<NewShaderDialog, NewShaderDialogResult>>(MatDialogRef);
-  protected readonly imports = inject(PluginCommands).imports;
+  private readonly pluginImports = inject(PluginCommands).imports;
+  private readonly recipeCommands = inject(ProjectRecipes).commands;
+  /** The active plugins' importers, then "New from a recipe…" while any recipe is active. */
+  protected readonly imports = computed(() => [...this.pluginImports(), ...this.recipeCommands()]);
 
   protected readonly model = signal<NewShaderModel>({ name: '' });
   protected readonly form = form(this.model, (path) => {

@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
-  Injectable,
   computed,
   effect,
   inject,
@@ -28,12 +27,7 @@ import { TranslatePipe } from '../../i18n/translate.pipe';
 import { RendererHandle } from '../../rendering/renderer-handle';
 import { ShaderStore } from '../../workspace/shader-store';
 import { EffectAdoption, adoptionMessage } from '../effect-adoption';
-import {
-  PluginTools,
-  type AssetToolAdapter,
-  type ToolSession,
-  type ToolSource,
-} from '../plugin-tools';
+import { PluginTools, type ToolSession, type ToolSource } from '../plugin-tools';
 import {
   ALPHA_THRESHOLD,
   DEFAULT_PALETTE,
@@ -55,7 +49,6 @@ import {
   removeStop,
   setStopColor,
   setStopPosition,
-  validatePaletteSettings,
   visiblePixels,
   type PaletteAdjustment,
 } from './palette';
@@ -776,19 +769,5 @@ export class PalettePanel {
 
   private say(text: string, error: boolean): void {
     this.notice.set({ text, error });
-  }
-}
-
-/** Registers the panel for every `palette-studio/v1` tool (`provideToolAdapters`). */
-@Injectable()
-export class PaletteStudioAdapter implements AssetToolAdapter {
-  readonly kind = 'assetTool' as const;
-  readonly workflow = 'palette-studio/v1' as const;
-  readonly command = { label: paletteKey('command'), icon: 'palette' };
-  readonly panel = PalettePanel;
-  readonly needsProject = false;
-
-  validateSettings(operation: string, settings: unknown) {
-    return validatePaletteSettings(operation, settings);
   }
 }

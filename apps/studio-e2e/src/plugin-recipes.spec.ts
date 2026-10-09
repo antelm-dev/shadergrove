@@ -23,13 +23,6 @@ const generated = resolve(studio, 'src/plugins');
 const packFile = readdirSync(generated).find((file) => file.startsWith(`${PACK}-`))!;
 const packText = readFileSync(resolve(generated, packFile), 'utf8');
 
-// ponytail: the app's entry points to recipes (New shader dialog, Installed card) are
-// coordinator wiring (02-coordinator-fragments.md). Until it is integrated those tests
-// cannot run; the coordinator deletes this guard when it applies the wiring.
-const wired = readFileSync(resolve(studio, 'src/app/plugins/plugins-page.ts'), 'utf8').includes(
-  'app-recipe-card',
-);
-
 /** Creating writes to the library, which an unverified account may not do (see plugins.spec.ts). */
 test.beforeAll(() => {
   const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -195,7 +188,6 @@ test('Project Recipes: installed off from its file, switched on and off, malform
 test('Project Recipes: previews every recipe, creates independent feedback shaders and keeps them after removal', async ({
   page,
 }) => {
-  test.skip(!wired, 'needs the coordinator wiring in 02-coordinator-fragments.md');
   await openStudio(page, true);
   await openPlugins(page);
   await installPack(page);
@@ -292,7 +284,6 @@ test('Project Recipes: previews every recipe, creates independent feedback shade
 test('Project Recipes: an unsaved draft is kept when the question is declined, and replaced only when discarded', async ({
   page,
 }) => {
-  test.skip(!wired, 'needs the coordinator wiring in 02-coordinator-fragments.md');
   await openStudio(page);
   await openPlugins(page);
   await installPack(page);

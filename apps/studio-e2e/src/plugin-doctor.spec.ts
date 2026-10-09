@@ -148,7 +148,7 @@ test('Shader Doctor: a versioned report from the sandboxed Worker, per target, k
   await page.locator('app-shader-browser .shader-row', { hasText: name }).click();
   await expect(page).toHaveURL(`/shaders/${encodeURIComponent(shader.id)}`);
   await expect.poll(() => engineCall(page, 'engine?.activePasses.length ?? 0')).toBe(2);
-  await expect.poll(() => engineCall(page, "engine['textures'].slotState(0)")).toBe('failed');
+  await expect.poll(() => engineCall(page, 'engine.textureSlotState(0)')).toBe('failed');
   // The editor shows Buffer A, so going to a finding's pass is visible.
   await page.getByRole('treeitem', { name: 'Buffer A' }).click();
   await expect(page.getByRole('tab', { name: 'Buffer A', exact: true })).toHaveAttribute(

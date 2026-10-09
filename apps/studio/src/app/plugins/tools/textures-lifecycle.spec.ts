@@ -28,7 +28,7 @@ import {
   encodePng,
   fromToolImage,
 } from './textures-image-bridge';
-import { TextureUtilitiesAdapter, TexturesPanel } from './textures-panel';
+import { TextureUtilitiesAdapter, TexturesTool } from './textures-adapter';
 
 /**
  * AC-LIFECYCLE for Texture Utilities: the official package behind the real
@@ -164,7 +164,7 @@ describe('texture utilities lifecycle', () => {
     expect(tool?.adapter).toMatchObject({
       kind: 'assetTool',
       workflow: 'texture-utilities/v1',
-      panel: TexturesPanel,
+      panel: TexturesTool,
       needsProject: false,
       command: { label: 'textures.command', icon: 'texture' },
     });

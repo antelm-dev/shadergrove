@@ -24,6 +24,7 @@ import { AppThemes } from '../../themes/app-themes';
 import { ShaderStore } from '../../workspace/shader-store';
 import { DocumentStatus } from '../editor/document-status';
 import { PluginCommands, type PluginCommand } from '../../plugins/plugin-commands';
+import { ProjectRecipes } from '../../plugins/tools/recipes';
 import { MenuCommands, type MenuCommand } from '../menu-commands';
 import { WorkspaceActions } from '../workspace-actions';
 import { AppTitlebar } from './app-titlebar';
@@ -156,6 +157,7 @@ describe('AppTitlebar Help and View menus', () => {
           provide: PluginCommands,
           useValue: { imports: pluginImports, exports: pluginExports },
         },
+        { provide: ProjectRecipes, useValue: { commands: signal([]) } },
         {
           provide: MenuCommands,
           useValue: {

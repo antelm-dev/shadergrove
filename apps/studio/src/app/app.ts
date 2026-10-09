@@ -55,6 +55,7 @@ import { TransportBar } from './ui/layout/transport-bar';
 import { StartupCoordinator } from './workspace/startup-coordinator';
 import { WorkspaceActions } from './ui/workspace-actions';
 import { PluginCommands } from './plugins/plugin-commands';
+import { ProjectRecipes } from './plugins/tools/recipes';
 import { FALLBACK_LANGUAGE_ID } from '@shadergrove/shared/plugin';
 import { I18n } from './i18n/i18n';
 import { TranslatePipe } from './i18n/translate.pipe';
@@ -103,6 +104,9 @@ export class App {
   protected readonly themes = inject(AppThemes);
   protected readonly workspace = inject(WorkspaceActions);
   private readonly pluginCommands = inject(PluginCommands);
+  private readonly recipes = inject(ProjectRecipes);
+  /** The active packages' tools (Shader Doctor, Texture Utilities…): each opens its panel in Plugins. */
+  protected readonly toolCommands = this.pluginCommands.toolCommands;
   protected readonly desktop = inject(DesktopPlatform);
   protected readonly status = inject(DocumentStatus);
   protected readonly commands = inject(MenuCommands);
@@ -307,6 +311,7 @@ export class App {
     this.commands.import('rename', 'action.importShader'),
     this.commands.import('overwrite', 'action.importReplace'),
     ...this.pluginCommands.imports(),
+    ...this.recipes.commands(),
     this.commands.exportShader,
     ...this.pluginCommands.exports(),
     this.commands.exportAll,
@@ -368,6 +373,7 @@ export class App {
           commands: [...this.shaderCommands, this.deleteShader, ...this.pluginCommands.effects()],
         },
         { label: this.i18n.t('menu.importExport'), commands: this.importExportCommands() },
+        { label: this.i18n.t('plugins.title'), commands: this.toolCommands() },
         {
           label: this.i18n.t('menu.settings'),
           commands: [

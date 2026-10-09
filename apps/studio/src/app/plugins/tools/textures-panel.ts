@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
-  Injectable,
   computed,
   effect,
   inject,
@@ -19,13 +18,7 @@ import type { ChannelIndex } from '@shadergrove/shared/project';
 import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 import { ShaderStore } from '../../workspace/shader-store';
-import {
-  PluginTools,
-  type AssetToolAdapter,
-  type ToolDelivery,
-  type ToolSession,
-  type ToolSource,
-} from '../plugin-tools';
+import { PluginTools, type ToolDelivery, type ToolSession, type ToolSource } from '../plugin-tools';
 import {
   CHANNEL_NAMES,
   NORMAL_STRENGTH,
@@ -35,7 +28,6 @@ import {
   edgeDifferences,
   textureKey,
   textureSidecarDetails,
-  validateTextureSettings,
   type ChannelName,
   type ChannelSource,
   type NormalSettings,
@@ -812,18 +804,4 @@ export class TexturesPanel {
 function imageOf(value: unknown) {
   const output = value as AssetToolOutput | undefined;
   return output?.kind === 'image' ? (output.images[0] ?? null) : null;
-}
-
-/** Registers the panel for every `texture-utilities/v1` tool (`provideToolAdapters`). */
-@Injectable()
-export class TextureUtilitiesAdapter implements AssetToolAdapter {
-  readonly kind = 'assetTool' as const;
-  readonly workflow = 'texture-utilities/v1' as const;
-  readonly command = { label: textureKey('command'), icon: 'texture' };
-  readonly panel = TexturesPanel;
-  readonly needsProject = false;
-
-  validateSettings(operation: string, settings: unknown) {
-    return validateTextureSettings(operation, settings);
-  }
 }

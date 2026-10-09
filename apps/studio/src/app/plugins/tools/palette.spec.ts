@@ -47,7 +47,7 @@ import {
   validatePaletteSettings,
   visiblePixels,
 } from './palette';
-import { PalettePanel, PaletteStudioAdapter } from './palette-panel';
+import { PaletteStudioAdapter, PaletteTool } from './palette-adapter';
 import { alphaPlane, fixturePlane, solidPlane } from './textures-fixtures';
 
 /**
@@ -534,7 +534,7 @@ describe('palette studio lifecycle', () => {
     expect(tool?.adapter).toMatchObject({
       kind: 'assetTool',
       workflow: 'palette-studio/v1',
-      panel: PalettePanel,
+      panel: PaletteTool,
       needsProject: false,
       command: { label: 'palette.command', icon: 'palette' },
     });

@@ -220,7 +220,7 @@ test('Palette Studio: alpha-aware extraction, gradient editing, JSON round-trip,
     ),
   );
   await expect(panel.getByTestId('palette-status')).toHaveClass(/error/);
-  await expect(panel.getByTestId('palette-status')).toContainText('noVisible');
+  await expect(panel.getByTestId('palette-status')).toContainText('No pixel is opaque enough');
   expect(await swatches(panel)).toHaveLength(6);
 
   // A palette file in, its stops reordered, and the edited palette out again.
@@ -262,7 +262,7 @@ test('Palette Studio: alpha-aware extraction, gradient editing, JSON round-trip,
   });
 
   // The effect preview: compiled by the renderer, CPU samples drawn, nothing added to the draft.
-  await expect(panel.getByTestId('palette-compile')).toContainText('compiles');
+  await expect(panel.getByTestId('palette-compile')).toContainText('The effect compiles');
   const cpu = await samples(panel);
   expect(cpu).toHaveLength(33);
   expect(cpu[0]).toEqual([0, 0, 0]);
@@ -295,7 +295,7 @@ test('Palette Studio: alpha-aware extraction, gradient editing, JSON round-trip,
     buffer: Buffer.from(exported.text),
   });
   expect(await stopColours(panel)).toEqual(['#000000', '#ff0000']);
-  await expect(panel.getByTestId('palette-compile')).toContainText('compiles');
+  await expect(panel.getByTestId('palette-compile')).toContainText('The effect compiles');
   await panel.getByTestId('palette-apply').click();
   await expect(panel.getByTestId('palette-notice')).toHaveAttribute('role', 'status');
   await backToEditor(page);

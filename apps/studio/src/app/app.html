@@ -397,6 +397,24 @@
 
     <mat-divider />
 
+    <!-- The active packages' tools, only while there is one. -->
+    @if (toolCommands().length > 0) {
+    <h3 class="menu-section">{{ 'plugins.title' | translate }}</h3>
+    @for (item of toolCommands(); track item.id) {
+    <button
+      mat-menu-item
+      type="button"
+      [disabled]="item.disabled?.() ?? false"
+      (click)="item.action()"
+    >
+      <mat-icon>{{ item.icon() }}</mat-icon>
+      <span>{{ item.label() }}</span>
+    </button>
+    }
+
+    <mat-divider />
+    }
+
     <h3 class="menu-section">{{ 'menu.settings' | translate }}</h3>
     <button mat-menu-item type="button" [matMenuTriggerFor]="themeMenu.menu()">
       <mat-icon>{{ themes.icon() }}</mat-icon>

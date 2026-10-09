@@ -1,8 +1,23 @@
-import { Injectable } from '@angular/core';
+import { Component, Injectable, input } from '@angular/core';
 
-import type { TranslationKey } from '../../i18n/keys';
-import type { AnalyzerToolAdapter } from '../plugin-tools';
+import type { AnalyzerToolAdapter, ToolSession } from '../plugin-tools';
 import { DoctorPanel } from './doctor-panel';
+
+/**
+ * `DoctorPanel`, fetched when an Installed card first shows it: the adapter is
+ * registered at startup (menus and palette list the tool), the panel's code is
+ * not part of the app's first download.
+ */
+@Component({
+  selector: 'app-doctor-tool',
+  imports: [DoctorPanel],
+  template: `@defer (on immediate) {
+    <app-doctor-panel [session]="session()" />
+  }`,
+})
+export class DoctorTool {
+  readonly session = input.required<ToolSession>();
+}
 
 /**
  * The host adapter that draws every active `analyzer` contribution — Shader
@@ -13,7 +28,7 @@ import { DoctorPanel } from './doctor-panel';
 @Injectable()
 export class ShaderDoctorAdapter implements AnalyzerToolAdapter {
   readonly kind = 'analyzer';
-  readonly command = { label: 'doctor.command' as TranslationKey, icon: 'health_and_safety' };
-  readonly panel = DoctorPanel;
+  readonly command = { label: 'doctor.command', icon: 'health_and_safety' } as const;
+  readonly panel = DoctorTool;
   readonly needsProject = true;
 }
