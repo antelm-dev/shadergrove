@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.1](https://github.com/antelm-dev/shadergrove/compare/v2.8.0...v2.8.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **studio:** never raise the sign-in prompt during server rendering ([#225](https://github.com/antelm-dev/shadergrove/issues/225)) ([9d470e8](https://github.com/antelm-dev/shadergrove/commit/9d470e854b9d50522f3a635910ffe4663c82cc8a))
+
 ## [2.8.0](https://github.com/antelm-dev/shadergrove/compare/v2.7.1...v2.8.0) (2026-10-09)
 
 
