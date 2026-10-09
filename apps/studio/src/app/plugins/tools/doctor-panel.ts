@@ -29,30 +29,8 @@ import { ShaderStore } from '../../workspace/shader-store';
 import { PluginTools, type ToolSession } from '../plugin-tools';
 import { doctorSlotStates, doctorSnapshot, doctorSource } from './doctor-source';
 
-/** The host text this panel shows; the dictionaries gain them with the coordinator's i18n fragment. */
-export type DoctorKey =
-  | 'doctor.command'
-  | 'doctor.target'
-  | 'doctor.run'
-  | 'doctor.cancel'
-  | 'doctor.running'
-  | 'doctor.noShader'
-  | 'doctor.stale'
-  | 'doctor.summary'
-  | 'doctor.coverage'
-  | 'doctor.noFindings'
-  | 'doctor.show'
-  | 'doctor.profileStudio'
-  | 'doctor.profileWallpaper'
-  | 'doctor.severityError'
-  | 'doctor.severityWarning'
-  | 'doctor.severityInfo'
-  | 'doctor.coverageChecked'
-  | 'doctor.coverageStructural'
-  | 'doctor.coverageUnchecked'
-  | 'doctor.confidenceCertain'
-  | 'doctor.confidenceLikely'
-  | 'doctor.confidencePossible';
+/** The host text this panel shows. */
+export type DoctorKey = Extract<TranslationKey, `doctor.${string}`>;
 
 const PROFILE_KEYS: Record<CapabilityProfileId, DoctorKey> = {
   'studio-webgl2/v1': 'doctor.profileStudio',
@@ -300,7 +278,7 @@ export class DoctorPanel {
   }
 
   protected t(key: DoctorKey, params?: TranslationParams): string {
-    return this.i18n.t(key as TranslationKey, params);
+    return this.i18n.t(key, params);
   }
 
   protected profileName(id: CapabilityProfileId): string {

@@ -1049,13 +1049,12 @@ export class PluginsPage {
         return this.i18n.t('plugins.kindProjectExporter');
       case 'language':
         return this.i18n.t('plugins.kindLanguage');
-      // Host text until the coordinator adds translation keys for the protocol-4 kinds.
       case 'analyzer':
-        return 'Analyzer';
+        return this.i18n.t('plugins.kindAnalyzer');
       case 'assetTool':
-        return 'Asset tool';
+        return this.i18n.t('plugins.kindAssetTool');
       case 'projectTemplate':
-        return 'Project template';
+        return this.i18n.t('plugins.kindProjectTemplate');
       default:
         return this.i18n.t('plugins.kindTheme');
     }

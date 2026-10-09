@@ -42,30 +42,7 @@ import { PluginTools, type ActiveTemplate } from '../plugin-tools';
 
 const GALLERY_DIALOG_ID = 'recipe-gallery';
 
-/**
- * The English of the `recipes.*` keys. ponytail: the shared dictionaries are the
- * coordinator's; until they carry these keys (02-coordinator-fragments.md) this
- * is what they read. Delete it and call `i18n.t` once they do.
- */
-const RECIPE_TEXT = {
-  'recipes.command': 'New from a recipe…',
-  'recipes.title': 'New from a recipe',
-  'recipes.intro':
-    'A recipe creates a new shader of your own. Its passes, files and controls are copied, and stay yours whatever happens to the recipe pack.',
-  'recipes.empty': 'No recipe is available. Switch a recipe pack on under Plugins.',
-  'recipes.beginner': 'Beginner',
-  'recipes.intermediate': 'Intermediate',
-  'recipes.advanced': 'Advanced',
-  'recipes.source': 'From {package} · by {author} · {license}',
-  'recipes.controls': 'Controls: {list}',
-  'recipes.preview': 'Preview',
-  'recipes.stopPreview': 'Stop preview',
-  'recipes.created': 'Created “{name}” from a recipe.',
-  'recipes.cancelled': 'Nothing was created.',
-  'recipes.failed': 'The shader could not be created.',
-} as const;
-
-export type RecipeTextKey = keyof typeof RECIPE_TEXT;
+export type RecipeTextKey = Extract<TranslationKey, `recipes.${string}`>;
 
 export type RecipeOutcome =
   | { status: 'created'; name: string }
@@ -211,10 +188,6 @@ export class ProjectRecipes {
 
   /** A `recipes.*` message in the language worn. */
   text(key: RecipeTextKey, params: TranslationParams = {}): string {
-    const translated = this.i18n.t(key as string as TranslationKey, params);
-    if (translated !== key) return translated;
-    return RECIPE_TEXT[key].replace(/\{(\w+)\}/g, (placeholder, field: string) =>
-      Object.hasOwn(params, field) ? String(params[field]) : placeholder,
-    );
+    return this.i18n.t(key, params);
   }
 }
