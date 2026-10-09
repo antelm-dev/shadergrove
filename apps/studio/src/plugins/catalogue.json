@@ -28,16 +28,16 @@
     },
     {
       "id": "dev.shadergrove.language-en",
-      "version": "1.0.5",
+      "version": "1.0.9",
       "name": "English",
       "description": "Shadergrove's interface in English.",
       "publisher": "Shadergrove",
       "license": "Apache-2.0",
       "protocolVersion": 3,
       "appVersionRange": ">=1.5.0 <3.0.0",
-      "file": "dev.shadergrove.language-en-1.0.5.sgplugin.json",
-      "bytes": 60775,
-      "sha256": "d2f7a8ac5d71fceac29cde6092bd49902adbc5241d430d39d31eca78b186ceba",
+      "file": "dev.shadergrove.language-en-1.0.9.sgplugin.json",
+      "bytes": 71078,
+      "sha256": "bd267826f15828b67dd4b38ef7cc4230fca5f0d83eab43385e797eedc8c777c0",
       "contributions": [
         {
           "kind": "language",
@@ -48,16 +48,16 @@
     },
     {
       "id": "dev.shadergrove.language-fr",
-      "version": "1.0.5",
+      "version": "1.0.9",
       "name": "French",
       "description": "Shadergrove's interface in French (Français).",
       "publisher": "Shadergrove",
       "license": "Apache-2.0",
       "protocolVersion": 3,
       "appVersionRange": ">=1.5.0 <3.0.0",
-      "file": "dev.shadergrove.language-fr-1.0.5.sgplugin.json",
-      "bytes": 66764,
-      "sha256": "ddda13c182a3ee1658016631d2b18dd8a38e88a619a29b525ba9b6a23e9cde31",
+      "file": "dev.shadergrove.language-fr-1.0.9.sgplugin.json",
+      "bytes": 78285,
+      "sha256": "12d51427093c957c3c6a0241910cbe08baf6414702fd0a5bfe5afb2f4d6cb9f4",
       "contributions": [
         {
           "kind": "language",
@@ -153,6 +153,101 @@
           "kind": "exporter",
           "id": "isf-export",
           "name": "ISF filter (.fs)"
+        }
+      ]
+    },
+    {
+      "id": "dev.shadergrove.project-recipes",
+      "version": "1.0.0",
+      "name": "Project Recipes",
+      "description": "Four starter projects to learn from and build on: a raymarched shape, procedural particles, feedback trails and an interactive UI. Each creates a new shader of your own, with its controls and notes; no textures or downloads.",
+      "publisher": "Shadergrove",
+      "license": "Apache-2.0",
+      "protocolVersion": 4,
+      "appVersionRange": ">=2.6.0 <3.0.0",
+      "file": "dev.shadergrove.project-recipes-1.0.0.sgplugin.json",
+      "bytes": 27583,
+      "sha256": "ffd6ede64ce0f1df30f13f3b5f803041b8564d3d440b81f1f46ea3c5cd82ef2f",
+      "contributions": [
+        {
+          "kind": "projectTemplate",
+          "id": "raymarching",
+          "name": "Raymarched shape"
+        },
+        {
+          "kind": "projectTemplate",
+          "id": "particles",
+          "name": "Procedural particles"
+        },
+        {
+          "kind": "projectTemplate",
+          "id": "feedback-trails",
+          "name": "Feedback trails"
+        },
+        {
+          "kind": "projectTemplate",
+          "id": "interactive-ui",
+          "name": "Interactive UI"
+        }
+      ]
+    },
+    {
+      "id": "dev.shadergrove.shader-doctor",
+      "version": "1.0.0",
+      "name": "Shader Doctor",
+      "description": "Check the open shader against a target — the Studio preview or a Wallpaper Engine export: pass wiring, texture slots, feedback and post-processing, with what was and was not checked.",
+      "publisher": "Shadergrove",
+      "license": "Apache-2.0",
+      "protocolVersion": 4,
+      "appVersionRange": ">=2.6.0 <3.0.0",
+      "file": "dev.shadergrove.shader-doctor-1.0.0.sgplugin.json",
+      "bytes": 9704,
+      "sha256": "6fc55afc723aed40f914faf1f1d1ab94b7effc1ac660ca3b931577c585eed55c",
+      "contributions": [
+        {
+          "kind": "analyzer",
+          "id": "doctor",
+          "name": "Shader Doctor"
+        }
+      ]
+    },
+    {
+      "id": "dev.shadergrove.texture-utilities",
+      "version": "1.0.0",
+      "name": "Texture Utilities",
+      "description": "Pack channels from up to four images into one RGBA texture, turn a height map into a normal map, and check how a texture tiles — computed on your device, downloaded as PNG with a metadata sidecar or assigned to a channel you choose.",
+      "publisher": "Shadergrove",
+      "license": "Apache-2.0",
+      "protocolVersion": 4,
+      "appVersionRange": ">=2.6.0 <3.0.0",
+      "file": "dev.shadergrove.texture-utilities-1.0.0.sgplugin.json",
+      "bytes": 4101,
+      "sha256": "f96e60a805d61d688c488d416065ca0aa7f3c1c23cbb147e04fabeb23a53bd81",
+      "contributions": [
+        {
+          "kind": "assetTool",
+          "id": "texture-utilities",
+          "name": "Texture Utilities"
+        }
+      ]
+    },
+    {
+      "id": "dev.shadergrove.palette-studio",
+      "version": "1.0.0",
+      "name": "Palette Studio",
+      "description": "Extract 4–8 colours from an image, edit a gradient, save it as palette JSON and add it to a shader as a luminance-mapping effect — computed on your device; the effect stays in the shader after the plugin is removed.",
+      "publisher": "Shadergrove",
+      "license": "Apache-2.0",
+      "protocolVersion": 4,
+      "appVersionRange": ">=2.6.0 <3.0.0",
+      "file": "dev.shadergrove.palette-studio-1.0.0.sgplugin.json",
+      "bytes": 11855,
+      "sha256": "b99ab6db59564c910f622ebbca8f73271cd6a102f13da55c211e54d5057151b5",
+      "contributions": [
+        {
+          "kind": "assetTool",
+          "id": "palette-studio",
+          "name": "Palette Studio"
         }
       ]
     }

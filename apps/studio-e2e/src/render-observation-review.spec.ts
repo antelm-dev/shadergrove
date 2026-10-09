@@ -248,6 +248,10 @@ test('an installed English upgrade preserves language and full-viewport derivati
   );
   await page.goto('/');
   await expect(page.locator('mat-toolbar.toolbar')).toBeVisible();
+  // Plugins is laid over the live preview: software-rendered, it would starve the default-pack
+  // seeding the install below waits for, as in the other plugin journeys. Kept across reloads.
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
   await page.getByTestId('open-plugins').click();
   await page.getByTestId('plugin-file').setInputFiles({
     name: 'language-en-pre-observation-1.0.2.sgplugin.json',
@@ -265,7 +269,7 @@ test('an installed English upgrade preserves language and full-viewport derivati
   await page.getByTestId(`install-available-${english}`).click();
   await expect(toggle).not.toBeChecked();
   await toggle.click();
-  await expect(page.getByTestId(`plugin-${english}`)).toContainText('version 1.0.5');
+  await expect(page.getByTestId(`plugin-${english}`)).toContainText('version 1.0.9');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 
   const { section } = await open(

@@ -1,5 +1,84 @@
 # Changelog
 
+## [2.8.1](https://github.com/antelm-dev/shadergrove/compare/v2.8.0...v2.8.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **studio:** never raise the sign-in prompt during server rendering ([#225](https://github.com/antelm-dev/shadergrove/issues/225)) ([9d470e8](https://github.com/antelm-dev/shadergrove/commit/9d470e854b9d50522f3a635910ffe4663c82cc8a))
+
+## [2.8.0](https://github.com/antelm-dev/shadergrove/compare/v2.7.1...v2.8.0) (2026-10-09)
+
+
+### Features
+
+* **studio:** contained split editor groups ([#219](https://github.com/antelm-dev/shadergrove/issues/219)) ([c558d3d](https://github.com/antelm-dev/shadergrove/commit/c558d3d58b8ff3a629fd3f55ec010566d1e2a356))
+
+## [2.7.1](https://github.com/antelm-dev/shadergrove/compare/v2.7.0...v2.7.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **studio:** open the deep-linked shader on a cold load ([#220](https://github.com/antelm-dev/shadergrove/issues/220)) ([0e87075](https://github.com/antelm-dev/shadergrove/commit/0e8707598dc469f1e3e36c4295d7692c94d3aceb))
+
+## [2.7.0](https://github.com/antelm-dev/shadergrove/compare/v2.6.0...v2.7.0) (2026-10-08)
+
+
+### Features
+
+* **studio:** history timeline with checkpoints and guarded restore ([#217](https://github.com/antelm-dev/shadergrove/issues/217)) ([3722af7](https://github.com/antelm-dev/shadergrove/commit/3722af7358d1a1aa08b7b7406bc02627ba22157d))
+
+## [2.6.0](https://github.com/antelm-dev/shadergrove/compare/v2.5.0...v2.6.0) (2026-10-08)
+
+
+### Features
+
+* **glsl-analysis:** add opt-in compiler-backed observation catalogue and insertion contract ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **i18n:** ship the en/fr language packs 1.0.5 ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **plugins:** ship Grove Amber and ISF as official plugins ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** add the inspection tab preference and en/fr strings ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** capture the actual frame and accepted programs for inspection ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** inspect frozen GPU frames and observe typed shader values ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** integrate glslang analysis into the editor ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** measure one frozen GPU variable in the render inspector ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** use the website grove mark as desktop icon and favicon ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+
+
+### Bug Fixes
+
+* **deps:** align the nx toolchain on 23.2.1 and patch brace-expansion ([#166](https://github.com/antelm-dev/shadergrove/issues/166)) ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **deps:** update Electron to 41 [security] ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **glsl-analysis:** read #line as a logical preprocessor directive ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **glsl-analysis:** refuse unbraced control assignments and comment-prefixed #line in observation ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** count every frame, capture draw-time uniforms, guard publication and compare behind effects ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** hide generated helpers by exact signature, not remapped line ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** keep user helper overloads and let a store revert complete analysis ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** look up generated helpers by own property only ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** refuse a replay that is NaN on only one side of the pre-effect comparison ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** release the observer's render target and clear colour after each draw ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** remap cached analysis, scope generated names per stage, cancel pending units ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** supersede pending observations on edit and keep skipped nonfinite output unverified ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+* **studio:** treat array parameters as user overloads of generated helpers ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+
+
+### Performance Improvements
+
+* **studio:** load the GPU observer and inspection panel on demand ([dc90d83](https://github.com/antelm-dev/shadergrove/commit/dc90d83eff5b49e1c18acb5444e670a4eaba0e9a))
+
+## [2.5.0](https://github.com/antelm-dev/shadergrove/compare/v2.4.1...v2.5.0) (2026-10-08)
+
+
+### Features
+
+* transactional shader history domain and transports ([#167](https://github.com/antelm-dev/shadergrove/issues/167)) ([19d2e05](https://github.com/antelm-dev/shadergrove/commit/19d2e0521fe546caf8c05085bc0efbdedf22b99b))
+
+## [2.4.1](https://github.com/antelm-dev/shadergrove/compare/v2.4.0...v2.4.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **studio:** apply on Enter in a Controls builder field typed into before the view updates ([#208](https://github.com/antelm-dev/shadergrove/issues/208)) ([655f137](https://github.com/antelm-dev/shadergrove/commit/655f137b8be55f1e2caba04f4226730076f6fefb))
+
 ## [2.4.0](https://github.com/antelm-dev/shadergrove/compare/v2.3.0...v2.4.0) (2026-10-07)
 
 

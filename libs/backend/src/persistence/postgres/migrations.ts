@@ -150,4 +150,28 @@ export const POSTGRES_MIGRATIONS: readonly Migration[] = [
       await exec(publicationSchemaSql('bytea'));
     },
   },
+  {
+    version: 5,
+    name: 'shader-history',
+    async up(exec) {
+      // Mirrors the SQLite table; see its migration for the row's meaning.
+      await exec(`
+        CREATE TABLE shader_history (
+          shader_id              text NOT NULL REFERENCES shaders(id) ON DELETE CASCADE,
+          revision               integer NOT NULL,
+          created_at             text NOT NULL,
+          checkpoint_name        text,
+          cause                  text NOT NULL,
+          restored_from_revision integer,
+          project_json           jsonb NOT NULL,
+          controls_json          jsonb NOT NULL,
+          render_json            jsonb NOT NULL,
+          presets_json           jsonb NOT NULL,
+          PRIMARY KEY (shader_id, revision)
+        );
+
+        CREATE INDEX idx_shader_history_newest ON shader_history(shader_id, revision DESC);
+      `);
+    },
+  },
 ];

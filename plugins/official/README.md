@@ -6,15 +6,19 @@ package: reviewed, installed switched off, enabled explicitly, and executed in
 the isolated plugin Worker. The app has no built-in fallback for what the
 Shadertoy, Wallpaper Engine and ISF packages do.
 
-| Folder              | Package id                         | Contributions                                               |
-| ------------------- | ---------------------------------- | ----------------------------------------------------------- |
-| `default-themes/`   | `dev.shadergrove.default-themes`   | `theme` `light`, `dark` (pair `default`) — default          |
-| `language-en/`      | `dev.shadergrove.language-en`      | `language` `english` (`en`) — default                       |
-| `language-fr/`      | `dev.shadergrove.language-fr`      | `language` `french` (`fr`) — default                        |
-| `grove-amber/`      | `dev.shadergrove.grove-amber`      | `theme` `amber-light`, `amber-dark` (pair `amber`)          |
-| `shadertoy/`        | `dev.shadergrove.shadertoy`        | `projectImporter` (paste, provider `shadertoy-api/v1`)      |
-| `wallpaper-engine/` | `dev.shadergrove.wallpaper-engine` | `projectExporter` (runtime `wallpaper-web/v1`)              |
-| `isf/`              | `dev.shadergrove.isf`              | `importer` / `exporter` `.fs` (one-pass ISF FX, protocol 1) |
+| Folder               | Package id                          | Contributions                                                                                                 |
+| -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `default-themes/`    | `dev.shadergrove.default-themes`    | `theme` `light`, `dark` (pair `default`) — default                                                            |
+| `language-en/`       | `dev.shadergrove.language-en`       | `language` `english` (`en`) — default                                                                         |
+| `language-fr/`       | `dev.shadergrove.language-fr`       | `language` `french` (`fr`) — default                                                                          |
+| `grove-amber/`       | `dev.shadergrove.grove-amber`       | `theme` `amber-light`, `amber-dark` (pair `amber`)                                                            |
+| `shadertoy/`         | `dev.shadergrove.shadertoy`         | `projectImporter` (paste, provider `shadertoy-api/v1`)                                                        |
+| `wallpaper-engine/`  | `dev.shadergrove.wallpaper-engine`  | `projectExporter` (runtime `wallpaper-web/v1`)                                                                |
+| `isf/`               | `dev.shadergrove.isf`               | `importer` / `exporter` `.fs` (one-pass ISF FX, protocol 1)                                                   |
+| `project-recipes/`   | `dev.shadergrove.project-recipes`   | `projectTemplate` `raymarching`, `particles`, `feedback-trails`, `interactive-ui` (protocol 4, data; no code) |
+| `shader-doctor/`     | `dev.shadergrove.shader-doctor`     | `analyzer` `doctor` (profiles `studio-webgl2/v1`, `wallpaper-web/v1`; protocol 4)                             |
+| `texture-utilities/` | `dev.shadergrove.texture-utilities` | `assetTool` `texture-utilities` (workflow `texture-utilities/v1`, image → image; protocol 4)                  |
+| `palette-studio/`    | `dev.shadergrove.palette-studio`    | `assetTool` `palette-studio` (workflow `palette-studio/v1`; protocol 4)                                       |
 
 ## Default packages
 

@@ -7,7 +7,13 @@ import {
 } from '@shadergrove/shared/shadertoy-api';
 import type { UpdateShaderPatch } from '@shadergrove/shared/api';
 import { ShaderLibrary, StorageError } from '@shadergrove/backend/library';
-import type { ImportMode, RenderSettings, ShaderParams } from '@shadergrove/shared/model';
+import type {
+  ImportMode,
+  RenderSettings,
+  ShaderHistoryEntry,
+  ShaderParams,
+  ShaderRecord,
+} from '@shadergrove/shared/model';
 import {
   buildCollectionBundle,
   buildShaderBundle,
@@ -62,6 +68,20 @@ export function createShaderIpc(storage: ShaderLibrary) {
     ),
     'delete-preset': handle((_event, id: string, presetId: string) =>
       storage.deletePreset(stringArg(id, 'id'), stringArg(presetId, 'presetId')),
+    ),
+    'list-history': handle(
+      (_event, id: string): Promise<ShaderHistoryEntry[]> =>
+        storage.listHistory(stringArg(id, 'id')),
+    ),
+    /** `name: null` clears the checkpoint; the shader revision does not move. */
+    'set-checkpoint': handle(
+      (_event, id: string, revision: number, name: string | null): Promise<ShaderHistoryEntry> =>
+        storage.setCheckpoint(stringArg(id, 'id'), revision, name),
+    ),
+    /** Restores into a new head; `expectedRevision` is the head the caller last read. */
+    'restore-history': handle(
+      (_event, id: string, revision: number, expectedRevision: number): Promise<ShaderRecord> =>
+        storage.restoreHistory(stringArg(id, 'id'), revision, expectedRevision),
     ),
     'export-shader': handle(async (_event, id: string) =>
       buildShaderBundle(await storage.exportOne(stringArg(id, 'id'))),

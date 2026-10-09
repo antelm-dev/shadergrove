@@ -40,6 +40,7 @@ export function isDataOnlyPackage(plugin: PluginPackage): boolean {
   return (
     plugin.code === undefined &&
     Object.keys(plugin.glsl).length === 0 &&
+    Object.keys(plugin.templates).length === 0 &&
     plugin.manifest.contributions.every(({ kind }) => kind === 'theme' || kind === 'language')
   );
 }

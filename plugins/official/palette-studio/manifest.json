@@ -1,0 +1,19 @@
+{
+  "id": "dev.shadergrove.palette-studio",
+  "version": "1.0.0",
+  "protocolVersion": 4,
+  "appVersionRange": ">=2.6.0 <3.0.0",
+  "name": "Palette Studio",
+  "publisher": "Shadergrove",
+  "license": "Apache-2.0",
+  "contributions": [
+    {
+      "kind": "assetTool",
+      "id": "palette-studio",
+      "name": "Palette Studio",
+      "workflow": "palette-studio/v1",
+      "inputs": ["image", "palette"],
+      "outputs": ["palette", "effect"]
+    }
+  ]
+}

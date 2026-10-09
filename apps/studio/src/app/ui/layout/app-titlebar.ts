@@ -13,6 +13,7 @@ import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 import { DocumentStatus } from '../editor/document-status';
 import { PluginCommands } from '../../plugins/plugin-commands';
+import { ProjectRecipes } from '../../plugins/tools/recipes';
 import { MenuCommands, type MenuCommand } from '../menu-commands';
 import { SurfaceLayoutService } from '../../surfaces';
 import { WorkspaceActions } from '../workspace-actions';
@@ -331,6 +332,7 @@ export class AppTitlebar {
   protected readonly i18n = inject(I18n);
   private readonly commands = inject(MenuCommands);
   private readonly pluginCommands = inject(PluginCommands);
+  private readonly recipes = inject(ProjectRecipes);
   private readonly layout = inject(SurfaceLayoutService);
 
   protected readonly themes = inject(AppThemes);
@@ -347,6 +349,7 @@ export class AppTitlebar {
     this.commands.import('rename', 'action.import'),
     this.commands.import('overwrite', 'action.importReplace'),
     ...this.pluginCommands.imports(),
+    ...this.recipes.commands(),
     this.commands.exportShader,
     ...this.pluginCommands.exports(),
     this.commands.exportAll,

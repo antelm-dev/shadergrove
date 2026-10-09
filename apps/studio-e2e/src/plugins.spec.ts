@@ -60,10 +60,7 @@ async function openStudio(page: Page): Promise<void> {
 
 async function menuItem(page: Page, name: RegExp): Promise<void> {
   await page.getByRole('button', { name: 'More actions' }).click();
-  const direct = page.getByRole('menuitem', { name });
-  if (!(await direct.isVisible())) {
-    await page.getByRole('menuitem', { name: /Import & export/ }).click();
-  }
+  // Import & export is a heading in this menu, not a submenu: the item is listed directly.
   await page.getByRole('menuitem', { name }).click();
 }
 
@@ -174,9 +171,10 @@ test('Shadertoy Import: discovered, installed off, paste and API imports, kept, 
     .fill('void mainImage(out vec4 c, in vec2 p) { c = vec4(p / iResolution.xy, 0.5, 1.0); }');
   await dialog.getByTestId('import-run').click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.locator('.mat-mdc-snack-bar-container')).toContainText(
-    'Imported “Pasted Waves”.',
-  );
+  // Scoped to this toast: the first-run tip may still be closing beside it.
+  await expect(
+    page.locator('.mat-mdc-snack-bar-container', { hasText: 'Imported “Pasted Waves”.' }),
+  ).toBeVisible();
   expect(await shaderNames(page)).toContain('Pasted Waves');
 
   // Invalid source is refused with a readable error in the dialog, which stays; nothing is created.
@@ -319,6 +317,14 @@ test('Shadertoy Import: leaving with browser Back while a fetch runs cancels it 
   });
   await openStudio(page);
   await openPlugins(page);
+  // isVisible() does not wait: decide only once the catalogue shows the package, as
+  // either an Install action or an installed card.
+  await expect(
+    page
+      .getByTestId(`install-available-${SHADERTOY}`)
+      .or(page.getByTestId(`plugin-${SHADERTOY}`))
+      .first(),
+  ).toBeVisible();
   if (await page.getByTestId(`install-available-${SHADERTOY}`).isVisible()) {
     await installAvailable(page, SHADERTOY);
   }

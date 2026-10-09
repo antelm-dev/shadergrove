@@ -278,7 +278,7 @@ test('Builder and JSON share one buffer: undo, redo, invalid JSON, repair, navig
   await expect(builder(page)).toBeVisible();
   await json.click();
 
-  await shell(page).locator('.monaco-editor .view-lines').click();
+  await shell(page).locator('.monaco-editor').click();
   await page.keyboard.press('Control+z');
   await expect(lines).not.toContainText('"enabled"');
   await expect(knobCount(page, ['Speed', 'enabled'])).toHaveCount(1);
@@ -296,7 +296,7 @@ test('Builder and JSON share one buffer: undo, redo, invalid JSON, repair, navig
 
   // Invalid JSON is kept as it is, and the Builder will not write over it.
   await json.click();
-  await shell(page).locator('.monaco-editor .view-lines').click();
+  await shell(page).locator('.monaco-editor').click();
   await page.keyboard.press('Control+End');
   await page.keyboard.type('x');
   await view.click();
@@ -313,7 +313,7 @@ test('Builder and JSON share one buffer: undo, redo, invalid JSON, repair, navig
   await expect(builder(page)).toBeHidden();
 
   // Repair it there, and the Builder takes over again.
-  await shell(page).locator('.monaco-editor .view-lines').click();
+  await shell(page).locator('.monaco-editor').click();
   await page.keyboard.press('Control+End');
   await page.keyboard.press('Backspace');
   await expect(page.locator('app-problems-panel .row', { hasText: /config/i })).toHaveCount(0);
@@ -377,7 +377,7 @@ test('undo history does not leak from one shader to the next', async ({ page }) 
   await page.getByRole('button', { name: 'JSON', exact: true }).click();
   await expect(shell(page).locator('.view-lines')).toContainText('"value"');
 
-  await shell(page).locator('.monaco-editor .view-lines').click();
+  await shell(page).locator('.monaco-editor').click();
   await page.keyboard.press('Control+z');
   await page.keyboard.press('Control+z');
   await expect(shell(page).locator('.view-lines')).toContainText('"value"');
@@ -429,6 +429,9 @@ test('is reachable and usable from a closed, minimized or floating editor and a 
   await expect(field(page, 'Label')).toBeFocused();
   await builder(page).getByRole('button', { name: 'Back to the list' }).focus();
   await page.keyboard.press('Enter');
+  // The list is shown once the builder has rendered; until then its buttons
+  // cannot take focus, and the Enter below would go to Back again.
+  await expect(builder(page).locator('.select[data-key="enabled"]')).toBeFocused();
 
   // Move it with the keyboard; the focus stays on a move action.
   await builder(page).locator('[data-move="enabled:up"]').focus();

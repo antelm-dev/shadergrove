@@ -6,7 +6,7 @@ import {
   provideZonelessChangeDetection,
   signal,
 } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -88,6 +88,17 @@ class CodeEditorStub {
   }
 
   async format(): Promise<void> {}
+
+  viewStates = new Map<string, unknown>();
+  adopted: Array<[string, unknown]> = [];
+
+  viewStateOf(docId: string): unknown {
+    return this.viewStates.get(docId) ?? null;
+  }
+
+  adoptViewState(docId: string, state: unknown): void {
+    this.adopted.push([docId, state]);
+  }
 }
 
 @Component({
@@ -130,6 +141,7 @@ class EditorTabsStub {
 })
 class EditorWindowControlsStub {
   readonly surfaceId = input<string>('');
+  readonly groupId = input<string | null>(null);
 }
 
 @Component({
@@ -277,7 +289,7 @@ describe('EditorPanel file explorer integration', () => {
   let requestAnimationFrameSpy: ReturnType<typeof vi.fn>;
   let navigation: ReturnType<typeof signal<EditorLocationRequest | null>>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     navigation = signal<EditorLocationRequest | null>(null);
     resizeObserverCallback = null;
     requestAnimationFrameSpy = vi.fn((callback: FrameRequestCallback) => {
@@ -326,6 +338,8 @@ describe('EditorPanel file explorer integration', () => {
     });
     TestBed.configureTestingModule({
       imports: [EditorPanel],
+      // The builder is deferred; the Config views below render it on purpose.
+      deferBlockBehavior: DeferBlockBehavior.Manual,
       providers: [
         provideZonelessChangeDetection(),
         { provide: ShaderStore, useValue: store },
@@ -340,6 +354,8 @@ describe('EditorPanel file explorer integration', () => {
         OpenDocuments,
       ],
     });
+    // The builder sits in a @defer block, whose dependencies resolve asynchronously.
+    await TestBed.compileComponents();
   });
 
   afterEach(() => {
@@ -589,10 +605,49 @@ describe('EditorPanel file explorer integration', () => {
       other.componentRef.setInput('surfaceId', editorSurfaceId(second));
       other.detectChanges();
       expect(controls.surfaceId()).toBe(editorSurfaceId(second));
+      expect(controls.groupId()).toBe(second);
+    });
+
+    it('hands view state over with a moved document, both ways', () => {
+      const session = TestBed.inject(EditorGroupSession);
+      const image = imagePass(store.project()!);
+      session.recordViewTransfer({ documentId: image.id, viewState: { scrollTop: 40 } });
+
+      const fixture = mountGroup();
+      fixture.detectChanges();
+      const editor = docsOf(fixture).editor;
+      expect(editor.adopted).toEqual([[image.id, { scrollTop: 40 }]]);
+      expect(session.viewTransfer(image.id)).toBeNull();
+
+      // Leaving this group, the document takes this editor's view state along.
+      editor.viewStates.set(image.id, { scrollTop: 7 });
+      session.captureViewTransfer(DEFAULT_EDITOR_GROUP_ID, image.id);
+      expect(session.viewTransfer(image.id)?.viewState).toEqual({ scrollTop: 7 });
+    });
+
+    it('offers the explorer only when asked to', () => {
+      const fixture = mountGroup();
+      fixture.componentRef.setInput('explorer', false);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('app-explorer-panel')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.explorer-resizer')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.explorer-reopen')).toBeNull();
     });
   });
 
   describe('Config views', () => {
+    async function mountWithBuilder() {
+      const fixture = mount();
+      // The zoneless scheduler races rAF: the synchronous stub would tick in the middle of
+      // rendering the deferred builder. These tests drive change detection themselves.
+      vi.stubGlobal('requestAnimationFrame', () => 0);
+      for (const block of await fixture.getDeferBlocks()) {
+        await block.render(DeferBlockState.Complete);
+      }
+      return fixture;
+    }
+
     function builder(fixture: ReturnType<typeof mount>): ControlsBuilderStub {
       return fixture.debugElement.query(By.directive(ControlsBuilderStub))
         .componentInstance as ControlsBuilderStub;
@@ -611,8 +666,8 @@ describe('EditorPanel file explorer integration', () => {
       return fixture.nativeElement.querySelector('app-controls-builder') as HTMLElement;
     }
 
-    it('shows the builder for a valid Config and keeps the editor alive behind it', () => {
-      const fixture = mount();
+    it('shows the builder for a valid Config and keeps the editor alive behind it', async () => {
+      const fixture = await mountWithBuilder();
       expect(fixture.nativeElement.querySelector('.view-bar')).toBeNull();
 
       openConfig(fixture);
@@ -623,8 +678,8 @@ describe('EditorPanel file explorer integration', () => {
       expect(codeEditor(fixture)).toBeDefined();
     });
 
-    it('toggles to the JSON without rebuilding either view', () => {
-      const fixture = mount();
+    it('toggles to the JSON without rebuilding either view', async () => {
+      const fixture = await mountWithBuilder();
       openConfig(fixture);
       const editor = codeEditor(fixture);
       const view = builder(fixture);
@@ -638,8 +693,19 @@ describe('EditorPanel file explorer integration', () => {
       expect(builder(fixture)).toBe(view);
     });
 
-    it('does not leave the builder while it holds an unapplied form', () => {
+    it('switches to the JSON before the deferred builder has loaded', () => {
       const fixture = mount();
+      openConfig(fixture);
+      expect(builderHost(fixture)).toBeNull();
+
+      (fixture.nativeElement.querySelector('.view-json') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(editorHost(fixture).hidden).toBe(false);
+    });
+
+    it('does not leave the builder while it holds an unapplied form', async () => {
+      const fixture = await mountWithBuilder();
       openConfig(fixture);
       const view = builder(fixture);
       view.holding = true;
@@ -653,9 +719,9 @@ describe('EditorPanel file explorer integration', () => {
       expect(builderHost(fixture).hidden).toBe(true);
     });
 
-    it('opens an invalid Config in JSON and a newly selected valid one in the builder', () => {
+    it('opens an invalid Config in JSON and a newly selected valid one in the builder', async () => {
       store.configValid.set(false);
-      const fixture = mount();
+      const fixture = await mountWithBuilder();
       openConfig(fixture);
       expect(editorHost(fixture).hidden).toBe(false);
       expect(builderHost(fixture).hidden).toBe(true);
@@ -692,8 +758,8 @@ describe('EditorPanel file explorer integration', () => {
       expect(fixture.componentInstance['configView']()).toBe('json');
     });
 
-    it('writes a builder commit through the Config model so it can be undone', () => {
-      const fixture = mount();
+    it('writes a builder commit through the Config model so it can be undone', async () => {
+      const fixture = await mountWithBuilder();
       openConfig(fixture);
 
       builder(fixture).commit.emit('[1]');
@@ -702,8 +768,8 @@ describe('EditorPanel file explorer integration', () => {
       expect(store.setDocSource).not.toHaveBeenCalled();
     });
 
-    it('writes the store directly when there is no Config model yet', () => {
-      const fixture = mount();
+    it('writes the store directly when there is no Config model yet', async () => {
+      const fixture = await mountWithBuilder();
       openConfig(fixture);
       codeEditor(fixture).applyResult = false;
 

@@ -12,6 +12,8 @@
  */
 
 /** The four channel slots plus the preview, as stored in the `assets` table. */
+import type { ShaderHistoryCause } from '@shadergrove/shared/model';
+
 import type { ShaderKind, UserScope } from './user-scope';
 
 export type AssetKey = 'thumbnail' | 'texture:0' | 'texture:1' | 'texture:2' | 'texture:3';
@@ -65,6 +67,24 @@ export interface PresetRow {
   createdAt: string;
   valuesJson: string;
   renderJson: string | null;
+}
+
+/** A `shader_history` row without its content — what a timeline lists. */
+export interface HistoryEntryRow {
+  revision: number;
+  createdAt: string;
+  cause: ShaderHistoryCause;
+  checkpointName: string | null;
+  restoredFromRevision: number | null;
+}
+
+/** A full `shader_history` row: the entry plus the serialized document it froze. */
+export interface HistoryRow extends HistoryEntryRow {
+  projectJson: string;
+  controlsJson: string;
+  renderJson: string;
+  /** The `Preset[]` of the public model, serialized. */
+  presetsJson: string;
 }
 
 /** Asset metadata without the bytes — enough to describe presence and dimensions. */
@@ -153,6 +173,29 @@ export interface ShaderTx {
   deleteAssetIf(shaderId: string, key: AssetKey, expectedUpdatedAt: string): Promise<boolean>;
   getMeta(key: string): Promise<string | null>;
   setMeta(key: string, value: string): Promise<void>;
+
+  // History. These take a shader id and do no ownership check: the library
+  // loads the shader through its scope first, and the rows cascade with it.
+  /** Inserts an immutable entry; a second entry for the same revision is a `conflict`. */
+  insertHistory(shaderId: string, row: HistoryRow): Promise<void>;
+  /** Entries without content, newest first (`revision DESC`). */
+  listHistory(shaderId: string): Promise<HistoryEntryRow[]>;
+  loadHistory(shaderId: string, revision: number): Promise<HistoryRow | null>;
+  hasHistory(shaderId: string): Promise<boolean>;
+  /**
+   * Sets or clears (`null`) one entry's checkpoint name, touching nothing else.
+   * Returns the entry, or `null` when there is no such revision.
+   */
+  setHistoryCheckpoint(
+    shaderId: string,
+    revision: number,
+    name: string | null,
+  ): Promise<HistoryEntryRow | null>;
+  /**
+   * Deletes all but the newest `keepUnnamed` entries without a checkpoint name;
+   * named entries are never touched. Returns how many went.
+   */
+  pruneHistory(shaderId: string, keepUnnamed: number): Promise<number>;
 }
 
 /**
@@ -182,4 +225,6 @@ export interface ShaderRepository {
   loadAsset(scope: UserScope, id: string, key: AssetKey): Promise<StoredAsset | null>;
   getMeta(key: string): Promise<string | null>;
   setMeta(key: string, value: string): Promise<void>;
+  /** Newest first; the caller has already checked the scope can read the shader. */
+  listHistory(shaderId: string): Promise<HistoryEntryRow[]>;
 }

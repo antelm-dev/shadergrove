@@ -1,0 +1,17 @@
+{
+  "id": "dev.shadergrove.shader-doctor",
+  "version": "1.0.0",
+  "protocolVersion": 4,
+  "appVersionRange": ">=2.6.0 <3.0.0",
+  "name": "Shader Doctor",
+  "publisher": "Shadergrove",
+  "license": "Apache-2.0",
+  "contributions": [
+    {
+      "kind": "analyzer",
+      "id": "doctor",
+      "name": "Shader Doctor",
+      "profiles": ["studio-webgl2/v1", "wallpaper-web/v1"]
+    }
+  ]
+}
