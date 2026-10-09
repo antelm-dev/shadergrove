@@ -171,9 +171,10 @@ test('Shadertoy Import: discovered, installed off, paste and API imports, kept, 
     .fill('void mainImage(out vec4 c, in vec2 p) { c = vec4(p / iResolution.xy, 0.5, 1.0); }');
   await dialog.getByTestId('import-run').click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.locator('.mat-mdc-snack-bar-container')).toContainText(
-    'Imported “Pasted Waves”.',
-  );
+  // Scoped to this toast: the first-run tip may still be closing beside it.
+  await expect(
+    page.locator('.mat-mdc-snack-bar-container', { hasText: 'Imported “Pasted Waves”.' }),
+  ).toBeVisible();
   expect(await shaderNames(page)).toContain('Pasted Waves');
 
   // Invalid source is refused with a readable error in the dialog, which stays; nothing is created.
