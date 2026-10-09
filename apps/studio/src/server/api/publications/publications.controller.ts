@@ -28,14 +28,19 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { fromNodeHeaders } from 'better-auth/node';
 
 import { StorageError } from '@shadergrove/backend/library';
 import { THUMBNAIL_ASSET_KEY } from '@shadergrove/backend/persistence';
 import type { PublicationLibrary } from '@shadergrove/backend/publication';
-import type { ExploreCapabilities } from '@shadergrove/shared/publication';
+import {
+  DEFAULT_PUBLICATION_SORT,
+  PUBLICATION_LIMITS,
+  PUBLICATION_SORTS,
+  type ExploreCapabilities,
+} from '@shadergrove/shared/publication';
 import { buildShaderBundle, slugify } from '@shadergrove/shared/validate';
 
 import { resolvePrincipal, type Auth, type Principal } from '../auth/auth';
@@ -108,8 +113,35 @@ export class PublicationsController {
   @ApiOperation({
     summary: 'List public shaders',
     description:
-      'Newest first. `search` matches the title, `limit` is capped at 50, and `cursor` is the ' +
-      '`nextCursor` of the previous page.',
+      'Newest first by `sort`. `search` matches the title, description or author label. ' +
+      '`cursor` is the `nextCursor` of the previous page, for the same `search` and `sort`.',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: 'string',
+    description: `Case-insensitive substring, at most ${PUBLICATION_LIMITS.searchLength} characters.`,
+  })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    enum: [...PUBLICATION_SORTS],
+    description:
+      '`updated` (default): last explicit update. `published`: first publication. ' +
+      'Anything else is a 400.',
+    example: DEFAULT_PUBLICATION_SORT,
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    type: 'string',
+    description: 'Opaque. One issued for another `search` or `sort` is a 400.',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: 'integer',
+    description: `Page size, ${PUBLICATION_LIMITS.pageSize} by default, capped at ${PUBLICATION_LIMITS.maxPageSize}.`,
   })
   @ApiErrors(400)
   @Public()
