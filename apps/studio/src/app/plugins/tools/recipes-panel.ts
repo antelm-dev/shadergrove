@@ -16,6 +16,7 @@ import {
   linkedSignal,
   output,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -312,11 +313,15 @@ export class RecipeCard {
     this.recipes.find(this.packageId(), this.contributionId()),
   );
 
-  /** A fresh distinct name for every new recipe entry and after every creation. */
-  protected readonly name = linkedSignal(() => {
-    const recipe = this.recipe();
-    return recipe ? this.recipes.defaultName(recipe) : '';
-  });
+  /**
+   * A fresh distinct name for every new recipe entry and after every creation.
+   * Keyed on the ref and blind to the library list, so a refresh (another tab's
+   * save, a plugin change) never discards what the user typed.
+   */
+  private readonly ref = computed(() => this.recipe()?.ref ?? null);
+  protected readonly name = linkedSignal(() =>
+    this.ref() ? untracked(() => this.recipes.defaultName(this.recipe()!)) : '',
+  );
 
   protected readonly report = signal<Report | null>(null);
 
@@ -352,7 +357,10 @@ export class RecipeCard {
       this.name(),
     );
     this.report.set(this.describe(outcome));
-    if (outcome.status === 'created') this.created.emit(outcome.name);
+    if (outcome.status === 'created') {
+      this.name.set(this.recipes.defaultName(entry));
+      this.created.emit(outcome.name);
+    }
   }
 
   private describe(outcome: RecipeOutcome): Report {

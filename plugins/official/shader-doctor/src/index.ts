@@ -27,8 +27,12 @@ const CHECKED_RULES = [
   'resources.texture',
 ];
 
-/** What it never evaluates: they need the GLSL itself, which this version does not parse. */
-const UNCHECKED_RULES = ['limits.source', 'source.portability'];
+/**
+ * What it never evaluates: the source rules need the GLSL itself, which this
+ * version does not parse; no target enforces the profile's file limit, and
+ * texture dimensions are not in the snapshot (metadata only).
+ */
+const UNCHECKED_RULES = ['limits.source', 'source.portability', 'limits.files', 'limits.textures'];
 
 const MESSAGE_LENGTH = 300;
 const bounded = (text: string): string =>

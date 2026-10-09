@@ -155,7 +155,12 @@ describe('Shader Doctor package', () => {
         expect.arrayContaining(['features.feedback', 'bindings.buffer', 'resources.texture']),
       );
       // The GLSL itself is never read: no portability or source verdict is claimed.
-      expect(report.uncheckedRules).toEqual(['limits.source', 'source.portability']);
+      expect(report.uncheckedRules).toEqual([
+        'limits.source',
+        'source.portability',
+        'limits.files',
+        'limits.textures',
+      ]);
     }
   });
 

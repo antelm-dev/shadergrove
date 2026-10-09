@@ -201,8 +201,8 @@
       "protocolVersion": 4,
       "appVersionRange": ">=2.6.0 <3.0.0",
       "file": "dev.shadergrove.shader-doctor-1.0.0.sgplugin.json",
-      "bytes": 9665,
-      "sha256": "c528fd4af080cce67cfd002bf3fb3f5d97bb6ac30fbbc4c22b91053cb545b11c",
+      "bytes": 9704,
+      "sha256": "6fc55afc723aed40f914faf1f1d1ab94b7effc1ac660ca3b931577c585eed55c",
       "contributions": [
         {
           "kind": "analyzer",

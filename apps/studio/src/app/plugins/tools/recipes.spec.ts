@@ -502,6 +502,37 @@ describe('Project Recipes', () => {
       expect(element.querySelector(`[data-testid="recipe-${ref}"]`)).toBeNull();
     });
 
+    it('keeps a typed name across library refreshes, and suggests a fresh one after creating', async () => {
+      const { installations } = setup();
+      await install(installations);
+      const fixture = TestBed.createComponent(RecipeCard);
+      fixture.componentRef.setInput('packageId', PACK);
+      fixture.componentRef.setInput('contributionId', 'particles');
+      await fixture.whenStable();
+      const ref = `${PACK}/particles`;
+      const field = () =>
+        (fixture.nativeElement as HTMLElement).querySelector(
+          `[data-testid="recipe-name-${ref}"]`,
+        ) as HTMLInputElement;
+      field().value = 'Mine';
+      field().dispatchEvent(new Event('input'));
+      await fixture.whenStable();
+      // Another tab saved something: the list is replaced, the typed name stays.
+      shaders.set([{ id: 'a', name: 'Elsewhere' }]);
+      await fixture.whenStable();
+      expect(field().value).toBe('Mine');
+
+      shaders.set([{ id: 'a', name: 'Procedural particles' }]);
+      (
+        (fixture.nativeElement as HTMLElement).querySelector(
+          `[data-testid="recipe-create-${ref}"]`,
+        ) as HTMLButtonElement
+      ).click();
+      await settle();
+      await fixture.whenStable();
+      expect(field().value).toBe('Procedural particles 2');
+    });
+
     it('lists every active recipe in the gallery, previews one at a time and closes once one is created', async () => {
       const { recipes, installations } = setup();
       await install(installations);

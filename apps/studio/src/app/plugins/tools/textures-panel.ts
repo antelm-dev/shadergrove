@@ -725,7 +725,8 @@ export class TexturesPanel {
     const outcome = await sessions.full.runAsset(request);
     if (outcome.status === 'failed') this.say(outcome.message, true);
     else if (outcome.status === 'cancelled') this.say(this.i18n.t(textureKey('cancelled')), false);
-    else if (outcome.status === 'stale') this.say(this.i18n.t(textureKey('staleDelivery')), true);
+    // The selection changed while it ran: nothing was being saved, so this is not a delivery failure.
+    else if (outcome.status === 'stale') this.say(this.i18n.t(textureKey('stale')), false);
   }
 
   /** The PNG or its sidecar, from the full result — only while it still holds. */
