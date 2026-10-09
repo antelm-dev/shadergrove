@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.0](https://github.com/antelm-dev/shadergrove/compare/v2.7.1...v2.8.0) (2026-10-09)
+
+
+### Features
+
+* **studio:** contained split editor groups ([#219](https://github.com/antelm-dev/shadergrove/issues/219)) ([c558d3d](https://github.com/antelm-dev/shadergrove/commit/c558d3d58b8ff3a629fd3f55ec010566d1e2a356))
+
 ## [2.7.1](https://github.com/antelm-dev/shadergrove/compare/v2.7.0...v2.7.1) (2026-10-09)
 
 
