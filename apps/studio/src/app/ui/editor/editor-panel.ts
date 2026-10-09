@@ -314,14 +314,17 @@ type ConfigView = 'builder' | 'json';
               />
 
               <!-- Kept alive while hidden, like the editor: a selected control and
-                   a half-edited form survive a look at the JSON. -->
-              <app-controls-builder
-                #builder
-                class="builder-view"
-                [hidden]="!showBuilder()"
-                (commit)="commitConfig($event)"
-                (repair)="showJson(true)"
-              />
+                   a half-edited form survive a look at the JSON. Loaded right after
+                   first render so the builder stays out of the initial bundle. -->
+              @defer (on immediate) {
+                <app-controls-builder
+                  #builder
+                  class="builder-view"
+                  [hidden]="!showBuilder()"
+                  (commit)="commitConfig($event)"
+                  (repair)="showJson(true)"
+                />
+              }
             </div>
           </div>
 
@@ -1030,7 +1033,10 @@ export class EditorPanel {
   protected setConfigView(view: ConfigView): void {
     if (view === this.configView()) return;
     if (view === 'json') {
-      this.builder()?.guard(() => this.showJson(false));
+      // Before the deferred builder has loaded there is no form to lose.
+      const builder = this.builder();
+      if (builder) builder.guard(() => this.showJson(false));
+      else this.showJson(false);
       return;
     }
     this.configView.set('builder');

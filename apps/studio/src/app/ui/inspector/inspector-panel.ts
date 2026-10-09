@@ -179,7 +179,10 @@ const TAB_META: Record<InspectorTab, { icon: string; labelKey: TranslationKey }>
         aria-labelledby="inspector-tab-postProcessing"
         [hidden]="tab() !== 'postProcessing'"
       >
-        <app-post-processing-panel />
+        <!-- Loaded right after first render: it and its sliders stay out of the initial bundle. -->
+        @defer (on immediate) {
+          <app-post-processing-panel />
+        }
       </div>
       <div
         class="panel"
