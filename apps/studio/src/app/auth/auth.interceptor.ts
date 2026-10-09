@@ -9,8 +9,9 @@
  * they were in the middle of.
  */
 
+import { isPlatformBrowser } from '@angular/common';
 import { HttpErrorResponse, type HttpInterceptorFn } from '@angular/common/http';
-import { inject } from '@angular/core';
+import { PLATFORM_ID, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, throwError } from 'rxjs';
 
@@ -18,6 +19,11 @@ import { AuthService } from './auth.service';
 import { AuthPrompt } from './auth-prompt';
 
 export const authInterceptor: HttpInterceptorFn = (request, next) => {
+  // The server renders every page anonymously (see `App`), so its `401`s are
+  // expected, not a lapsed session. A prompt opened there is shipped as inert
+  // markup whose backdrop covers the hydrated page, signed-in user or not.
+  if (!isPlatformBrowser(inject(PLATFORM_ID))) return next(request);
+
   const auth = inject(AuthService);
   const prompt = inject(AuthPrompt);
   const router = inject(Router);
