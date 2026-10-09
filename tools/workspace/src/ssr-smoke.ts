@@ -81,6 +81,16 @@ for (const failing of [false, true]) {
     }
     const library = await fetch(base + '/api/shaders', { signal: AbortSignal.timeout(5000) });
     assert.equal(library.status, 401);
+
+    // An emailed link carries its token in the query; a server-side redirect
+    // would drop it before the app could read it.
+    for (const path of ['/reset-password?token=smoke', '/verify-email?token=smoke']) {
+      const page = await fetch(base + path, {
+        redirect: 'manual',
+        signal: AbortSignal.timeout(5000),
+      });
+      assert.equal(page.status, 200, path + ' must reach the app, not redirect');
+    }
   } finally {
     if (child.pid && child.exitCode === null && child.signalCode === null) {
       const stopped = new Promise<void>((resolve) => child.once('exit', () => resolve()));
@@ -89,4 +99,6 @@ for (const failing of [false, true]) {
     }
   }
 }
-log.info('production SSR starts; public readiness works and the library remains protected');
+log.info(
+  'production SSR starts; public readiness works, the library remains protected and email links reach the app',
+);
