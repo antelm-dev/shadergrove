@@ -28,7 +28,7 @@ import {
   type SetParamsOutcome,
 } from './state/project-mutations';
 import { parseControls } from './state/controls-schema';
-import { ShaderApi } from '../api/shader-api';
+import { ApiError, ShaderApi } from '../api/shader-api';
 import { OutputLog } from '../ui/bottom-panel/output-log';
 
 /**
@@ -63,6 +63,9 @@ export interface CompileOutcome {
   revision: number;
   diagnostics: readonly CompileDiagnostic[];
 }
+
+/** How a history restore ended; anything but `'restored'` left the open document alone. */
+export type HistoryRestoreOutcome = 'restored' | 'conflict' | 'failed';
 
 export type ApplyPatchResult =
   | { ok: true; revision: number; diagnostics: readonly CompileDiagnostic[] }
@@ -417,6 +420,9 @@ export class ShaderStore {
     const record = this.record();
     const draft = this.draft();
     if (!record || !draft || this.saving()) return false;
+    // Nothing to write: a clean save would only add a duplicate history entry.
+    // A legacy example still saves, since saving is what gives it a personal copy.
+    if (!this.dirty() && record.kind === 'shader') return true;
 
     const controls = parseControls(draft.controlsText);
     if (!controls) {
@@ -516,6 +522,53 @@ export class ShaderStore {
     this.discardCurrentDraft();
   }
 
+  // --- History --------------------------------------------------------------
+
+  /**
+   * Copies a history entry of the open shader into a new head and adopts the
+   * server's answer as the clean saved state. Callers run it behind the
+   * unsaved-changes guard. The head held here is the `expectedRevision`, so a
+   * shader that moved on elsewhere is a `'conflict'` and nothing here changes.
+   */
+  async restoreHistory(id: string, revision: number): Promise<HistoryRestoreOutcome> {
+    const record = this.record();
+    if (record?.id !== id || this.saving()) return 'failed';
+
+    this.saving.set(true);
+    try {
+      const restored = await this.persistence.restoreHistory(id, revision, record.revision);
+      if (this.selectedId() === id) {
+        // Typed while the request was out: kept for the stale-recovery prompt, not lost.
+        if (this.dirty()) this.recovery.flush();
+        else this.recovery.forget(id);
+        this.selection.adoptCreated(restored);
+      }
+      await this.refreshList();
+      return 'restored';
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) return 'conflict';
+      this.report(error);
+      return 'failed';
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  /**
+   * Preset and name writes move the server's revision without returning it.
+   * Taking it from the refreshed list keeps the next save or restore from being
+   * refused as stale.
+   */
+  private followRevision(id: string): void {
+    const summary = this.shaders().find((shader) => shader.id === id);
+    if (!summary) return;
+    this.record.update((current) =>
+      current?.id === id
+        ? { ...current, revision: summary.revision, updatedAt: summary.updatedAt }
+        : current,
+    );
+  }
+
   // --- Collection actions -------------------------------------------------
 
   async create(name: string): Promise<void> {
@@ -546,6 +599,7 @@ export class ShaderStore {
       await this.refreshList();
       if (this.selectedId() === id) {
         this.record.update((record) => (record ? { ...record, name: updated.name } : record));
+        this.followRevision(id);
       }
       this.documentState.notify(`Renamed to “${updated.name}”`, false);
     } catch (error) {
@@ -591,6 +645,7 @@ export class ShaderStore {
       this.record.update((current) => (current ? { ...current, presets } : current));
       this.activePresetId.set(preset.id);
       await this.refreshList();
+      this.followRevision(record.id);
       this.documentState.notify(`Saved preset “${preset.name}”`, false);
     } catch (error) {
       this.report(error);
@@ -624,6 +679,7 @@ export class ShaderStore {
       this.record.update((current) => (current ? { ...current, presets } : current));
       if (this.activePresetId() === presetId) this.activePresetId.set(null);
       await this.refreshList();
+      this.followRevision(record.id);
       this.documentState.notify('Preset deleted', false);
     } catch (error) {
       this.report(error);

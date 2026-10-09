@@ -1,3 +1,5 @@
+import { Location } from '@angular/common';
+import { provideLocationMocks } from '@angular/common/testing';
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
@@ -12,19 +14,25 @@ import { ShaderStore } from './shader-store';
 @Component({ template: '' })
 class Blank {}
 
-async function setup(url: string) {
+/** `cold`: the page was opened at `url`, but the router has not navigated yet, as on a real startup. */
+async function setup(url: string, { cold = false } = {}) {
   const selectedId = signal<string | null>(null);
+  const requested: (string | null | undefined)[] = [];
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
       provideRouter([{ path: '**', component: Blank }]),
+      provideLocationMocks(),
       {
         provide: ShaderStore,
         useValue: {
           selectedId,
-          shaders: signal([{ id: 'waves' }]),
+          shaders: signal([{ id: 'waves' }, { id: 'plasma' }]),
           notice: signal(null),
-          initializeClient: async () => undefined,
+          initializeClient: async (id?: string | null) => {
+            requested.push(id);
+            if (id) selectedId.set(id);
+          },
         },
       },
       {
@@ -40,11 +48,12 @@ async function setup(url: string) {
     ],
   });
   const router = TestBed.inject(Router);
-  await router.navigateByUrl(url);
+  if (cold) TestBed.inject(Location).go(url);
+  else await router.navigateByUrl(url);
   const coordinator = TestBed.inject(RoutingCoordinator);
   // `afterNextRender` never fires without a view; start routing the way it would.
   await (coordinator as unknown as { initializeRouting(): Promise<void> }).initializeRouting();
-  return { router, selectedId };
+  return { router, selectedId, requested };
 }
 
 const settle = async () => {
@@ -56,6 +65,12 @@ describe('RoutingCoordinator', () => {
   it('normalizes an unknown path to the selection', async () => {
     const { router } = await setup('/somewhere');
     expect(router.url).toBe('/');
+  });
+
+  it('opens the deep-linked shader when startup runs before the initial navigation', async () => {
+    const { router, requested } = await setup('/shaders/plasma', { cold: true });
+    expect(requested).toEqual(['plasma']);
+    expect(router.url).toBe('/shaders/plasma');
   });
 
   it('leaves the desktop sign-in page alone, through startup and a selection', async () => {
