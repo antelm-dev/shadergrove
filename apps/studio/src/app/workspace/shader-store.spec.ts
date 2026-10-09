@@ -46,6 +46,7 @@ const CONTROLS: ShaderControl[] = [
 
 const FRAGMENT = 'void main() { gl_FragColor = vec4(1.0); }';
 const VERTEX = 'void main() { gl_Position = vec4(position, 1.0); }';
+const RESTORED = 'void main() { gl_FragColor = vec4(0.25); }';
 
 function makeRecord(overrides: Partial<ShaderRecord> = {}): ShaderRecord {
   return {
@@ -177,6 +178,26 @@ class FakeApi implements Partial<ShaderApi> {
 
   deletePreset(): Promise<void> {
     return this.track('deletePreset', () => undefined);
+  }
+
+  /** Like the server: a stale head is a 409; otherwise the entry becomes a new head. */
+  restoreHistory(id: string, _revision: number, expectedRevision: number): Promise<ShaderRecord> {
+    return this.track('restoreHistory', () => {
+      const current = this.records.get(id);
+      if (!current) throw new ApiError(`No such shader ${id}`, [], 404);
+      if (current.revision !== expectedRevision) {
+        throw new ApiError(`Shader "${id}" was modified by another write`, [], 409);
+      }
+      const restored = makeRecord({
+        ...current,
+        revision: current.revision + 1,
+        updatedAt: '2024-04-04T00:00:00.000Z',
+        fragment: RESTORED,
+        project: migrateLegacyProject(RESTORED, current.vertex),
+      });
+      this.records.set(id, restored);
+      return structuredClone(restored);
+    });
   }
 
   importBundle(): Promise<ImportResult> {
@@ -1103,5 +1124,109 @@ describe('ShaderStore: captureMissingPreview', () => {
 
     store.captureMissingPreview('waves');
     expect(setThumbnail).not.toHaveBeenCalled();
+  });
+});
+
+describe('ShaderStore: history', () => {
+  // Drafts and legacy projects other tests left in storage would be adopted here.
+  // Read through the window, as the store does via DOCUMENT. Some runners give the test
+  // window no storage at all; then the store has none either and there is nothing to clear.
+  beforeEach(() => window.localStorage?.clear());
+
+  it('restores an entry as the clean saved state, sending the head it holds', async () => {
+    const { store, api } = setup(makeRecord({ revision: 4 }));
+    await store.initialize();
+    const restore = vi.spyOn(api, 'restoreHistory');
+    const remove = vi.spyOn(TestBed.inject(DraftRecovery), 'remove');
+
+    expect(await store.restoreHistory('waves', 2)).toBe('restored');
+
+    expect(restore).toHaveBeenCalledWith('waves', 2, 4);
+    expect(store.record()?.revision).toBe(5);
+    expect(store.fragment()).toBe(RESTORED);
+    expect(store.dirty()).toBe(false);
+    expect(store.saving()).toBe(false);
+    expect(remove).toHaveBeenCalledWith('waves');
+    expect(api.calls.slice(-1)).toEqual(['list']);
+  });
+
+  it('reports a stale head as a conflict and leaves the document alone', async () => {
+    const { store, api } = setup(makeRecord({ revision: 4 }));
+    await store.initialize();
+    api.records.get('waves')!.revision = 6; // Saved elsewhere since it was opened.
+
+    expect(await store.restoreHistory('waves', 2)).toBe('conflict');
+
+    expect(store.record()?.revision).toBe(4);
+    expect(store.fragment()).toBe(FRAGMENT);
+    expect(store.notice()).toBeNull();
+  });
+
+  it('reports any other failure and keeps the document', async () => {
+    const { store, api } = setup(makeRecord());
+    await store.initialize();
+    api.failures.set('restoreHistory', new ApiError('Entry is corrupt'));
+
+    expect(await store.restoreHistory('waves', 1)).toBe('failed');
+
+    expect(store.fragment()).toBe(FRAGMENT);
+    expect(store.notice()).toEqual({ text: 'Entry is corrupt', error: true });
+  });
+
+  it('refuses to restore into a shader that is not the open one', async () => {
+    const { store, api } = setup(makeRecord());
+    await store.initialize();
+
+    expect(await store.restoreHistory('plasma', 1)).toBe('failed');
+    expect(api.calls).not.toContain('restoreHistory');
+  });
+
+  it('keeps edits typed while the restore was out for the recovery prompt', async () => {
+    // Explicit storage, as the sync-reload spec above: the recovery prompt reads it, and
+    // the environment's own localStorage may not exist on every runner.
+    const api = new FakeApi(makeRecord());
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: ShaderApi, useValue: api },
+        { provide: Preferences, useValue: new FakePreferences() },
+        { provide: PLATFORM_ID, useValue: 'browser' },
+        { provide: DOCUMENT, useValue: documentWith(new MemoryStorage()) },
+      ],
+    });
+    const store = TestBed.inject(ShaderStore);
+    await store.initialize();
+    const original = api.restoreHistory.bind(api);
+    vi.spyOn(api, 'restoreHistory').mockImplementationOnce(async (...args) => {
+      store.setFragment('void main() { /* typed meanwhile */ }');
+      return original(...args);
+    });
+
+    expect(await store.restoreHistory('waves', 1)).toBe('restored');
+
+    expect(store.fragment()).toBe(RESTORED);
+    expect(store.staleRecovery()?.shaderId).toBe('waves');
+  });
+
+  it('follows the revision a preset write moved on, so the next restore is not stale', async () => {
+    const { store, api } = setup(makeRecord({ revision: 4 }));
+    await store.initialize();
+    const savePreset = api.savePreset.bind(api);
+    vi.spyOn(api, 'savePreset').mockImplementationOnce(async (...args) => {
+      api.records.get('waves')!.revision = 5; // The server bumps the head for a preset.
+      return savePreset(...args);
+    });
+
+    await store.savePreset('Calm');
+
+    expect(store.record()?.revision).toBe(5);
+    expect(await store.restoreHistory('waves', 2)).toBe('restored');
+  });
+
+  it('does not send a save when nothing changed', async () => {
+    const { store, api } = setup(makeRecord());
+    await store.initialize();
+
+    expect(await store.save()).toBe(true);
+    expect(api.calls).not.toContain('update');
   });
 });

@@ -11,6 +11,8 @@ import {
   createDefaultSurface,
   editorSurfaceId,
   isContainedPlacement,
+  type EditorGroupId,
+  type SplitAxis,
   type SurfaceId,
 } from '@shadergrove/shared/surfaces';
 import { SurfaceLayoutService, SurfaceRegistry, describeSurfaceCommands } from '../../surfaces';
@@ -18,6 +20,7 @@ import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 import type { TranslationKey } from '../../i18n/keys';
 import { WorkspaceActions } from '../workspace-actions';
+import { EditorGroups } from './editor-groups';
 
 const DOCK_LABELS: Record<EditorDockSide, TranslationKey> = {
   bottom: 'editor.dockBottom',
@@ -57,6 +60,26 @@ const DOCK_ICONS: Record<EditorDockSide, string> = {
           <span>{{ 'action.detach' | translate }}</span>
         </button>
       }
+      <button
+        mat-menu-item
+        type="button"
+        class="split-right"
+        [disabled]="!canSplit()"
+        (click)="splitGroup('horizontal')"
+      >
+        <mat-icon>vertical_split</mat-icon>
+        <span>{{ 'editor.splitRight' | translate }}</span>
+      </button>
+      <button
+        mat-menu-item
+        type="button"
+        class="split-down"
+        [disabled]="!canSplit()"
+        (click)="splitGroup('vertical')"
+      >
+        <mat-icon>horizontal_split</mat-icon>
+        <span>{{ 'editor.splitDown' | translate }}</span>
+      </button>
       @for (side of dockSides; track side) {
         <button
           mat-menu-item
@@ -101,9 +124,9 @@ const DOCK_ICONS: Record<EditorDockSide, string> = {
       matIconButton
       type="button"
       class="control"
-      [matTooltip]="'editor.close' | translate"
-      [attr.aria-label]="'editor.close' | translate"
-      (click)="layout.close(surfaceId())"
+      [matTooltip]="(closesGroup() ? 'editor.closeGroup' : 'editor.close') | translate"
+      [attr.aria-label]="(closesGroup() ? 'editor.closeGroup' : 'editor.close') | translate"
+      (click)="close()"
     >
       <mat-icon>close</mat-icon>
     </button>
@@ -144,11 +167,21 @@ export class EditorWindowControls {
   protected readonly layout = inject(SurfaceLayoutService);
   protected readonly registry = inject(SurfaceRegistry);
   protected readonly workspace = inject(WorkspaceActions);
+  private readonly groups = inject(EditorGroups);
   private readonly i18n = inject(I18n);
   protected readonly dockSides = EDITOR_DOCK_SIDES;
 
   /** The editor surface these controls act on; the default group's when absent. */
   readonly surfaceId = input<SurfaceId>(editorSurfaceId(DEFAULT_EDITOR_GROUP_ID));
+  /** The split group the controls sit in; null for the lone legacy editor. */
+  readonly groupId = input<EditorGroupId | null>(null);
+
+  private readonly splitSource = computed(() => this.groupId() ?? this.groups.primaryGroupId);
+  protected readonly canSplit = computed(() => this.groups.canSplit(this.splitSource()));
+  /** In a split, close merges this group into its neighbour; otherwise it hides the editor. */
+  protected readonly closesGroup = computed(
+    () => this.groupId() !== null && this.groups.canCloseGroup(),
+  );
 
   private readonly surface = computed(
     () =>
@@ -181,6 +214,16 @@ export class EditorWindowControls {
     // Floating, or restoring from floating: only the default surface has a legacy dock side.
     return this.surfaceId() === this.layout.editorId ? this.layout.editorDockSide() : 'bottom';
   });
+
+  protected splitGroup(axis: SplitAxis): void {
+    this.groups.split(axis, this.splitSource());
+  }
+
+  protected close(): void {
+    const groupId = this.groupId();
+    if (groupId !== null && this.closesGroup()) this.groups.closeGroup(groupId);
+    else this.layout.close(this.surfaceId());
+  }
 
   protected dockedOn(side: EditorDockSide): boolean {
     return this.activeDockSide() === side;

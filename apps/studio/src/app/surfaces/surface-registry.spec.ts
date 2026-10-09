@@ -113,4 +113,32 @@ describe('SurfaceRegistry', () => {
     expect(snap.version).toBe(LAYOUT_VERSION);
     expect(snap.surfaces.some((s) => s.kind === 'preview')).toBe(true);
   });
+
+  it('carries the editor split tree through snapshot and hydrate', () => {
+    const second = editorSurfaceId(asEditorGroupId('editor-group:1'));
+    const first = editorSurfaceId(asEditorGroupId('editor-group:default'));
+    const tree = {
+      kind: 'split' as const,
+      id: 'split:x' as never,
+      axis: 'vertical' as const,
+      ratio: 0.3,
+      first: { kind: 'leaf' as const, surfaceId: first },
+      second: { kind: 'leaf' as const, surfaceId: second },
+    };
+    registry.upsert(createDefaultSurface('editor', { id: first }));
+    registry.upsert(
+      createDefaultSurface('editor', {
+        id: second,
+        chrome: { kind: 'editor', editorGroupId: asEditorGroupId('editor-group:1') },
+      }),
+    );
+    registry.setEditorLayout(tree);
+
+    const snapshot = registry.snapshot();
+    expect(snapshot.editorLayout).toEqual(tree);
+
+    registry.setEditorLayout({ kind: 'leaf', surfaceId: first });
+    registry.hydrate(snapshot);
+    expect(registry.editorLayout()).toEqual(tree);
+  });
 });

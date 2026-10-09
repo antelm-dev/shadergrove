@@ -6,6 +6,7 @@ import type {
   ImportResult,
   Preset,
   RenderSettings,
+  ShaderHistoryEntry,
   ShaderParams,
   ShaderRecord,
   ShaderSummary,
@@ -73,6 +74,28 @@ export class DesktopShaderApi extends ShaderApi {
 
   override deletePreset(id: string, presetId: string): Promise<void> {
     return this.request(() => window.electron.bridge.shader.deletePreset(id, presetId));
+  }
+
+  override listHistory(id: string): Promise<ShaderHistoryEntry[]> {
+    return this.request(() => window.electron.bridge.shader.listHistory(id));
+  }
+
+  override setCheckpoint(
+    id: string,
+    revision: number,
+    name: string | null,
+  ): Promise<ShaderHistoryEntry> {
+    return this.request(() => window.electron.bridge.shader.setCheckpoint(id, revision, name));
+  }
+
+  override restoreHistory(
+    id: string,
+    revision: number,
+    expectedRevision: number,
+  ): Promise<ShaderRecord> {
+    return this.request(() =>
+      window.electron.bridge.shader.restoreHistory(id, revision, expectedRevision),
+    );
   }
 
   override exportShader(id: string): Promise<Bundle> {

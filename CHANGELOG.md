@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.8.0](https://github.com/antelm-dev/shadergrove/compare/v2.7.1...v2.8.0) (2026-10-09)
+
+
+### Features
+
+* **studio:** contained split editor groups ([#219](https://github.com/antelm-dev/shadergrove/issues/219)) ([c558d3d](https://github.com/antelm-dev/shadergrove/commit/c558d3d58b8ff3a629fd3f55ec010566d1e2a356))
+
+## [2.7.1](https://github.com/antelm-dev/shadergrove/compare/v2.7.0...v2.7.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **studio:** open the deep-linked shader on a cold load ([#220](https://github.com/antelm-dev/shadergrove/issues/220)) ([0e87075](https://github.com/antelm-dev/shadergrove/commit/0e8707598dc469f1e3e36c4295d7692c94d3aceb))
+
+## [2.7.0](https://github.com/antelm-dev/shadergrove/compare/v2.6.0...v2.7.0) (2026-10-08)
+
+
+### Features
+
+* **studio:** history timeline with checkpoints and guarded restore ([#217](https://github.com/antelm-dev/shadergrove/issues/217)) ([3722af7](https://github.com/antelm-dev/shadergrove/commit/3722af7358d1a1aa08b7b7406bc02627ba22157d))
+
 ## [2.6.0](https://github.com/antelm-dev/shadergrove/compare/v2.5.0...v2.6.0) (2026-10-08)
 
 

@@ -8,7 +8,15 @@
  * SSR-safe: hydration runs in the browser only.
  */
 
-import { Injectable, PLATFORM_ID, computed, inject, signal } from '@angular/core';
+import {
+  Injectable,
+  PLATFORM_ID,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 
 import type { InspectorTab } from '@shadergrove/shared/panel-prefs';
@@ -84,6 +92,15 @@ export class SurfaceLayoutService {
   constructor() {
     if (this.isBrowser) {
       this.hydrateFromPreferences();
+      // The split tree changes only on committed edits (split, close, resize
+      // release), never on pointermove, so each new tree is persisted as is.
+      let persisted = this.registry.editorLayout();
+      effect(() => {
+        const tree = this.registry.editorLayout();
+        if (tree === persisted) return;
+        persisted = tree;
+        untracked(() => this.persistLayout());
+      });
     }
   }
 
@@ -105,6 +122,7 @@ export class SurfaceLayoutService {
       chrome: { kind: 'editor', editorGroupId: DEFAULT_EDITOR_GROUP_ID },
     });
     this.registry.ensure('inspector');
+    this.registry.repairEditorLayout();
   }
 
   setPreviewWorkspace(rect: Rect): void {
@@ -214,7 +232,9 @@ export class SurfaceLayoutService {
 
     if (surface.kind === 'editor') {
       const remaining = Math.max(0, this.registry.openEditorGroupCount() - 1);
-      if (remaining < 1) {
+      // The default editor frames every contained split group, so closing it
+      // hides the whole editor and keeps the split for the next open.
+      if (remaining < 1 || id === this.editorId) {
         // Sole editor group: hide the surface UI without rejecting (legacy editorOpen).
         this.registry.upsert({ ...surface, open: false });
         this.persistLayout();

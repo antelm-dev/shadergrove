@@ -9,11 +9,16 @@ import type {
   ImportResult,
   Preset,
   RenderSettings,
+  ShaderHistoryEntry,
   ShaderParams,
   ShaderRecord,
   ShaderSummary,
 } from '@shadergrove/shared/model';
-import type { UpdateShaderPatch } from '@shadergrove/shared/api';
+import type {
+  RestoreShaderHistoryRequest,
+  SetShaderCheckpointRequest,
+  UpdateShaderPatch,
+} from '@shadergrove/shared/api';
 import { mimeFromExt } from '@shadergrove/shared/validate';
 import { API_BASE_URL } from './api-base-url';
 
@@ -85,6 +90,20 @@ export abstract class ShaderApi {
     render?: RenderSettings,
   ): Promise<Preset>;
   abstract deletePreset(id: string, presetId: string): Promise<void>;
+  /** Saved document states (source, settings and presets), newest first. */
+  abstract listHistory(id: string): Promise<ShaderHistoryEntry[]>;
+  /** Names an entry, or clears its name with `null`. The shader revision does not move. */
+  abstract setCheckpoint(
+    id: string,
+    revision: number,
+    name: string | null,
+  ): Promise<ShaderHistoryEntry>;
+  /** Copies an entry into a new head; refused as a conflict unless `expectedRevision` is the head. */
+  abstract restoreHistory(
+    id: string,
+    revision: number,
+    expectedRevision: number,
+  ): Promise<ShaderRecord>;
   abstract exportShader(id: string): Promise<Bundle>;
   abstract exportAll(): Promise<Bundle>;
   abstract importBundle(bundle: unknown, mode: ImportMode): Promise<ImportResult>;
@@ -194,6 +213,39 @@ export class HttpShaderApi extends ShaderApi {
 
   override deletePreset(id: string, presetId: string): Promise<void> {
     return this.delete(`/shaders/${id}/presets/${presetId}`);
+  }
+
+  // --- History ------------------------------------------------------------
+
+  override async listHistory(id: string): Promise<ShaderHistoryEntry[]> {
+    const response = await this.get<{ history: ShaderHistoryEntry[] }>(`/shaders/${id}/history`);
+    return response.history;
+  }
+
+  override async setCheckpoint(
+    id: string,
+    revision: number,
+    name: string | null,
+  ): Promise<ShaderHistoryEntry> {
+    const body: SetShaderCheckpointRequest = { name };
+    const response = await this.put<{ entry: ShaderHistoryEntry }>(
+      `/shaders/${id}/history/${revision}/checkpoint`,
+      body,
+    );
+    return response.entry;
+  }
+
+  override async restoreHistory(
+    id: string,
+    revision: number,
+    expectedRevision: number,
+  ): Promise<ShaderRecord> {
+    const body: RestoreShaderHistoryRequest = { expectedRevision };
+    const response = await this.post<{ shader: ShaderRecord }>(
+      `/shaders/${id}/history/${revision}/restore`,
+      body,
+    );
+    return response.shader;
   }
 
   // --- Import / export ----------------------------------------------------

@@ -417,6 +417,22 @@ export class CodeEditor {
     this.editor?.focus();
   }
 
+  /** Cursor, selection and scroll of a document here — live when mounted, else as last left. */
+  viewStateOf(docId: string): Monaco.editor.ICodeEditorViewState | null {
+    if (this.mounted === docId) return this.editor?.saveViewState() ?? null;
+    return this.viewStates.get(docId) ?? null;
+  }
+
+  /**
+   * Take over a document's view state from another editor, as when its tab
+   * moves between editor groups: applied now when it is mounted, otherwise
+   * restored by `mount` like this editor's own.
+   */
+  adoptViewState(docId: string, state: Monaco.editor.ICodeEditorViewState): void {
+    if (this.mounted === docId && this.editor) this.editor.restoreViewState(state);
+    else this.viewStates.set(docId, state);
+  }
+
   /**
    * Put the cursor on a line of a given document — what clicking a diagnostic
    * does.
