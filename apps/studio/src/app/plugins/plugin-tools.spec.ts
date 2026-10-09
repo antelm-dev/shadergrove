@@ -223,18 +223,30 @@ describe('plugin tools', () => {
         packages: { id: string; file: string; protocolVersion: number }[];
       };
       expect(catalogue.packages.length).toBeGreaterThan(0);
+      const tools = ['analyzer', 'assetTool', 'projectTemplate'];
+      const protocol4: string[] = [];
       for (const entry of catalogue.packages) {
         const parsed = parsePluginPackage(readFileSync(resolve(generated, entry.file), 'utf8'));
         if (!parsed.ok) throw new Error(`${entry.id}: ${parsed.errors.join()}`);
-        // No official package lists a protocol-4 kind yet, and none gained template data.
+        // The protocol-4 tool packs are new, not changed: each contributes only tool kinds.
+        if (parsed.value.manifest.protocolVersion >= 4) {
+          protocol4.push(entry.id);
+          expect(parsed.value.manifest.contributions.every((c) => tools.includes(c.kind))).toBe(
+            true,
+          );
+          continue;
+        }
+        // No earlier official package gained a protocol-4 kind or template data.
         expect(parsed.value.manifest.protocolVersion).toBeLessThanOrEqual(3);
         expect(parsed.value.templates).toEqual({});
-        expect(
-          parsed.value.manifest.contributions.some((c) =>
-            ['analyzer', 'assetTool', 'projectTemplate'].includes(c.kind),
-          ),
-        ).toBe(false);
+        expect(parsed.value.manifest.contributions.some((c) => tools.includes(c.kind))).toBe(false);
       }
+      expect(protocol4.sort()).toEqual([
+        'dev.shadergrove.palette-studio',
+        'dev.shadergrove.project-recipes',
+        'dev.shadergrove.shader-doctor',
+        'dev.shadergrove.texture-utilities',
+      ]);
     });
   });
 

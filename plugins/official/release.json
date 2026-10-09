@@ -6,6 +6,10 @@
     "grove-amber",
     "shadertoy",
     "wallpaper-engine",
-    "isf"
+    "isf",
+    "project-recipes",
+    "shader-doctor",
+    "texture-utilities",
+    "palette-studio"
   ]
 }

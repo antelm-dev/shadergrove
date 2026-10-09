@@ -141,6 +141,11 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
   for (const key of Object.keys(messages)) {
     if (
       key.startsWith('builder.') ||
+      // Nor the plugin tools' strings, added later still (1.0.9).
+      /^(recipes|doctor|textures)\./.test(key) ||
+      ['plugins.kindAnalyzer', 'plugins.kindAssetTool', 'plugins.kindProjectTemplate'].includes(
+        key,
+      ) ||
       key === 'inspector.editControls' ||
       key === 'inspector.noControls'
     ) {
@@ -168,7 +173,9 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
   await page.getByTestId(`use-language-${FRENCH}/french`).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
 
-  // The builder's entry falls back to English in this profile today.
+  // The builder's entry and the tools' kinds fall back to English in this profile today.
+  const doctor = page.getByTestId('available-dev.shadergrove.shader-doctor');
+  await expect(doctor).toContainText('Analyzer');
   await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
   await expect(page.getByRole('button', { name: /^Edit controls$/ })).toBeVisible();
 
@@ -184,6 +191,10 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
   if (!(await updated.isChecked())) await updated.click();
   await expect(updated).toBeChecked();
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+  await expect(doctor).toContainText('Analyseur');
+  await expect(page.getByTestId('available-dev.shadergrove.palette-studio')).toContainText(
+    'Outil de ressources',
+  );
   await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
   await expect(page.getByRole('button', { name: 'Modifier les contrôles' })).toBeVisible();
 });
