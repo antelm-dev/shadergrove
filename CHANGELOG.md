@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.1](https://github.com/antelm-dev/shadergrove/compare/v2.7.0...v2.7.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **studio:** open the deep-linked shader on a cold load ([#220](https://github.com/antelm-dev/shadergrove/issues/220)) ([0e87075](https://github.com/antelm-dev/shadergrove/commit/0e8707598dc469f1e3e36c4295d7692c94d3aceb))
+
 ## [2.7.0](https://github.com/antelm-dev/shadergrove/compare/v2.6.0...v2.7.0) (2026-10-08)
 
 
