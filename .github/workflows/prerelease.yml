@@ -39,7 +39,7 @@ jobs:
           # renovate: datasource=node-version depName=node
           node-version: '26.5.0'
       - name: Test beta release routing and recovery
-        run: node --test .github/scripts/releases.test.mjs .github/scripts/beta-release.test.mjs
+        run: node --test .github/scripts/releases.test.mjs .github/scripts/beta-release.test.mjs .github/scripts/prune-betas.test.mjs
       - name: Resolve build version and existing release
         id: target
         env:
@@ -98,3 +98,33 @@ jobs:
       linux: ${{ vars.DESKTOP_LINUX_RELEASE_ENABLED == 'true' }}
       macos: ${{ vars.DESKTOP_MACOS_RELEASE_ENABLED == 'true' }}
     secrets: inherit
+
+  prune:
+    name: Prune old betas
+    needs: [version, desktop]
+    # Also after a skipped publication, so a stable release still closes its beta cycle.
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # renovate: datasource=node-version depName=node
+          node-version: '26.5.0'
+      - name: Delete closed-cycle and surplus betas with their tags
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tags="$(node .github/scripts/prune-betas.mjs)"
+          for tag in $tags; do
+            gh release delete "$tag" --cleanup-tag --yes
+            echo "Deleted $tag"
+          done

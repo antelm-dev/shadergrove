@@ -70,6 +70,13 @@ has since overtaken its base. A bare tag without a release gets no such exemptio
 Reusing a beta version for another commit fails. Published betas use
 `prerelease=true`, `latest=false`, and the `beta` updater manifest.
 
+After each beta run, `.github/scripts/prune-betas.mjs` deletes old published betas
+with their tags: every beta whose base is at or below the highest published stable,
+and all but the newest five of each open base. The newest beta of a base is always
+kept so numbering never restarts below an installed beta, and drafts are never
+deleted. Deleted betas lose their notes and binaries; clients still on one download
+the next update in full instead of differentially.
+
 Release decisions read the complete paginated release list (drafts are visible
 because the resolving job has `contents: write`). An unreadable page, a malformed
 entry, a published non-prerelease release whose tag is not `vX.Y.Z`, or more than
