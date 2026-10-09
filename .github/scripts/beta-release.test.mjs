@@ -3,7 +3,9 @@ import test from 'node:test';
 import { readGitHub, resolveBetaRelease } from './beta-release.mjs';
 
 const sha = 'a'.repeat(40);
-const input = { event: 'push', ref: 'refs/heads/develop', sha, base: '2.0.0', runNumber: '42' };
+const input = { event: 'push', ref: 'refs/heads/develop', sha, base: '2.0.0' };
+// Pins the version so recovery checks see the release under test, whatever its target.
+const pinned = { ...input, version: '2.0.0-beta.42' };
 const stable = (version, draft = false) => ({ tag_name: `v${version}`, draft, prerelease: false });
 const beta = (release) => ({
   tag_name: 'v2.0.0-beta.42',
@@ -20,10 +22,40 @@ const remote =
     throw new Error(`Unexpected API path: ${path}`);
   };
 
-test('automatic numbering is stable across retries and does not use the attempt number', async () => {
-  const target = { version: '2.0.0-beta.42', tag: 'v2.0.0-beta.42', sha, publish: true };
-  assert.deepEqual(await resolveBetaRelease(input, remote()), target);
-  assert.deepEqual(await resolveBetaRelease({ ...input, attempt: '2' }, remote()), target);
+test('automatic numbering restarts at 0 for each base and follows its highest beta', async () => {
+  assert.deepEqual(await resolveBetaRelease(input, remote()), {
+    version: '2.0.0-beta.0',
+    tag: 'v2.0.0-beta.0',
+    sha,
+    publish: true,
+  });
+  const other = 'b'.repeat(40);
+  const releases = [
+    beta({ tag_name: 'v2.0.0-beta.3', target_commitish: other }),
+    beta({ tag_name: 'v2.0.0-beta.0', target_commitish: other }),
+    beta({ tag_name: 'v1.9.0-beta.9', target_commitish: other }),
+    beta({ tag_name: 'v2.0.0-beta.x', target_commitish: other }),
+    stable('1.9.0'),
+  ];
+  assert.equal((await resolveBetaRelease(input, remote({ releases }))).version, '2.0.0-beta.4');
+});
+
+test('reruns resume the beta already created for their commit', async () => {
+  const releases = [
+    beta({ tag_name: 'v2.0.0-beta.2', target_commitish: 'b'.repeat(40) }),
+    beta({ tag_name: 'v2.0.0-beta.1', draft: true, target_commitish: sha }),
+  ];
+  assert.deepEqual(await resolveBetaRelease(input, remote({ releases })), {
+    version: '2.0.0-beta.1',
+    tag: 'v2.0.0-beta.1',
+    sha,
+    publish: true,
+  });
+  const published = [beta({ tag_name: 'v2.0.0-beta.1', target_commitish: sha })];
+  assert.equal(
+    (await resolveBetaRelease(input, remote({ releases: published, tagSha: sha }))).publish,
+    false,
+  );
 });
 
 test('manual dispatch accepts an explicit beta version or generates one', async () => {
@@ -31,7 +63,7 @@ test('manual dispatch accepts an explicit beta version or generates one', async 
   assert.equal((await resolveBetaRelease(manual, remote())).version, manual.version);
   assert.equal(
     (await resolveBetaRelease({ ...manual, version: '' }, remote())).version,
-    '2.0.0-beta.42',
+    '2.0.0-beta.0',
   );
 });
 
@@ -39,12 +71,12 @@ test('draft recovery requires the original commit, with or without an existing t
   const draft = beta({ draft: true, target_commitish: sha });
   for (const tagSha of [null, sha]) {
     assert.equal(
-      (await resolveBetaRelease(input, remote({ releases: [draft], tagSha }))).publish,
+      (await resolveBetaRelease(pinned, remote({ releases: [draft], tagSha }))).publish,
       true,
     );
   }
   await assert.rejects(
-    resolveBetaRelease(input, remote({ releases: [{ ...draft, target_commitish: 'develop' }] })),
+    resolveBetaRelease(pinned, remote({ releases: [{ ...draft, target_commitish: 'develop' }] })),
     /another commit/,
   );
 });
@@ -53,11 +85,11 @@ test('existing betas are still recovered or skipped after their stable cycle adv
   const later = [stable('2.0.0'), stable('2.1.0')];
   const draft = beta({ draft: true, target_commitish: sha });
   assert.equal(
-    (await resolveBetaRelease(input, remote({ releases: [draft, ...later] }))).publish,
+    (await resolveBetaRelease(pinned, remote({ releases: [draft, ...later] }))).publish,
     true,
   );
   assert.equal(
-    (await resolveBetaRelease(input, remote({ releases: [beta(), ...later], tagSha: sha })))
+    (await resolveBetaRelease(pinned, remote({ releases: [beta(), ...later], tagSha: sha })))
       .publish,
     false,
   );
@@ -66,26 +98,26 @@ test('existing betas are still recovered or skipped after their stable cycle adv
 test('published prereleases at the same commit are skipped', async () => {
   const published = beta({ target_commitish: 'develop' });
   assert.equal(
-    (await resolveBetaRelease(input, remote({ releases: [published], tagSha: sha }))).publish,
+    (await resolveBetaRelease(pinned, remote({ releases: [published], tagSha: sha }))).publish,
     false,
   );
   await assert.rejects(
-    resolveBetaRelease(input, remote({ releases: [published] })),
+    resolveBetaRelease(pinned, remote({ releases: [published] })),
     /another commit/,
   );
 });
 
 test('tag collisions, duplicate releases and releases in the wrong channel are refused', async () => {
   await assert.rejects(
-    resolveBetaRelease(input, remote({ tagSha: 'b'.repeat(40) })),
+    resolveBetaRelease(pinned, remote({ tagSha: 'b'.repeat(40) })),
     /another commit/,
   );
   await assert.rejects(
-    resolveBetaRelease(input, remote({ releases: [beta({ prerelease: false })], tagSha: sha })),
+    resolveBetaRelease(pinned, remote({ releases: [beta({ prerelease: false })], tagSha: sha })),
     /prerelease/,
   );
   await assert.rejects(
-    resolveBetaRelease(input, remote({ releases: [beta(), beta({ draft: true })], tagSha: sha })),
+    resolveBetaRelease(pinned, remote({ releases: [beta(), beta({ draft: true })], tagSha: sha })),
     /Several releases/,
   );
 });
@@ -101,7 +133,7 @@ test('new beta bases must be strictly newer than the highest published stable', 
   }
   // A bare tag without a release is not an existing beta and gets no exemption.
   await assert.rejects(
-    resolveBetaRelease(input, remote({ releases: [stable('2.0.0')], tagSha: sha })),
+    resolveBetaRelease(pinned, remote({ releases: [stable('2.0.0')], tagSha: sha })),
     /not newer/,
   );
   // Manual versions are held to the same rule.
@@ -116,7 +148,7 @@ test('new beta bases must be strictly newer than the highest published stable', 
   const pending = [stable('2.1.0'), stable('2.2.0', true), beta({ tag_name: 'v3.0.0-beta.1' })];
   assert.equal(
     (await resolveBetaRelease({ ...input, base: '2.2.0' }, remote({ releases: pending }))).version,
-    '2.2.0-beta.42',
+    '2.2.0-beta.0',
   );
 });
 
@@ -132,8 +164,6 @@ test('invalid versions and non-develop events fail before reading GitHub', async
     { event: 'pull_request' },
     { sha: 'develop' },
     { base: '2.0.0-beta.1' },
-    { runNumber: '0' },
-    { runNumber: '01' },
     { version: '2.0.0' },
     { version: '2.0.0-beta.01' },
     { version: '2.0.0-beta.1\npublish=true' },

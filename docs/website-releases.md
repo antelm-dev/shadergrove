@@ -53,8 +53,9 @@ images are disabled by the website's Markdown renderer.
 
 Every push to `develop` starts `.github/workflows/prerelease.yml`. The upcoming
 stable version is explicitly configured in `.github/beta-release.json` (currently
-`2.5.0`); the beta version is `<base>-beta.<workflow run number>`, for example
-`2.5.0-beta.42`. Rerunning a workflow keeps its original number. Versions are
+`2.5.0`); betas are numbered per base from `<base>-beta.0`, one past the highest
+existing `<base>-beta.N` release, so changing the base restarts at 0. A commit that
+already has a beta of that base reuses it, so reruns keep their number. Versions are
 written to `package.json` and `APP_VERSION` only in the build checkout, without
 committing version bumps back to `develop`. A new beta's base must be strictly
 newer (by semver) than the highest published stable release, for automatic and
