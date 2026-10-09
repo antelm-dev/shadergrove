@@ -4,37 +4,41 @@ import { EditorGroups } from './editor-groups';
 import type { OpenDocumentsState } from './open-documents-state';
 
 /**
- * Primary-group compatibility facade over `EditorGroups`.
+ * Active-group facade over `EditorGroups`.
  *
- * Existing shortcuts and panels keep using this service while multi-group UI
- * targets `EditorGroups` directly.
+ * Workspace-level actions (the close, cycle and Ctrl+digit shortcuts, explorer
+ * commands) act on the group the user last focused; with one group that is the
+ * primary group, as before splits existed.
  */
 @Injectable({ providedIn: 'root' })
 export class OpenDocuments {
   private readonly groups = inject(EditorGroups);
+  private readonly groupId = computed(
+    () => this.groups.activeGroupId() ?? this.groups.primaryGroupId,
+  );
 
-  readonly openIds = computed(() => this.groups.openIds(this.groups.primaryGroupId));
-  readonly openDocs = computed(() => this.groups.openDocs(this.groups.primaryGroupId));
-  readonly canClose = computed(() => this.groups.canClose(this.groups.primaryGroupId));
+  readonly openIds = computed(() => this.groups.openIds(this.groupId()));
+  readonly openDocs = computed(() => this.groups.openDocs(this.groupId()));
+  readonly canClose = computed(() => this.groups.canClose(this.groupId()));
 
   activate(docId: string): void {
-    this.groups.activate(docId, this.groups.primaryGroupId);
+    this.groups.activate(docId, this.groupId());
   }
 
   close(docId: string): boolean {
-    return this.groups.close(docId, this.groups.primaryGroupId);
+    return this.groups.close(docId, this.groupId());
   }
 
   closeOthers(docId: string): void {
-    this.groups.closeOthers(docId, this.groups.primaryGroupId);
+    this.groups.closeOthers(docId, this.groupId());
   }
 
   reorder(sourceId: string, targetId: string): void {
-    this.groups.reorder(sourceId, targetId, this.groups.primaryGroupId);
+    this.groups.reorder(sourceId, targetId, this.groupId());
   }
 
   cycle(step: 1 | -1): void {
-    this.groups.cycle(step, this.groups.primaryGroupId);
+    this.groups.cycle(step, this.groupId());
   }
 
   peekState(): OpenDocumentsState {

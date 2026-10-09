@@ -1,7 +1,7 @@
 {
   "manifest": {
     "id": "dev.shadergrove.language-en",
-    "version": "1.0.6",
+    "version": "1.0.8",
     "protocolVersion": 3,
     "appVersionRange": ">=1.5.0 <3.0.0",
     "name": "English",
@@ -542,6 +542,12 @@
           "editor.moveToNewGroup": "Move to new group",
           "editor.moveToGroup": "Move to {id}",
           "editor.externalizeGroup": "Detach to new window (coming soon)",
+          "editor.splitRight": "Split right",
+          "editor.splitDown": "Split down",
+          "editor.closeGroup": "Close this editor group",
+          "editor.groupLabel": "Source editor {n}",
+          "editor.resizeGroupsAcross": "Resize the editor groups. Use the left and right arrow keys.",
+          "editor.resizeGroupsDown": "Resize the editor groups. Use the up and down arrow keys.",
           "explorer.title": "Project explorer",
           "explorer.collapse": "Collapse the explorer",
           "explorer.expand": "Expand the explorer",

@@ -131,7 +131,7 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
     readFileSync(
       resolve(
         import.meta.dirname,
-        '../../studio/src/plugins/dev.shadergrove.language-fr-1.0.6.sgplugin.json',
+        '../../studio/src/plugins/dev.shadergrove.language-fr-1.0.8.sgplugin.json',
       ),
       'utf8',
     ),

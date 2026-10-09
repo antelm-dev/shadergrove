@@ -34,6 +34,7 @@ import {
   type SurfaceId,
 } from '@shadergrove/shared/surfaces';
 import { CodeEditor, type EditorDoc } from '../../editor/code-editor';
+import type { SessionEditorViewState } from '@shadergrove/shared/session';
 import { EditorSettings } from '../../editor/editor-settings';
 import { ProjectAnalysis } from '../../editor/glsl-analysis';
 import {
@@ -47,6 +48,7 @@ import { DocumentStatus } from './document-status';
 import { EditorTabs } from './editor-tabs';
 import { EditorWindowControls } from './editor-window-controls';
 import { EditorGroups } from './editor-groups';
+import { EditorGroupSession } from './editor-group-session';
 import { ControlsBuilder } from './controls-builder';
 import { PassConfigPanel } from '../inspector/pass-config-panel';
 import { TranslatePipe } from '../../i18n/translate.pipe';
@@ -60,7 +62,12 @@ import {
   type ExplorerViewMode,
 } from '../file-explorer';
 
-type EditorSurface = Pick<CodeEditor, 'applyEdit' | 'focus' | 'format' | 'layout' | 'revealIn'>;
+type EditorSurface = Pick<
+  CodeEditor,
+  'adoptViewState' | 'applyEdit' | 'focus' | 'format' | 'layout' | 'revealIn' | 'viewStateOf'
+>;
+
+type MonacoViewState = Parameters<CodeEditor['adoptViewState']>[1];
 
 /** How the Config document is shown: the visual builder, or its JSON. */
 type ConfigView = 'builder' | 'json';
@@ -130,7 +137,7 @@ type ConfigView = 'builder' | 'json';
         </button>
       }
 
-      <app-editor-window-controls [surfaceId]="surfaceId()" />
+      <app-editor-window-controls [surfaceId]="surfaceId()" [groupId]="groupId()" />
     </div>
 
     <mat-menu #editorMenu="matMenu">
@@ -307,14 +314,17 @@ type ConfigView = 'builder' | 'json';
               />
 
               <!-- Kept alive while hidden, like the editor: a selected control and
-                   a half-edited form survive a look at the JSON. -->
-              <app-controls-builder
-                #builder
-                class="builder-view"
-                [hidden]="!showBuilder()"
-                (commit)="commitConfig($event)"
-                (repair)="showJson(true)"
-              />
+                   a half-edited form survive a look at the JSON. Loaded right after
+                   first render so the builder stays out of the initial bundle. -->
+              @defer (on immediate) {
+                <app-controls-builder
+                  #builder
+                  class="builder-view"
+                  [hidden]="!showBuilder()"
+                  (commit)="commitConfig($event)"
+                  (repair)="showJson(true)"
+                />
+              }
             </div>
           </div>
 
@@ -604,6 +614,7 @@ export class EditorPanel {
   protected readonly workspace = inject(WorkspaceActions);
   protected readonly status = inject(DocumentStatus);
   protected readonly groups = inject(EditorGroups);
+  private readonly session = inject(EditorGroupSession);
   protected readonly fileExplorerLimits = FILE_EXPLORER_LIMITS;
 
   /**
@@ -616,6 +627,8 @@ export class EditorPanel {
   readonly surfaceId = input<SurfaceId>(editorSurfaceId(DEFAULT_EDITOR_GROUP_ID));
   readonly collapsed = input(false);
   readonly dragEnabled = input(false);
+  /** Whether this panel offers the project explorer; a split shows it in its first group only. */
+  readonly explorer = input(true);
   readonly dragStart = output<PointerEvent>();
 
   private readonly documentRef = inject(DOCUMENT);
@@ -647,6 +660,7 @@ export class EditorPanel {
   protected readonly explorerPreferredOpen = computed(
     () => this.preferences.value().fileExplorerOpen,
   );
+  private readonly explorerShown = computed(() => this.explorer() && !this.collapsed());
   protected readonly explorerWidth = computed(
     () => this.liveExplorerWidth() ?? this.preferences.value().fileExplorerWidth,
   );
@@ -665,17 +679,17 @@ export class EditorPanel {
     }),
   );
   protected readonly explorerDocked = computed(
-    () => !this.collapsed() && this.explorerPreferredOpen() && !this.narrow(),
+    () => this.explorerShown() && this.explorerPreferredOpen() && !this.narrow(),
   );
   protected readonly explorerOverlayAvailable = computed(
-    () => !this.collapsed() && this.explorerPreferredOpen() && this.narrow(),
+    () => this.explorerShown() && this.explorerPreferredOpen() && this.narrow(),
   );
   protected readonly explorerOverlayOpen = computed(
     () => this.explorerOverlayAvailable() && !this.overlayDismissed(),
   );
   protected readonly showExplorerReopen = computed(
     () =>
-      !this.collapsed() &&
+      this.explorerShown() &&
       (!this.explorerPreferredOpen() ||
         (this.explorerOverlayAvailable() && !this.explorerOverlayOpen())),
   );
@@ -772,6 +786,28 @@ export class EditorPanel {
     });
 
     this.destroyRef.onDestroy(() => this.analysis?.dispose());
+
+    // Where a document was in this editor travels with its tab to another group…
+    effect((onCleanup) => {
+      const groupId = this.ownGroupId();
+      onCleanup(
+        this.session.registerViewSource(
+          groupId,
+          (docId) => (this.editor()?.viewStateOf(docId) as SessionEditorViewState | null) ?? null,
+        ),
+      );
+    });
+
+    // …and is picked up here when this group shows a document that arrived that way.
+    effect(() => {
+      const doc = this.activeDoc();
+      const editor = this.editor();
+      if (!doc || !editor || !this.session.viewTransfer(doc.id)) return;
+      untracked(() => {
+        const viewState = this.session.consumeViewTransfer(doc.id)?.viewState;
+        if (viewState) editor.adoptViewState(doc.id, viewState as unknown as MonacoViewState);
+      });
+    });
 
     // A newly selected shader opens its Config in the builder when the builder
     // can edit it, and in JSON when it first needs repairing. Declared before the
@@ -997,7 +1033,10 @@ export class EditorPanel {
   protected setConfigView(view: ConfigView): void {
     if (view === this.configView()) return;
     if (view === 'json') {
-      this.builder()?.guard(() => this.showJson(false));
+      // Before the deferred builder has loaded there is no form to lose.
+      const builder = this.builder();
+      if (builder) builder.guard(() => this.showJson(false));
+      else this.showJson(false);
       return;
     }
     this.configView.set('builder');
