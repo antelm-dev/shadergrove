@@ -186,7 +186,7 @@ describe('theme contributions', () => {
   it('refuses the kind under an older protocol, and a package for a future one', () => {
     const result = validatePluginPackage({
       ...themes([dark]),
-      manifest: { ...themes([dark]).manifest, protocolVersion: 4 },
+      manifest: { ...themes([dark]).manifest, protocolVersion: 5 },
     });
     expect(result.ok).toBe(false);
   });

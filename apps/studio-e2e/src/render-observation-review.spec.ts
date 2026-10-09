@@ -269,7 +269,7 @@ test('an installed English upgrade preserves language and full-viewport derivati
   await page.getByTestId(`install-available-${english}`).click();
   await expect(toggle).not.toBeChecked();
   await toggle.click();
-  await expect(page.getByTestId(`plugin-${english}`)).toContainText('version 1.0.8');
+  await expect(page.getByTestId(`plugin-${english}`)).toContainText('version 1.0.9');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 
   const { section } = await open(

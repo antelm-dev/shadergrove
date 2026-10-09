@@ -239,7 +239,7 @@ test('a French profile holding the pre-History 1.0.5 pack is offered the History
     readFileSync(
       resolve(
         import.meta.dirname,
-        '../../studio/src/plugins/dev.shadergrove.language-fr-1.0.8.sgplugin.json',
+        '../../studio/src/plugins/dev.shadergrove.language-fr-1.0.9.sgplugin.json',
       ),
       'utf8',
     ),
@@ -282,7 +282,7 @@ test('a French profile holding the pre-History 1.0.5 pack is offered the History
   const updated = page.getByTestId(`plugin-enable-${FRENCH}`).getByRole('switch');
   if (!(await updated.isChecked())) await updated.click();
   await expect(updated).toBeChecked();
-  await expect(page.getByTestId(`plugin-${FRENCH}`)).toContainText('1.0.8');
+  await expect(page.getByTestId(`plugin-${FRENCH}`)).toContainText('1.0.9');
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
   await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
   await openHistory(page, 'Historique…');

@@ -1,0 +1,129 @@
+{
+  "project": {
+    "version": 1,
+    "vertex": "varying vec2 vUv;\n\nvoid main() {\n  vUv = uv;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}\n",
+    "passes": [
+      {
+        "id": "image",
+        "kind": "image",
+        "name": "Image",
+        "slot": null,
+        "enabled": true,
+        "source": "precision highp float;\n\nuniform vec2 iResolution;\nuniform float iTime;\n\n// One uniform per control, named u_<key>.\nuniform float u_speed;\nuniform float u_blend;\nuniform vec3 u_baseColor;\nuniform vec3 u_lightColor;\n\n#include \"sdf.glsl\"\n\n// The whole scene as one distance: a sphere melting into a rounded box, over a floor.\nfloat scene(vec3 p) {\n  float t = iTime * u_speed;\n  vec3 q = p - vec3(0.0, 0.08 * sin(t * 2.0), 0.0);\n  float sphere = sdSphere(q - vec3(0.5 * sin(t), 0.0, 0.0), 0.42);\n  float box = sdRoundBox(q, vec3(0.32), 0.06);\n  return min(smoothUnion(sphere, box, u_blend), p.y + 0.6);\n}\n\n// The surface normal is the gradient of the distance, by central differences.\nvec3 normalAt(vec3 p) {\n  vec2 e = vec2(0.001, 0.0);\n  return normalize(vec3(\n    scene(p + e.xyy) - scene(p - e.xyy),\n    scene(p + e.yxy) - scene(p - e.yxy),\n    scene(p + e.yyx) - scene(p - e.yyx)\n  ));\n}\n\n// March towards the light: the closest miss along the way darkens the point.\nfloat softShadow(vec3 origin, vec3 toLight) {\n  float shade = 1.0;\n  float travelled = 0.02;\n  for (int i = 0; i < 32; i++) {\n    float d = scene(origin + toLight * travelled);\n    shade = min(shade, 8.0 * d / travelled);\n    travelled += clamp(d, 0.02, 0.25);\n    if (shade < 0.001 || travelled > 6.0) break;\n  }\n  return clamp(shade, 0.0, 1.0);\n}\n\nvoid main() {\n  vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution) / iResolution.y;\n  vec3 origin = vec3(0.0, 0.35, 2.6);\n  vec3 ray = normalize(vec3(uv, -1.6));\n\n  // Sphere tracing: step by the distance to the nearest surface until it is tiny.\n  float travelled = 0.0;\n  bool hit = false;\n  for (int i = 0; i < 96; i++) {\n    float d = scene(origin + ray * travelled);\n    if (d < 0.001) {\n      hit = true;\n      break;\n    }\n    travelled += d;\n    if (travelled > 12.0) break;\n  }\n\n  vec3 sky = mix(vec3(0.04, 0.05, 0.08), vec3(0.16, 0.19, 0.27), clamp(uv.y + 0.5, 0.0, 1.0));\n  vec3 color = sky;\n  if (hit) {\n    vec3 p = origin + ray * travelled;\n    vec3 n = normalAt(p);\n    vec3 toLight = normalize(vec3(0.6, 0.8, 0.35));\n    float diffuse = max(dot(n, toLight), 0.0) * softShadow(p + n * 0.002, toLight);\n    float rim = pow(1.0 - max(dot(n, -ray), 0.0), 3.0);\n    float checker = mod(floor(p.x * 2.0) + floor(p.z * 2.0), 2.0);\n    vec3 albedo = p.y < -0.59 ? vec3(0.22 + 0.08 * checker) : u_baseColor;\n    color = albedo * (0.12 + diffuse * u_lightColor) + rim * 0.25 * u_lightColor;\n    color = mix(color, sky, 1.0 - exp(-0.015 * travelled * travelled));\n  }\n\n  // Lighting is computed in linear light; the screen expects gamma-encoded values.\n  gl_FragColor = vec4(pow(color, vec3(0.4545)), 1.0);\n}\n",
+        "channels": [
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          }
+        ],
+        "resolution": {
+          "mode": "viewport",
+          "scale": 1,
+          "width": 512,
+          "height": 512
+        },
+        "filter": "linear",
+        "wrap": "clamp"
+      },
+      {
+        "id": "common",
+        "kind": "common",
+        "name": "Common",
+        "slot": null,
+        "enabled": true,
+        "source": "",
+        "channels": [
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          }
+        ],
+        "resolution": {
+          "mode": "viewport",
+          "scale": 1,
+          "width": 512,
+          "height": 512
+        },
+        "filter": "linear",
+        "wrap": "clamp"
+      }
+    ],
+    "files": [
+      {
+        "id": "sdf",
+        "name": "sdf.glsl",
+        "source": "// Signed distance functions: negative inside a shape, zero on it, positive outside.\n// Included by the Image pass with  #include \"sdf.glsl\"\n\nfloat sdSphere(vec3 p, float radius) {\n  return length(p) - radius;\n}\n\nfloat sdRoundBox(vec3 p, vec3 halfSize, float rounding) {\n  vec3 q = abs(p) - halfSize + rounding;\n  return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - rounding;\n}\n\n// A union that melts two shapes together; k is how far the blend reaches.\nfloat smoothUnion(float a, float b, float k) {\n  float h = clamp(0.5 + 0.5 * (b - a) / max(k, 0.0001), 0.0, 1.0);\n  return mix(b, a, h) - k * h * (1.0 - h);\n}\n"
+      }
+    ]
+  },
+  "controls": [
+    {
+      "key": "speed",
+      "type": "number",
+      "label": "Speed",
+      "folder": "Motion",
+      "default": 0.5,
+      "min": 0,
+      "max": 2,
+      "step": 0.01
+    },
+    {
+      "key": "blend",
+      "type": "number",
+      "label": "Blend",
+      "folder": "Shape",
+      "default": 0.25,
+      "min": 0,
+      "max": 0.6,
+      "step": 0.01
+    },
+    {
+      "key": "baseColor",
+      "type": "color",
+      "label": "Surface",
+      "folder": "Light",
+      "default": "#4f9dff"
+    },
+    {
+      "key": "lightColor",
+      "type": "color",
+      "label": "Light",
+      "folder": "Light",
+      "default": "#ffe2b8"
+    }
+  ],
+  "render": {
+    "postProcessing": {
+      "enabled": true,
+      "effects": [
+        {
+          "type": "vignette",
+          "instanceId": "vignette",
+          "enabled": true,
+          "settings": {
+            "intensity": 0.35,
+            "softness": 0.55,
+            "roundness": 1
+          }
+        }
+      ]
+    }
+  },
+  "presets": []
+}

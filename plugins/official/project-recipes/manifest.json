@@ -1,0 +1,66 @@
+{
+  "id": "dev.shadergrove.project-recipes",
+  "version": "1.0.0",
+  "protocolVersion": 4,
+  "appVersionRange": ">=2.6.0 <3.0.0",
+  "name": "Project Recipes",
+  "publisher": "Shadergrove",
+  "license": "Apache-2.0",
+  "contributions": [
+    {
+      "kind": "projectTemplate",
+      "id": "raymarching",
+      "name": "Raymarched shape",
+      "description": "A sphere melting into a rounded box over a checkered floor, found by sphere tracing and lit with soft shadows. Distance functions live in an included file.",
+      "difficulty": "intermediate",
+      "notes": [
+        "A signed distance function says how far a point is from the surface; sphere tracing steps along each ray by that distance.",
+        "The normal is the gradient of the distance, taken by central differences.",
+        "A smooth union blends two shapes; Blend sets how far the melt reaches.",
+        "sdf.glsl is a file the Image pass pulls in with #include."
+      ],
+      "provenance": { "author": "Shadergrove", "license": "Apache-2.0" }
+    },
+    {
+      "kind": "projectTemplate",
+      "id": "particles",
+      "name": "Procedural particles",
+      "description": "Glowing particles rising and swaying, drawn in a single Image pass with no stored state: each one's position is a function of its index and the time.",
+      "difficulty": "beginner",
+      "notes": [
+        "A hash turns a particle's index into stable random numbers: its lifetime, start and colour.",
+        "GLSL loops need a constant bound, so the Particles control stops the loop early instead.",
+        "Light is added up, then mapped back below 1 so bright overlaps do not clip."
+      ],
+      "provenance": { "author": "Shadergrove", "license": "Apache-2.0" }
+    },
+    {
+      "kind": "projectTemplate",
+      "id": "feedback-trails",
+      "name": "Feedback trails",
+      "description": "Buffer A reads the frame it drew last tick, fades it and paints a moving brush on top; the Image pass displays the trail. Press on the canvas to paint with the pointer.",
+      "difficulty": "intermediate",
+      "notes": [
+        "iChannel0 of Buffer A is bound to Buffer A itself with feedback: last tick's frame, not this one's.",
+        "A buffer starts out all zeros; every written texel has alpha 1, so alpha 0 means start clean.",
+        "Clear wipes the trail while it is on.",
+        "The Image pass samples Buffer A without feedback: the frame drawn this tick."
+      ],
+      "provenance": { "author": "Shadergrove", "license": "Apache-2.0" }
+    },
+    {
+      "kind": "projectTemplate",
+      "id": "interactive-ui",
+      "name": "Interactive UI",
+      "description": "A slider and a switch drawn with distance functions and driven by the pointer. Buffer A remembers their state from one frame to the next; the Common pass holds the layout both passes share.",
+      "difficulty": "advanced",
+      "notes": [
+        "iMouse holds the pointer in pixels; its z is above 0 while a button is pressed.",
+        "A shader has no variables that last, so Buffer A stores the UI state and reads it back with feedback.",
+        "The switch flips only on the frame a press starts, by remembering whether the pointer was down.",
+        "Code in the Common pass is shared by every pass."
+      ],
+      "provenance": { "author": "Shadergrove", "license": "Apache-2.0" }
+    }
+  ]
+}

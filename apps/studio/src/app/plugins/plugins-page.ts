@@ -50,7 +50,9 @@ import {
   type InstalledPlugin,
   type PluginReview,
 } from './plugin-installations';
+import { PluginToolsOutlet } from './plugin-tools-outlet';
 import { ProjectPluginActions, type ProjectActionOutcome } from './project-actions';
+import { RecipeCard } from './tools/recipes-panel';
 
 type Message = { text: string; error: boolean; warnings?: readonly string[] };
 type AvailableState = 'install' | 'update' | 'installed';
@@ -73,6 +75,8 @@ type AvailableState = 'install' | 'update' | 'installed';
     MatButtonModule,
     MatIconModule,
     MatSlideToggleModule,
+    PluginToolsOutlet,
+    RecipeCard,
     RouterLink,
     TranslatePipe,
   ],
@@ -423,6 +427,12 @@ type AvailableState = 'install' | 'update' | 'installed';
                           </button>
                         }
                       }
+                      @case ('projectTemplate') {
+                        <app-recipe-card
+                          [packageId]="installed.id"
+                          [contributionId]="contribution.id"
+                        />
+                      }
                       @case ('projectExporter') {
                         @let exporter = asProjectExporter(contribution);
                         @if (!runtimeOf(exporter)) {
@@ -474,6 +484,8 @@ type AvailableState = 'install' | 'update' | 'installed';
                 </li>
               }
             </ul>
+            <!-- The package's tools: host panels drawn by their registered adapters. -->
+            <app-plugin-tools-outlet [packageId]="installed.id" />
           }
         </article>
       }
@@ -1049,6 +1061,12 @@ export class PluginsPage {
         return this.i18n.t('plugins.kindProjectExporter');
       case 'language':
         return this.i18n.t('plugins.kindLanguage');
+      case 'analyzer':
+        return this.i18n.t('plugins.kindAnalyzer');
+      case 'assetTool':
+        return this.i18n.t('plugins.kindAssetTool');
+      case 'projectTemplate':
+        return this.i18n.t('plugins.kindProjectTemplate');
       default:
         return this.i18n.t('plugins.kindTheme');
     }
@@ -1078,6 +1096,12 @@ export class PluginsPage {
           name: contribution.nativeName,
           locale: contribution.locale,
         });
+      case 'analyzer':
+        return contribution.profiles.join(', ');
+      case 'assetTool':
+        return contribution.workflow;
+      case 'projectTemplate':
+        return contribution.description;
     }
   }
 

@@ -64,11 +64,11 @@ describe('validatePluginPackage', () => {
   });
 
   it('rejects an unknown kind, protocol version and field before activation', () => {
-    expect(errors(pkg({}, { contributions: [{ ...effect, kind: 'analyzer' }] }))[0]).toMatch(
-      /kind "analyzer"/,
+    expect(errors(pkg({}, { contributions: [{ ...effect, kind: 'macro' }] }))[0]).toMatch(
+      /kind "macro"/,
     );
-    expect(errors(pkg({}, { protocolVersion: 4 }))[0]).toMatch(
-      /protocolVersion 4 is not supported/,
+    expect(errors(pkg({}, { protocolVersion: 5 }))[0]).toMatch(
+      /protocolVersion 5 is not supported/,
     );
     expect(errors(pkg({}, { scripts: { postinstall: 'x' } }))[0]).toMatch(/scripts/);
     expect(errors(pkg({ assets: [] }))[0]).toMatch(/assets/);
