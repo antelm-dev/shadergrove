@@ -4,7 +4,7 @@ The temporary staging origin is <https://staging.45-155-170-120.sslip.io/>. It
 points to the PulseHeberg VPS at `45.155.170.120`. Replace this hostname and
 `BETTER_AUTH_URL` when Shadergrove has its own domain. The VPS runs Dokploy,
 Traefik, the web application, PostgreSQL 16, and Mailpit. Only ports 22, 80,
-and 443 are open; PostgreSQL, Mailpit, and the Dokploy dashboard have no public
+and 443 are open (HTTPS also uses UDP 443); PostgreSQL, Mailpit, and the Dokploy dashboard have no public
 port or domain.
 
 ## Access
@@ -12,19 +12,25 @@ port or domain.
 The Dokploy dashboard is reachable through a local SSH tunnel. From PowerShell:
 
 ```powershell
-ssh -N -i "$env:USERPROFILE\.ssh\vps-lab-01" -L 127.0.0.1:3000:172.18.0.4:3000 root@45.155.170.120
+ssh -N -i "$env:USERPROFILE\.ssh\vps-lab-01" -L 127.0.0.1:3000:172.18.0.4:3000 ADMIN_USER@45.155.170.120
 ```
 
 Open <http://127.0.0.1:3000/> in a browser. Mailpit, which captures staging
 verification and password-reset emails, uses a separate tunnel:
 
 ```powershell
-ssh -N -i "$env:USERPROFILE\.ssh\vps-lab-01" -L 127.0.0.1:8025:172.18.0.7:8025 root@45.155.170.120
+ssh -N -i "$env:USERPROFILE\.ssh\vps-lab-01" -L 127.0.0.1:8025:172.18.0.7:8025 ADMIN_USER@45.155.170.120
 ```
 
 Open <http://127.0.0.1:8025/>. The `172.18.0.x` addresses are Docker gateway
 addresses and can change when services are recreated. On the VPS, find the new
-address with `docker ps` followed by `nsenter -t $(docker inspect -f '{{.State.Pid}}' CONTAINER_ID) -n ip -4 addr`.
+address with `sudo docker ps` followed by
+`sudo nsenter -t $(sudo docker inspect -f '{{.State.Pid}}' CONTAINER_ID) -n ip -4 addr`.
+
+Administration uses the `ADMIN_USER` account with the existing local key and sudo.
+Root SSH accepts only keys with a forced command, preserving the restricted CI
+deployment key. See [VPS security](vps-security.md) for controls, maintenance,
+and recovery.
 
 ## Deployments
 
