@@ -2,5 +2,7 @@
   "useMarkdownLinks": true,
   "newLinkFormat": "relative",
   "attachmentFolderPath": "./assets",
-  "userIgnoreFilters": ["planning/archive/"]
+  "userIgnoreFilters": [
+    "planning/archive/"
+  ]
 }

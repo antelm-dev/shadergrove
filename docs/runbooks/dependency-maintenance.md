@@ -1,3 +1,10 @@
+---
+type: runbook
+area: maintenance
+last_verified:
+related: []
+---
+
 # Dependency maintenance
 
 Renovate proposes updates to `develop` every Monday before 06:00 Europe/Paris,

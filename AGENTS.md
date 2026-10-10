@@ -1,3 +1,10 @@
+# Repository rules and runbooks
+
+The canonical rules for changing this repository are in `docs/rules/` — start with
+`docs/rules/README.md`, and read the notes relevant to the surfaces you touch before editing. Operating,
+deploying and releasing procedures are in `docs/runbooks/`. Follow a runbook's steps as written; do not
+run deployment or release steps unless the user asked for them.
+
 # Feature planning and agent runs
 
 Feature plans live in GitHub Issues and the Project configured in `.github/agent-project.json`.

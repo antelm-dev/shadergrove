@@ -4,7 +4,7 @@ Shadergrove has three Windows delivery paths. CI previews are temporary test
 builds, beta releases are opt-in Electron updates, and stable releases are
 versioned from `master`.
 
-Before promoting a commit, complete [the release-readiness checklist](docs/release-readiness.md).
+Before promoting a commit, complete [the release-readiness checklist](docs/runbooks/release-readiness.md).
 Record which checks passed and which still require manual validation in the release PR.
 
 ## Desktop account configuration

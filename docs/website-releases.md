@@ -178,4 +178,4 @@ Linux and macOS users download subsequent versions manually.
 
 The new pipeline still requires an actual GitHub Actions run; unit tests and local
 website checks do not establish Linux/macOS installed-package readiness. Follow the
-[release-readiness checklist](release-readiness.md) before activating those platforms.
+[release-readiness checklist](runbooks/release-readiness.md) before activating those platforms.

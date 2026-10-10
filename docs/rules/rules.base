@@ -1,0 +1,23 @@
+filters:
+  and:
+    - file.inFolder("rules")
+    - file.ext == "md"
+    - type == "rule"
+views:
+  - type: table
+    name: By enforcement
+    order:
+      - file.name
+      - applies_to
+      - enforced_by
+    groupBy:
+      property: enforced_by
+      direction: ASC
+  - type: table
+    name: By surface
+    order:
+      - file.name
+      - enforced_by
+    groupBy:
+      property: applies_to
+      direction: ASC
