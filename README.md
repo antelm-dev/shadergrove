@@ -212,6 +212,10 @@ docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB
 docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backup.sql
 ```
 
+Keep copies off the machine that runs PostgreSQL, and test that they restore. The
+[backup and restore runbook](docs/runbooks/database-backup-restore.md) covers
+compressed dumps, a restore drill and restoring over a live database.
+
 **SQLite (Desktop / dev)** lives at one file. On the desktop app it is
 `<userData>/library/shader-studio.sqlite` (`%APPDATA%/Shader Studio/library` on
 Windows, `~/Library/Application Support/Shader Studio/library` on macOS,

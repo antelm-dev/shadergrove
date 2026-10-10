@@ -14,9 +14,12 @@ come first.
 | [Release readiness](release-readiness.md)                          | release     |
 | [Releasing](../../RELEASING.md)                                    | release     |
 | [Dependency maintenance](dependency-maintenance.md)                | maintenance |
+| [Database backup and restore](database-backup-restore.md)          | data        |
+| [Deployment rollback](deployment-rollback.md)                      | deploy      |
+| [Secret rotation](secret-rotation.md)                              | security    |
 
 Still in `docs/` until their pending edits are committed: [staging](../staging.md),
-[PR previews](../pr-previews.md) and [VPS security](../vps-security.md).
+[PR previews](../pr-previews.md) and `vps-security.md` (not committed yet).
 
 To add a runbook, start from [the runbook template](../templates/runbook.md) and add it to the
 table above.
