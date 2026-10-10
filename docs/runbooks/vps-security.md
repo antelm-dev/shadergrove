@@ -13,10 +13,10 @@ Host: `vps-lab-01`, `45.155.170.120`, Ubuntu 24.04 LTS. Hardening applied on
 ## Access
 
 ```powershell
-ssh -i "$env:USERPROFILE\.ssh\vps-lab-01" ADMIN_USER@45.155.170.120
+ssh vps-lab-01
 ```
 
-`ADMIN_USER` uses the existing local public key and has passwordless full sudo,
+The administrator account (see [staging access](staging.md#access)) uses the existing local public key and has passwordless full sudo,
 explicitly approved by the operator. Protect this private key as a full
 administrator credential. A named account makes routine operations auditable;
 it does not limit what a stolen administrator key can do.
@@ -97,8 +97,8 @@ test ! -e /var/run/reboot-required || cat /var/run/reboot-required
 
 Verified after applying access and firewall changes:
 
-- A separate `ADMIN_USER` key login and full sudo succeed; unrestricted root SSH fails.
-- Dokploy and Mailpit return HTTP 200 through local `ADMIN_USER` SSH tunnels.
+- A separate administrator key login and full sudo succeed; unrestricted root SSH fails.
+- Dokploy and Mailpit return HTTP 200 through local administrator SSH tunnels.
 - Public staging `/api/health` returns HTTP 200 with `{"status":"ok"}`.
 - External IPv4 TCP checks succeed on 22/80/443 and fail on
   2377/3000/4000/5432/7946/8025.
@@ -119,7 +119,7 @@ application/container vulnerability audit remain separate follow-ups. Never
 add untrusted PR workloads to this privileged staging host.
 
 For SSH recovery use the provider console, then inspect the SSH drop-in and
-`/home/ADMIN_USER/.ssh/authorized_keys`. A copy of the prior SSH drop-in is stored at
+the administrator's `~/.ssh/authorized_keys`. A copy of the prior SSH drop-in is stored at
 `/root/hardening-config-backup/01-staging-hardening.conf`. Restore only the
 required settings, run `sshd -t`, and reload `ssh`; do not disable the firewall
 or open the Dokploy dashboard publicly to recover access.

@@ -19,7 +19,8 @@ off the machine that runs PostgreSQL.
 - **Self-hosted (Docker Compose):** a shell in the directory holding `docker-compose.yml` and `.env`.
   The defaults are database `shader_studio` and user `shader_studio`; use `POSTGRES_DB` and
   `POSTGRES_USER` from `.env` if you changed them.
-- **Staging:** SSH access as `ADMIN_USER` (see [VPS security](vps-security.md)). The database name and
+- **Staging:** SSH access through the `vps-lab-01` host alias (see [staging access](staging.md#access)
+  and [VPS security](vps-security.md)). The database name and
   user are in the `DATABASE_URL` of the Dokploy application's environment
   (`postgres://USER:PASSWORD@HOST:5432/DATABASE`).
 - Run the commands below in a POSIX shell (`sh`, bash, Git Bash). Do not redirect `pg_dump` output
@@ -50,9 +51,9 @@ db=$(sudo docker ps --filter ancestor=postgres:16 --format '{{.Names}}' | head -
 [ -n "$db" ] || db=$(sudo docker ps --format '{{.Names}} {{.Image}}' | awk '/postgres/ { print $1; exit }')
 echo "$db"
 sudo docker exec "$db" pg_dump -U USER -d DATABASE -Fc -f /tmp/shadergrove.dump
-sudo docker cp "$db:/tmp/shadergrove.dump" "/home/ADMIN_USER/shadergrove-$(date -u +%Y%m%dT%H%M%SZ).dump"
+sudo docker cp "$db:/tmp/shadergrove.dump" "$HOME/shadergrove-$(date -u +%Y%m%dT%H%M%SZ).dump"
 sudo docker exec "$db" rm /tmp/shadergrove.dump
-sudo chown ADMIN_USER: /home/ADMIN_USER/shadergrove-*.dump
+sudo chown "$(id -un):" ~/shadergrove-*.dump
 ```
 
 Check that `echo "$db"` printed the staging database container, not a PR preview's: preview
@@ -60,8 +61,8 @@ databases run in Compose projects named `shadergrove-pr-N`. Then, from your mach
 off the VPS and delete the VPS copy:
 
 ```sh
-scp -i ~/.ssh/vps-lab-01 'ADMIN_USER@45.155.170.120:shadergrove-*.dump' ./
-ssh -i ~/.ssh/vps-lab-01 ADMIN_USER@45.155.170.120 'rm shadergrove-*.dump'
+scp 'vps-lab-01:shadergrove-*.dump' ./
+ssh vps-lab-01 'rm shadergrove-*.dump'
 ```
 
 **Scheduled off-server backups are not configured yet.** Until a destination is chosen and set up

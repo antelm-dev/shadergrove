@@ -16,17 +16,29 @@ port or domain.
 
 ## Access
 
-The Dokploy dashboard is reachable through a local SSH tunnel. From PowerShell:
+Administration goes through a named account with sudo. Its name is not kept in this public
+repository: put it in a host entry in your SSH config (`~/.ssh/config`, or
+`%USERPROFILE%\.ssh\config` on Windows), replacing `ADMIN_USER`:
+
+```
+Host vps-lab-01
+  HostName 45.155.170.120
+  User ADMIN_USER
+  IdentityFile ~/.ssh/vps-lab-01
+```
+
+Every command in these runbooks connects with `ssh vps-lab-01`. The Dokploy dashboard is reachable
+through a local SSH tunnel:
 
 ```powershell
-ssh -N -i "$env:USERPROFILE\.ssh\vps-lab-01" -L 127.0.0.1:3000:172.18.0.4:3000 ADMIN_USER@45.155.170.120
+ssh -N -L 127.0.0.1:3000:172.18.0.4:3000 vps-lab-01
 ```
 
 Open <http://127.0.0.1:3000/> in a browser. Mailpit, which captures staging
 verification and password-reset emails, uses a separate tunnel:
 
 ```powershell
-ssh -N -i "$env:USERPROFILE\.ssh\vps-lab-01" -L 127.0.0.1:8025:172.18.0.7:8025 ADMIN_USER@45.155.170.120
+ssh -N -L 127.0.0.1:8025:172.18.0.7:8025 vps-lab-01
 ```
 
 Open <http://127.0.0.1:8025/>. The `172.18.0.x` addresses are Docker gateway
@@ -34,7 +46,6 @@ addresses and can change when services are recreated. On the VPS, find the new
 address with `sudo docker ps` followed by
 `sudo nsenter -t $(sudo docker inspect -f '{{.State.Pid}}' CONTAINER_ID) -n ip -4 addr`.
 
-Administration uses the `ADMIN_USER` account with the existing local key and sudo.
 Root SSH accepts only keys with a forced command, preserving the restricted CI
 deployment key. See [VPS security](vps-security.md) for controls, maintenance,
 and recovery.
