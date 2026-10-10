@@ -1,3 +1,10 @@
+---
+type: runbook
+area: infra
+last_verified:
+related: [vps-security.md, website-vps.md, deployment-rollback.md, database-backup-restore.md]
+---
+
 # Staging on vps-lab-01
 
 The temporary staging origin is <https://staging.45-155-170-120.sslip.io/>. It
@@ -41,14 +48,14 @@ source has no provider push webhook configured. When studio inputs change,
 the `check`, `studio-check`, `smoke`, `e2e`, and `docker` GitHub Actions jobs
 must pass on a push to `develop` before `deploy-staging` queues the studio
 deployment. Website validation and deployment run independently; see
-[CI routing](ci.md). The restricted SSH command receives `studio COMMIT_SHA`
+[CI routing](../ci.md). The restricted SSH command receives `studio COMMIT_SHA`
 and queues only the studio service. The `staging` GitHub environment allows
 deployments only from
 `develop` and holds the CI private key in its `STAGING_DEPLOY_SSH_KEY` secret.
 Its public key in `/root/.ssh/authorized_keys` has a
 forced command and the OpenSSH `restrict` option, so that key can only execute
 `/usr/local/sbin/deploy-shadergrove-staging`. The script is versioned at
-[`ops/staging/deploy-on-vps.sh`](../ops/staging/deploy-on-vps.sh); copy changes to
+[`ops/staging/deploy-on-vps.sh`](../../ops/staging/deploy-on-vps.sh); copy changes to
 the same VPS path when updating it. The Dokploy deploy token lives only in
 `/root/.config/shadergrove-staging-deploy-token` (mode 600), not in GitHub.
 

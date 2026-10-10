@@ -1,3 +1,10 @@
+---
+type: runbook
+area: security
+last_verified: 2026-10-04
+related: [staging.md, secret-rotation.md]
+---
+
 # Staging VPS security
 
 Host: `vps-lab-01`, `45.155.170.120`, Ubuntu 24.04 LTS. Hardening applied on
@@ -37,7 +44,7 @@ Mailpit, and Dokploy have no published host ports. Swarm 2377/7946/4789 remains
 closed to the Internet; adding nodes requires an explicit private-network plan.
 
 Docker can bypass UFW for published container ports. The additional
-[`docker-firewall.sh`](../ops/staging/docker-firewall.sh) applies `SG-EXTERNAL`
+[`docker-firewall.sh`](../../ops/staging/docker-firewall.sh) applies `SG-EXTERNAL`
 through `DOCKER-USER` for both address families on public interface `eth0`.
 It preserves established replies and allows original destination ports TCP
 80/443 and UDP 443; other inbound forwarded traffic is dropped. It replaces

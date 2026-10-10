@@ -2,7 +2,7 @@
 type: runbook
 area: deploy
 last_verified:
-related: [database-backup-restore.md, website-vps.md, ../staging.md, ../pr-previews.md]
+related: [database-backup-restore.md, website-vps.md, staging.md, pr-previews.md]
 ---
 
 # Deployment rollback
@@ -56,7 +56,7 @@ other.
 ## PR previews
 
 A preview is disposable. Remove the `preview` label to delete it, or push a fix to the PR: the next
-successful CI run redeploys it, keeping its database. See [PR previews](../pr-previews.md).
+successful CI run redeploys it, keeping its database. See [PR previews](pr-previews.md).
 
 ## Self-hosted (Docker Compose)
 

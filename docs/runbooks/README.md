@@ -9,17 +9,17 @@ come first.
 
 | Runbook                                                            | Area        |
 | ------------------------------------------------------------------ | ----------- |
-| [Deploying Shadergrove with accounts](deploying-authentication.md) | deploy      |
+| [Staging on vps-lab-01](staging.md)                                | infra       |
 | [Website on vps-lab-01](website-vps.md)                            | infra       |
+| [Staging VPS security](vps-security.md)                            | security    |
+| [Secret rotation](secret-rotation.md)                              | security    |
+| [Deploying Shadergrove with accounts](deploying-authentication.md) | deploy      |
+| [PR preview environments](pr-previews.md)                          | deploy      |
+| [Deployment rollback](deployment-rollback.md)                      | deploy      |
+| [Database backup and restore](database-backup-restore.md)          | data        |
 | [Release readiness](release-readiness.md)                          | release     |
 | [Releasing](../../RELEASING.md)                                    | release     |
 | [Dependency maintenance](dependency-maintenance.md)                | maintenance |
-| [Database backup and restore](database-backup-restore.md)          | data        |
-| [Deployment rollback](deployment-rollback.md)                      | deploy      |
-| [Secret rotation](secret-rotation.md)                              | security    |
-
-Operational notes not yet moved into this folder: [staging](../staging.md),
-[PR previews](../pr-previews.md) and [VPS security](../vps-security.md).
 
 To add a runbook, start from [the runbook template](../templates/runbook.md) and add it to the
 table above.

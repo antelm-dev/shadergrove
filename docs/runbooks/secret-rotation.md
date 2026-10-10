@@ -2,7 +2,7 @@
 type: runbook
 area: security
 last_verified:
-related: [deploying-authentication.md, ../staging.md, ../vps-security.md, ../pr-previews.md]
+related: [deploying-authentication.md, staging.md, vps-security.md, pr-previews.md]
 ---
 
 # Secret rotation
@@ -103,7 +103,7 @@ Dokploy menu labels in this step have not been checked yet.
 Keep your current session open throughout. Generate a new key, append its public key to
 `/home/ADMIN_USER/.ssh/authorized_keys`, and from a second terminal confirm both a login and `sudo -n id`
 with the new key. Only then remove the old line and replace `~/.ssh/vps-lab-01` locally. If you lock
-yourself out, recover through the provider console as described in [VPS security](../vps-security.md).
+yourself out, recover through the provider console as described in [VPS security](vps-security.md).
 
 ## Verify
 

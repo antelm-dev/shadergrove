@@ -2,7 +2,7 @@
 type: runbook
 area: data
 last_verified:
-related: [deployment-rollback.md, deploying-authentication.md, ../staging.md]
+related: [deployment-rollback.md, deploying-authentication.md, staging.md]
 ---
 
 # Database backup and restore
@@ -19,7 +19,7 @@ off the machine that runs PostgreSQL.
 - **Self-hosted (Docker Compose):** a shell in the directory holding `docker-compose.yml` and `.env`.
   The defaults are database `shader_studio` and user `shader_studio`; use `POSTGRES_DB` and
   `POSTGRES_USER` from `.env` if you changed them.
-- **Staging:** SSH access as `ADMIN_USER` (see [VPS security](../vps-security.md)). The database name and
+- **Staging:** SSH access as `ADMIN_USER` (see [VPS security](vps-security.md)). The database name and
   user are in the `DATABASE_URL` of the Dokploy application's environment
   (`postgres://USER:PASSWORD@HOST:5432/DATABASE`).
 - Run the commands below in a POSIX shell (`sh`, bash, Git Bash). Do not redirect `pg_dump` output
