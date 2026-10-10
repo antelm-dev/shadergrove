@@ -18,8 +18,8 @@ come first.
 | [Deployment rollback](deployment-rollback.md)                      | deploy      |
 | [Secret rotation](secret-rotation.md)                              | security    |
 
-Still in `docs/` until their pending edits are committed: [staging](../staging.md),
-[PR previews](../pr-previews.md) and `vps-security.md` (not committed yet).
+Operational notes not yet moved into this folder: [staging](../staging.md),
+[PR previews](../pr-previews.md) and [VPS security](../vps-security.md).
 
 To add a runbook, start from [the runbook template](../templates/runbook.md) and add it to the
 table above.
