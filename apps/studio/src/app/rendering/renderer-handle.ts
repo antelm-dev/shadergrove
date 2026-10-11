@@ -7,10 +7,11 @@ import {
   type CaptureOptions,
   type FrameSnapshot,
   type InvalidationReason,
-} from './render-inspection';
-import type { ObservationRequest, ObservationResult } from './render-observation';
-import type { ShaderEngine } from './shader-engine';
-import type { ProfilerSnapshot } from './performance-profiler';
+  type ObservationRequest,
+  type ObservationResult,
+  type ShaderEngine,
+  type ProfilerSnapshot,
+} from '@shadergrove/rendering';
 import { encodeThumbnail } from './thumbnail';
 
 /**

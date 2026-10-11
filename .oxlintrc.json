@@ -66,6 +66,30 @@
       }
     },
     {
+      "files": ["libs/rendering/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@angular/*",
+                  "electron",
+                  "node:*",
+                  "@nestjs/*",
+                  "@shadergrove/backend",
+                  "@shadergrove/backend/*",
+                  "**/apps/**"
+                ],
+                "message": "The shared runtime runs in any browser host: no Angular, Node, Electron, backend or app imports."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["apps/website/**"],
       "plugins": ["typescript", "react", "jsx-a11y", "nextjs"]
     }

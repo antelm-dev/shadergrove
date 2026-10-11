@@ -2,7 +2,7 @@ import { DestroyRef, Injector, effect, signal, untracked, type Signal } from '@a
 
 import type { PassResolution } from '@shadergrove/shared';
 import { Preferences } from '../../prefs/preferences';
-import type { ProfilerSnapshot } from '../../rendering/performance-profiler';
+import type { ProfilerSnapshot } from '@shadergrove/rendering';
 import { RendererHandle } from '../../rendering/renderer-handle';
 import { ShaderStore } from '../../workspace/shader-store';
 import { recommendLowerScale } from './profiler-recommendation';
