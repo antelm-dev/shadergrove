@@ -221,7 +221,7 @@ export class EditorWindow {
   protected readonly activeDoc = computed(() => {
     const documents = this.documents();
     const id = this.mirror.field('activeDocId')();
-    return documents.find((document) => document.id === id) ?? documents[0] ?? null;
+    return documents.find((document) => document.id === id) ?? documents.at(0) ?? null;
   });
 
   protected readonly liveIds = computed(() => this.documents().map((document) => document.id));
