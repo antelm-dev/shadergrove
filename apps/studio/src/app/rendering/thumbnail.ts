@@ -37,14 +37,26 @@ export function coverCrop(
  * the *blob* decides the extension, never the request.
  */
 export async function encodeThumbnail(frame: Blob): Promise<ThumbnailUpload | null> {
+  const encoded = await scaleFrame(frame);
+  if (!encoded) return null;
+
+  const ext = encoded.type === 'image/webp' ? 'webp' : 'png';
+  return { ext, bytes: new Uint8Array(await encoded.arrayBuffer()) };
+}
+
+/** The cropping and encoding behind `encodeThumbnail`, at any size, as a WebP (or PNG) blob. */
+export async function scaleFrame(
+  frame: Blob,
+  size: { width: number; height: number } = { width: THUMBNAIL_WIDTH, height: THUMBNAIL_HEIGHT },
+): Promise<Blob | null> {
   const bitmap = await createImageBitmap(frame);
   try {
-    const crop = coverCrop(bitmap.width, bitmap.height);
+    const crop = coverCrop(bitmap.width, bitmap.height, size.width / size.height);
     if (crop.width === 0) return null;
 
     const canvas = document.createElement('canvas');
-    canvas.width = THUMBNAIL_WIDTH;
-    canvas.height = THUMBNAIL_HEIGHT;
+    canvas.width = size.width;
+    canvas.height = size.height;
 
     const context = canvas.getContext('2d');
     if (!context) return null;
@@ -56,17 +68,11 @@ export async function encodeThumbnail(frame: Blob): Promise<ThumbnailUpload | nu
       crop.height,
       0,
       0,
-      THUMBNAIL_WIDTH,
-      THUMBNAIL_HEIGHT,
+      size.width,
+      size.height,
     );
 
-    const encoded = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, 'image/webp', 0.82),
-    );
-    if (!encoded) return null;
-
-    const ext = encoded.type === 'image/webp' ? 'webp' : 'png';
-    return { ext, bytes: new Uint8Array(await encoded.arrayBuffer()) };
+    return await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.82));
   } finally {
     bitmap.close();
   }
