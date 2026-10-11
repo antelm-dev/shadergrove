@@ -99,8 +99,16 @@ function defaultDisplays(): DisplayWorkArea[] {
   }));
 }
 
+/** A panel window's size the first time it opens, in the shape the panel is used in. */
+const FIRST_SIZES: Partial<Record<SurfaceKind, { width: number; height: number }>> = {
+  'bottom-panel': { width: 1000, height: 360 },
+  inspector: { width: 380, height: 760 },
+  editor: { width: 960, height: 760 },
+};
+
 function fallbackBoundsFor(kind: SurfaceKind): Rect {
   const min = minSizeForKind(kind);
+  const size = FIRST_SIZES[kind] ?? { width: 1280, height: 720 };
   const cursor = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursor);
   return centerInWorkArea(
@@ -110,8 +118,8 @@ function fallbackBoundsFor(kind: SurfaceKind): Rect {
       width: display.workArea.width,
       height: display.workArea.height,
     },
-    Math.min(1280, display.workArea.width),
-    Math.min(720, display.workArea.height),
+    Math.min(size.width, display.workArea.width),
+    Math.min(size.height, display.workArea.height),
     min,
   );
 }
