@@ -517,9 +517,11 @@
           } @if (inspectorOpen()) {
           <!-- Docked, floating, minimized or maximized — InspectorShell owns
              its own positioning, dragging and resize the same way EditorShell
-             does; this is just the inspector's slot in the workspace grid. -->
+             does; this is just the inspector's slot in the workspace grid. In
+             a native window of its own, the workspace shows nothing of it. -->
+          @if (!layout.inspectorNative()) {
           <app-inspector-shell class="inspector" />
-          } @else {
+          } } @else {
           <!-- Collapsing the inspector has to leave something behind to open it
              again, or the only way back is a keyboard shortcut and a menu item. -->
           <button

@@ -7,7 +7,12 @@ import { desktopConfig } from './app/app.config.desktop';
 import { rootComponent } from './app/root-component';
 
 rootComponent()
-  .then((root) => bootstrapApplication(root, desktopConfig))
+  .then(({ component, providers }) =>
+    bootstrapApplication(component, {
+      ...desktopConfig,
+      providers: [...desktopConfig.providers, ...providers],
+    }),
+  )
   .catch((error: unknown) => console.error(error));
 
 // ponytail: dev-only escape probe for the plugin sandbox prototype; remove once hostile tests run in CI.

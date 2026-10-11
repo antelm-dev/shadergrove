@@ -57,6 +57,7 @@ export const BOTTOM_PANEL_SURFACE_ID = WELL_KNOWN_SURFACE_IDS.bottomPanel;
 /** The panels the desktop can move into a native window of their own, and that window's kind. */
 const NATIVE_PANELS: ReadonlyMap<SurfaceId, SatelliteKind> = new Map([
   [BOTTOM_PANEL_SURFACE_ID, 'bottom-panel'],
+  [INSPECTOR_SURFACE_ID, 'inspector'],
 ]);
 
 @Injectable({ providedIn: 'root' })

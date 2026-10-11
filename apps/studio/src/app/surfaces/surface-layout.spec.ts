@@ -635,3 +635,59 @@ describe('SurfaceLayoutService bottom panel without a native host', () => {
     }
   });
 });
+
+describe('SurfaceLayoutService native inspector', () => {
+  const id = WELL_KNOWN_SURFACE_IDS.inspector;
+  let layout: SurfaceLayoutService;
+  let desktop: FakeDesktop;
+
+  beforeEach(() => {
+    desktop = new FakeDesktop();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: Preferences, useValue: new FakePreferences() },
+        { provide: DesktopPlatform, useValue: desktop },
+      ],
+    });
+    layout = TestBed.inject(SurfaceLayoutService);
+    TestBed.tick();
+  });
+
+  it('opens its own page, then hides with its window and comes back in it', async () => {
+    expect(await layout.detach(id)).toBe(true);
+    expect(desktop.opens).toEqual([{ surfaceId: id, kind: 'inspector', path: '/inspector' }]);
+    expect(layout.inspectorNative()).toBe(true);
+    expect(layout.inspectorOpen()).toBe(true);
+
+    desktop.windowClosed(id);
+    await settle();
+    expect(layout.inspectorNative()).toBe(true);
+    expect(layout.inspectorOpen()).toBe(false);
+
+    layout.openInspector();
+    await settle();
+    expect(desktop.opens).toHaveLength(2);
+    expect(layout.inspectorOpen()).toBe(true);
+  });
+
+  it('closes its window when hidden from the workspace, and docks where it was on Dock', async () => {
+    const before = layout.inspector().placement;
+    await layout.detach(id);
+    await settle();
+
+    layout.toggleInspectorOpen();
+    await settle();
+    expect(desktop.closes).toEqual([id]);
+    expect(layout.inspectorOpen()).toBe(false);
+
+    layout.toggleInspectorOpen();
+    await settle();
+    desktop.returned({ surfaceId: id });
+    desktop.windowClosed(id);
+    await settle();
+
+    expect(layout.inspectorNative()).toBe(false);
+    expect(layout.inspector().placement).toEqual(before);
+    expect(layout.inspectorOpen()).toBe(true);
+  });
+});

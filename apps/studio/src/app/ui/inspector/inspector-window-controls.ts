@@ -6,6 +6,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { isContainedPlacement } from '@shadergrove/shared/surfaces';
+import { DesktopPlatform } from '../../desktop/desktop-platform';
 import { SurfaceLayoutService } from '../../surfaces';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 
@@ -49,6 +50,12 @@ import { TranslatePipe } from '../../i18n/translate.pipe';
           <mat-icon class="check" aria-hidden="true">check</mat-icon>
         }
       </button>
+      @if (desktop.available) {
+        <button mat-menu-item type="button" class="open-in-window" (click)="openInWindow()">
+          <mat-icon>select_window</mat-icon>
+          <span>{{ 'action.openInWindow' | translate }}</span>
+        </button>
+      }
       <button mat-menu-item type="button" [attr.aria-checked]="dockedRight()" (click)="dock()">
         <mat-icon>dock_to_right</mat-icon>
         <span>{{ 'inspector.dockRight' | translate }}</span>
@@ -122,6 +129,7 @@ import { TranslatePipe } from '../../i18n/translate.pipe';
 })
 export class InspectorWindowControls {
   protected readonly layout = inject(SurfaceLayoutService);
+  protected readonly desktop = inject(DesktopPlatform);
   protected readonly inspectorId = this.layout.inspectorId;
 
   private readonly surface = computed(() => this.layout.inspector());
@@ -157,6 +165,11 @@ export class InspectorWindowControls {
   protected float(): void {
     if (this.floating()) return;
     this.layout.float(this.inspectorId);
+  }
+
+  /** Desktop only: into a native window of its own, until docked again. */
+  protected openInWindow(): void {
+    void this.layout.detach(this.inspectorId);
   }
 
   protected dock(): void {

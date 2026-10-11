@@ -1,4 +1,4 @@
-import { provideZonelessChangeDetection, signal, type Type } from '@angular/core';
+import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,40 +8,14 @@ import { DesktopPlatform } from '../../desktop/desktop-platform';
 import { I18n } from '../../i18n/i18n';
 import { provideTestLanguages, speaking } from '../../i18n/testing/languages';
 import { Preferences } from '../../prefs/preferences';
-import { RendererHandle } from '../../rendering/renderer-handle';
-import { SurfaceLayoutService } from '../../surfaces/surface-layout';
-import { OutputSync } from '../../workspace/output-sync';
-import { RoutingCoordinator } from '../../workspace/routing-coordinator';
-import { SessionHost } from '../../workspace/session-sync/session-host';
 import {
   SESSION_CHANNEL,
   type SessionMessage,
 } from '../../workspace/session-sync/session-protocol';
-import { ShaderStore } from '../../workspace/shader-store';
-import { StartupCoordinator } from '../../workspace/startup-coordinator';
 import { FakeBroadcastChannel } from '../../workspace/testing/fake-broadcast-channel';
+import { forbidMainWindowOnly } from '../../workspace/testing/main-window-only';
 import { IDLE_PROFILER } from '../inspector/profiler-session';
 import { BottomPanelWindow } from './bottom-panel-window';
-
-/** What a panel window must never create: the main window's session and its side effects. */
-export const MAIN_WINDOW_ONLY: readonly Type<unknown>[] = [
-  ShaderStore,
-  StartupCoordinator,
-  RoutingCoordinator,
-  OutputSync,
-  SurfaceLayoutService,
-  SessionHost,
-  RendererHandle,
-];
-
-/** Throwing factories for `MAIN_WINDOW_ONLY`: a test fails the moment a panel window asks for one. */
-export const forbidMainWindowOnly = (window: string) =>
-  MAIN_WINDOW_ONLY.map((token) => ({
-    provide: token,
-    useFactory: () => {
-      throw new Error(`the ${window} window must not create ${token.name}`);
-    },
-  }));
 
 const diagnostic: CompileDiagnostic = {
   severity: 'error',
