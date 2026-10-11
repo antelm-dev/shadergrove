@@ -1,7 +1,7 @@
 {
   "manifest": {
     "id": "dev.shadergrove.language-fr",
-    "version": "1.0.12",
+    "version": "1.0.15",
     "protocolVersion": 3,
     "appVersionRange": ">=1.5.0 <3.0.0",
     "name": "French",
@@ -115,6 +115,8 @@
           "toolbar.toggleBrowser": "Afficher ou masquer la bibliothèque de shaders",
           "toolbar.documentActions": "{description} — clic droit pour les actions",
           "toolbar.saveLabel": "Enregistrer le shader. {hint}",
+          "toolbar.sections": "Sections",
+          "toolbar.editor": "Éditeur",
           "auth.accountTooltip": "Ouvrir le compte et la connexion",
           "auth.accountMenu": "Menu du compte",
           "auth.accountTitle": "Votre compte",

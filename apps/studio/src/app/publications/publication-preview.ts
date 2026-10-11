@@ -15,7 +15,7 @@ import type { PublicationDetail } from '@shadergrove/shared/publication';
 import { defaultParams } from '@shadergrove/shared/validate';
 import { I18n } from '../i18n/i18n';
 import { GlContextRegistry } from '../rendering/gl-context-registry';
-import { type ChannelSource, type EnginePass, ShaderEngine } from '../rendering/shader-engine';
+import { type ChannelSource, type EnginePass, ShaderEngine } from '@shadergrove/rendering';
 import { PublicationApi } from './publication-api';
 
 /**

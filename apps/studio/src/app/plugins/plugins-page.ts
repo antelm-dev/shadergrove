@@ -89,10 +89,6 @@ type Tab = 'browse' | 'installed';
   ],
   template: `
     <header class="page-bar">
-      <a matButton routerLink="/">
-        <mat-icon>arrow_back</mat-icon>
-        {{ 'plugins.backToEditor' | translate }}
-      </a>
       <h1>{{ 'plugins.title' | translate }}</h1>
     </header>
 

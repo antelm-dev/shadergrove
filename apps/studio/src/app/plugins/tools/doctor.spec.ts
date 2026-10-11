@@ -41,7 +41,7 @@ import { DesktopPlatform } from '../../desktop/desktop-platform';
 import { EditorNavigation } from '../../editor/editor-navigation';
 import { I18n } from '../../i18n/i18n';
 import { RendererHandle } from '../../rendering/renderer-handle';
-import type { ShaderEngine } from '../../rendering/shader-engine';
+import type { ShaderEngine } from '@shadergrove/rendering';
 import { AppThemes } from '../../themes/app-themes';
 import { WorkspaceActions } from '../../ui/workspace-actions';
 import { ShaderStore } from '../../workspace/shader-store';

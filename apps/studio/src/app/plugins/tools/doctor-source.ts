@@ -16,7 +16,7 @@ import {
   type ResourceState,
 } from '@shadergrove/shared/plugin';
 import type { ShaderProject } from '@shadergrove/shared/project';
-import type { ShaderEngine } from '../../rendering/shader-engine';
+import type { ShaderEngine } from '@shadergrove/rendering';
 import type { ShaderStore } from '../../workspace/shader-store';
 import type { ToolSource } from '../plugin-tools';
 

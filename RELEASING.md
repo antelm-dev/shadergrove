@@ -41,6 +41,26 @@ check and uploads the unpacked application as
 `shadergrove-preview-<commit>`. The artifact is available from the workflow
 run for 14 days and is never published to the Electron update feed.
 
+## PR builds
+
+To test a pull request as a desktop app before merging it, run **Actions → PR
+desktop build → Run workflow** with the PR number. It packages the PR's head
+commit (not merged with its base) for Windows and uploads it as `shadergrove-pr-<number>-<commit>` for 14
+days; the run summary explains how to start it. Only open pull requests from
+this repository are built, and the build is never published to the update feed.
+
+The app keeps its library and preferences in the Windows profile
+(`%APPDATA%\Shader Studio`). Electron resolves that folder through Windows, so
+setting `APPDATA` alone does not move it; start a test build in a throwaway
+profile instead:
+
+```powershell
+$p = "$env:TEMP\shadergrove-test"
+New-Item -Force -ItemType Directory "$p\AppData\Roaming", "$p\AppData\Local" | Out-Null
+$env:USERPROFILE = $p; $env:APPDATA = "$p\AppData\Roaming"; $env:LOCALAPPDATA = "$p\AppData\Local"
+& .\win-unpacked\shadergrove.exe
+```
+
 ## Stable releases
 
 Release Please runs after pushes to `master` and maintains a release pull

@@ -40,6 +40,7 @@ import { SurfaceLayoutService } from './surfaces/surface-layout';
 import { SurfaceRegistry } from './surfaces/surface-registry';
 import { EditorShell } from './ui/editor/editor-shell';
 import { BottomPanel } from './ui/bottom-panel/bottom-panel';
+import { AppNavigation, AppNavigationLinks } from './ui/layout/app-navigation';
 import { AppTitlebar } from './ui/layout/app-titlebar';
 import { DocumentStatus } from './ui/editor/document-status';
 import { GlobalShortcuts } from './ui/layout/global-shortcuts';
@@ -71,6 +72,7 @@ const ZEN_EDGE_PX = 48;
   selector: 'app-root',
   hostDirectives: [GlobalShortcuts],
   imports: [
+    AppNavigationLinks,
     AppTitlebar,
     BottomPanel,
     EditorShell,
@@ -114,6 +116,11 @@ export class App {
   private readonly surfaces = inject(SurfaceRegistry);
   protected readonly i18n = inject(I18n);
   protected readonly outputMode = isOutputWindow();
+  /** Which of Editor / Explore / Plugins is on screen, and where each link leads. */
+  protected readonly nav = inject(AppNavigation);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly toolbar = viewChild('toolbar', { read: ElementRef<HTMLElement> });
+  private readonly titlebar = viewChild(AppTitlebar, { read: ElementRef<HTMLElement> });
 
   protected readonly auth = inject(AuthService);
   private readonly authPrompt = inject(AuthPrompt);
@@ -465,6 +472,28 @@ export class App {
       this.browserWidth();
       this.drawerOpen();
       this.sidenavContainer().updateContentMargins();
+    });
+
+    // Routed pages start where the toolbar ends, below the title bar when there
+    // is one: whatever those measure on this platform, at this width, in or out
+    // of fullscreen. The title bar coming or going re-runs this.
+    effect((onCleanup) => {
+      const toolbar = this.toolbar()?.nativeElement;
+      const titlebar = this.titlebar()?.nativeElement;
+      if (!toolbar || typeof ResizeObserver === 'undefined') return;
+      const host = this.host.nativeElement;
+      const observer = new ResizeObserver(() =>
+        host.style.setProperty('--app-page-top', `${toolbar.offsetTop + toolbar.offsetHeight}px`),
+      );
+      observer.observe(toolbar);
+      if (titlebar) observer.observe(titlebar);
+      onCleanup(() => observer.disconnect());
+    });
+
+    // Zen hides the bars, so a page shown under it would have no way back:
+    // reaching one, by a link, Back or a shortcut, leaves zen first.
+    effect(() => {
+      if (this.nav.away() && this.commands.zen()) this.commands.zen.set(false);
     });
 
     // Picking a shader on a handset should get the drawer out of the way — it

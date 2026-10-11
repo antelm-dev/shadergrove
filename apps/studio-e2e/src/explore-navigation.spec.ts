@@ -232,7 +232,7 @@ test('Back and the Explore link both return to the same search, pages and scroll
 
   // Nothing was asked of the server on the way, and the draft was never touched.
   expect(listings).toHaveLength(requests);
-  await page.getByRole('link', { name: 'Back to the editor' }).click();
+  await page.getByTestId('open-editor').click();
   await expectDraft(page, 'explore draft');
 });
 
@@ -435,7 +435,7 @@ test('switching the order after page two starts over, and every way back keeps e
   // Nothing was fetched again, and no cursor was ever sent to the other order.
   expect(listings).toHaveLength(requests);
   expect(listings.every(({ status }) => status === 200)).toBe(true);
-  await page.getByRole('link', { name: 'Back to the editor' }).click();
+  await page.getByTestId('open-editor').click();
   await expectDraft(page, 'sort draft');
 });
 

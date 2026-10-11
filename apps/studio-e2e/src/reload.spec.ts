@@ -13,7 +13,7 @@ test.describe.configure({ timeout: 120_000 });
 // What a user would click next on each page.
 const pages: Record<string, (page: Page) => Locator> = {
   '/': (page) => page.getByTestId('open-plugins'),
-  '/plugins': (page) => page.getByRole('link', { name: /back to the editor/i }),
+  '/plugins': (page) => page.getByTestId('open-editor'),
 };
 
 for (const [path, next] of Object.entries(pages)) {

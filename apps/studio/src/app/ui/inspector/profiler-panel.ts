@@ -14,7 +14,7 @@ import { interval } from 'rxjs';
 import type { PassResolution } from '@shadergrove/shared';
 import { Preferences } from '../../prefs/preferences';
 import { RendererHandle } from '../../rendering/renderer-handle';
-import type { ProfilerSnapshot } from '../../rendering/performance-profiler';
+import type { ProfilerSnapshot } from '@shadergrove/rendering';
 import { ShaderStore } from '../../workspace/shader-store';
 import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';

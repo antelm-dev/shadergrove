@@ -4,14 +4,16 @@ import { PLATFORM_ID, TransferState, inject, makeStateKey } from '@angular/core'
 /**
  * What the Explore pages share.
  *
- * A page here is a routed component laid over the whole window. The editor is
- * not replaced: it stays mounted underneath with its open shader and any
- * unsaved draft, which is why visiting Explore never asks to save first.
+ * A page here is a routed component laid over the editor, below the title bar
+ * and toolbar (`--app-page-top`, measured by `App`), which keep the Editor /
+ * Explore / Plugins links in reach. The editor is not replaced: it stays mounted
+ * underneath with its open shader and any unsaved draft, which is why visiting
+ * Explore never asks to save first. The page itself is what scrolls.
  */
 export const PAGE_STYLES = `
   :host {
     position: fixed;
-    inset: 0;
+    inset: var(--app-page-top, 0px) 0 0;
     z-index: 20;
     display: flex;
     flex-direction: column;

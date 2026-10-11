@@ -1,7 +1,4 @@
-import {
-  PROFILER_MIN_GPU_SAMPLES,
-  type ProfilerGpuSupport,
-} from '../../rendering/performance-profiler';
+import { PROFILER_MIN_GPU_SAMPLES, type ProfilerGpuSupport } from '@shadergrove/rendering';
 
 export const TARGET_FRAME_MS = 1000 / 60;
 export const OVER_BUDGET_RATIO = 1.1;
