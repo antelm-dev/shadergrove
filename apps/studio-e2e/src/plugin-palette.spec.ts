@@ -266,7 +266,6 @@ test('Palette Studio: alpha-aware extraction, gradient editing, JSON round-trip,
   });
 
   // The effect preview: compiled by the renderer, CPU samples drawn, nothing added to the draft.
-  await expect(panel.getByTestId('palette-compile')).toContainText('The effect compiles');
   // The earlier palette compiled too, so the samples are polled until they show the edited one.
   await expect
     .poll(async () => {
@@ -274,6 +273,7 @@ test('Palette Studio: alpha-aware extraction, gradient editing, JSON round-trip,
       return [drawn.length, drawn[0], drawn[16], drawn[32]];
     })
     .toEqual([33, [0, 0, 0], [128, 0, 0], [255, 0, 0]]);
+  await expect(panel.getByTestId('palette-compile')).toContainText('The effect compiles');
   const cpu = await samples(panel);
   expect(await effects(page, id)).toEqual([]);
 

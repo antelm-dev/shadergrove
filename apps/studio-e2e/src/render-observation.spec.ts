@@ -173,11 +173,11 @@ test('selects the nth visit of a loop statement, and an unvisited visit is unava
   await choose(section, 'inc');
 
   await measure(section, 1);
-  expect(await values(section)).toEqual([0]);
+  await expect.poll(() => values(section)).toEqual([0]);
   await expect(section.locator('.availability')).toHaveText('Available');
 
   await measure(section, 3);
-  expect(await values(section)).toEqual([1]);
+  await expect.poll(() => values(section)).toEqual([1]);
 
   // The loop runs four times: visit 5 never happens, which is not the value 0.
   await measure(section, 5);
@@ -194,7 +194,7 @@ test('keeps the statement single-evaluation, so the output matches the unmodifie
   await choose(section, 'once');
   await measure(section);
   // `bump()` mutates a global and feeds the output: a second evaluation would change both.
-  expect(await values(section)).toEqual([1]);
+  await expect.poll(() => values(section)).toEqual([1]);
   await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
   await expect(section.locator('.fidelity')).toContainText('matches the original');
   await expect(section.locator('.fidelity')).not.toContainText('Do not trust');
@@ -245,7 +245,7 @@ void main() {
   await measure(section);
   await expect(section.locator('.source-identity')).toHaveText('lib.glsl:2:9');
   const { width } = await drawingBuffer(page);
-  expect(await values(section)).toEqual([width * 2]);
+  await expect.poll(() => values(section)).toEqual([width * 2]);
 });
 
 test('measures from the captured feedback inputs, and leaves the live feedback untouched', async ({
@@ -338,7 +338,7 @@ void main() {
   await section.locator('.find').click();
   await choose(section, 'seen');
   await measure(section);
-  expect(await values(section)).toEqual([before.value * 2]);
+  await expect.poll(() => values(section)).toEqual([before.value * 2]);
   await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
 
   await panel.locator('.release').click();
@@ -507,7 +507,7 @@ test('measures the accepted program, not the broken draft, after a failed edit',
   await pick(panel, 4, 4);
   await choose(section, 'once');
   await measure(section);
-  expect(await values(section)).toEqual([1]);
+  await expect.poll(() => values(section)).toEqual([1]);
   await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
 });
 
@@ -569,7 +569,7 @@ test('maps points in the pass, Common and nested includes, and does not offer a 
     await choose(section, name);
     await measure(section);
     await expect(section.locator('.source-identity')).toHaveText(place);
-    expect(await values(section)).toEqual([value]);
+    await expect.poll(() => values(section)).toEqual([value]);
     await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
   }
 });
@@ -588,7 +588,7 @@ test('offers a shadowing variable only at its own place, with its own value', as
     await section.locator('.point-select').selectOption((await option.getAttribute('value'))!);
     await measure(section);
     await expect(section.locator('.source-identity')).toHaveText(place);
-    expect(await values(section)).toEqual([place === 'Image:6:9' ? 2 : 9]);
+    await expect.poll(() => values(section)).toEqual([place === 'Image:6:9' ? 2 : 9]);
   }
 });
 
@@ -663,7 +663,9 @@ void main() {
     await pick(panel, x, y);
     await measure(section);
     // gl_FragCoord is the scaled target's own centre; the inputs are the captured frame's, not live ones.
-    expect(await values(section)).toEqual([x + 0.5, frozen.current, await frozenPrevious(x, y)]);
+    await expect
+      .poll(() => values(section))
+      .toEqual([x + 0.5, frozen.current, await frozenPrevious(x, y)]);
     await expect(section.locator('.label .badge').nth(1)).toHaveText('Output verified');
   }
 });
@@ -687,7 +689,7 @@ test('does not trust a value when the preserved output differs numerically from 
     };
   });
   await measure(section);
-  expect(await values(section)).toEqual([1]);
+  await expect.poll(() => values(section)).toEqual([1]);
   await expect(section.locator('.label .badge').nth(1)).toHaveText('Not verified');
   await expect(section.locator('.fidelity')).toContainText('Do not trust');
   await expect(section.locator('.fidelity')).toContainText('texel(s) differently');
