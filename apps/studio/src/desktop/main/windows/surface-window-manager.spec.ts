@@ -44,7 +44,10 @@ class MockBrowserWindow extends EventEmitter {
     height: number;
   };
 
-  constructor(id: number, options: SecureWindowOptions) {
+  constructor(
+    id: number,
+    readonly options: SecureWindowOptions,
+  ) {
     super();
     this.webContents = new MockWebContents(id);
     this.bounds = {
@@ -339,6 +342,39 @@ describe('SurfaceWindowManager bottom-panel satellite', () => {
     expect(again.status).toBe('focused');
     expect(h.windows).toHaveLength(1);
     expect(h.loadCalls).toBe(1);
+  });
+
+  it('opens a framed window, so the OS title bar can move it', async () => {
+    const h = createHarness({ mode: 'resolve' });
+
+    await h.manager.open(bottomPanel);
+
+    expect(h.windows[0]?.options.frame).toBe(true);
+  });
+
+  it('loads only the page that belongs to the kind', async () => {
+    const h = createHarness({ mode: 'resolve' });
+
+    const swapped = await h.manager.open({ ...bottomPanel, path: '/output' });
+    const unknown = await h.manager.open({ ...bottomPanel, kind: 'nope' as 'bottom-panel' });
+    const editor = await h.manager.open({
+      surfaceId: 'surface:editor:editor-group:default',
+      kind: 'editor',
+      path: '/editor',
+      bounds: bottomPanel.bounds,
+    });
+    const inspector = await h.manager.open({
+      surfaceId: WELL_KNOWN_SURFACE_IDS.inspector,
+      kind: 'inspector',
+      path: '/inspector',
+      bounds: bottomPanel.bounds,
+    });
+
+    expect(swapped).toEqual({ status: 'rejected', reason: 'path-not-allowed' });
+    expect(unknown).toEqual({ status: 'rejected', reason: 'path-not-allowed' });
+    expect(editor.status).toBe('ok');
+    expect(inspector.status).toBe('ok');
+    expect(h.windows).toHaveLength(2);
   });
 
   it('rejects an unsafe path without creating a window', async () => {

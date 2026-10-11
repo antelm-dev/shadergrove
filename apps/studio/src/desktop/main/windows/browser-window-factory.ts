@@ -58,7 +58,9 @@ export function createSecureBrowserWindow(options: SecureWindowOptions): Browser
     minWidth: options.minWidth,
     minHeight: options.minHeight,
     show: options.show ?? false,
-    frame: options.frame,
+    // Never pass `frame: undefined`: Electron reads any present key as a boolean, so an
+    // undefined frame meant a frameless window nobody could move.
+    frame: options.frame ?? true,
     backgroundColor: options.backgroundColor ?? '#090b10',
     autoHideMenuBar: options.autoHideMenuBar,
     title: options.title,

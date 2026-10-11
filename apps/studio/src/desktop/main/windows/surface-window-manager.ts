@@ -9,8 +9,10 @@ import { screen, type BrowserWindow } from 'electron';
 
 import type { Rect } from '@shadergrove/shared/geometry';
 import {
+  NATIVE_SURFACE_PATHS,
   WELL_KNOWN_SURFACE_IDS,
   asSurfaceId,
+  isSurfaceKind,
   type SurfaceId,
   type SurfaceKind,
 } from '@shadergrove/shared/surfaces';
@@ -209,6 +211,11 @@ export class SurfaceWindowManager {
       });
     }
 
+    // Each kind loads its own page and nothing else, so a satellite never boots another's shell.
+    if (!isSurfaceKind(request.kind) || NATIVE_SURFACE_PATHS[request.kind] !== path.split('?')[0]) {
+      return Promise.resolve({ status: 'rejected', reason: 'path-not-allowed' });
+    }
+
     const surfaceId = asSurfaceId(request.surfaceId);
     const decision = this.options.registry.canOpen(request.kind, surfaceId);
     if (!decision.ok && decision.existing) {
@@ -237,6 +244,8 @@ export class SurfaceWindowManager {
       minWidth: min.width,
       minHeight: min.height,
       show: false,
+      // The OS title bar is what moves, snaps and resizes a satellite.
+      frame: true,
       autoHideMenuBar: true,
       webPreferences: { preload: this.options.preload },
     });
