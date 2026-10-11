@@ -6,6 +6,11 @@
 // what you came to look at.
 
 :host {
+  // Where routed pages begin (`PAGE_STYLES`). `App` measures the toolbar once it
+  // is on screen; until then — the server's HTML — the web toolbar is all there is.
+  --app-toolbar-height: 44px;
+  --app-page-top: var(--app-toolbar-height);
+
   position: relative;
   display: block;
   height: 100dvh;
@@ -44,8 +49,8 @@ app-titlebar {
   align-items: center;
   column-gap: 12px;
   flex: 0 0 auto;
-  height: 44px;
-  min-height: 44px;
+  height: var(--app-toolbar-height);
+  min-height: var(--app-toolbar-height);
   padding-inline: 8px 12px;
   background: var(--mat-sys-surface-container-low);
   border-bottom: 1px solid var(--mat-sys-outline-variant);
@@ -138,10 +143,11 @@ app-titlebar {
 
 // Under a mouse the bar gives four more pixels to the canvas.
 @media (pointer: fine) and (min-width: 601px) {
-  .toolbar {
-    height: 40px;
-    min-height: 40px;
+  :host {
+    --app-toolbar-height: 40px;
+  }
 
+  .toolbar {
     button[matIconButton] {
       width: 28px;
       height: 28px;
@@ -160,6 +166,20 @@ app-titlebar {
       height: 28px;
     }
   }
+}
+
+// Under a page these act on nothing that can be seen.
+.toolbar.away {
+  .browser-toggle,
+  .quick-actions,
+  .transport {
+    display: none;
+  }
+}
+
+// The section links fill the bar's height, like tabs.
+.bar-start {
+  align-self: stretch;
 }
 
 // What gives way as the bar narrows, least-missed first: the resolution, the
@@ -429,6 +449,10 @@ app-titlebar {
   z-index: 1;
 }
 
+.body.away {
+  visibility: hidden;
+}
+
 .body {
   flex: 1;
   min-height: 0;
@@ -616,7 +640,7 @@ app-titlebar {
     // The icon alone carries it; the label does not fit next to everything else.
     --mat-button-filled-horizontal-padding: 12px;
 
-    ::ng-deep .mat-mdc-button-touch-target + * {
+    .save-label {
       display: none;
     }
   }
