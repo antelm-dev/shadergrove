@@ -107,6 +107,8 @@ export const TRANSLATION_KEYS = [
   'toolbar.toggleBrowser',
   'toolbar.documentActions',
   'toolbar.saveLabel',
+  'toolbar.sections',
+  'toolbar.editor',
   'auth.accountTooltip',
   'auth.accountMenu',
   'auth.accountTitle',

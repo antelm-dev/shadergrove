@@ -25,6 +25,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/studio/package.json ./apps/studio/
 COPY libs/backend/package.json ./libs/backend/
 COPY libs/glsl-analysis/package.json ./libs/glsl-analysis/
+COPY libs/rendering/package.json ./libs/rendering/
 COPY libs/shared/package.json ./libs/shared/
 COPY tools/maintenance/package.json ./tools/maintenance/
 COPY tools/mcp/package.json ./tools/mcp/

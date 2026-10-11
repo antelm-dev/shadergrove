@@ -97,6 +97,8 @@
   "toolbar.toggleBrowser": "Afficher ou masquer la bibliothèque de shaders",
   "toolbar.documentActions": "{description} — clic droit pour les actions",
   "toolbar.saveLabel": "Enregistrer le shader. {hint}",
+  "toolbar.sections": "Sections",
+  "toolbar.editor": "Éditeur",
   "auth.accountTooltip": "Ouvrir le compte et la connexion",
   "auth.accountMenu": "Menu du compte",
   "auth.accountTitle": "Votre compte",

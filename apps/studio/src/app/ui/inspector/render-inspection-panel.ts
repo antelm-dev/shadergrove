@@ -26,7 +26,7 @@ import {
   type FrameSnapshot,
   type InvalidationReason,
   type TexelFormat,
-} from '../../rendering/render-inspection';
+} from '@shadergrove/rendering';
 import { RendererHandle } from '../../rendering/renderer-handle';
 import {
   DEFAULT_VISUAL,

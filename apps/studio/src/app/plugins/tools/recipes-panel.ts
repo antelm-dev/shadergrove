@@ -33,7 +33,7 @@ import { LIMITS, defaultParams } from '@shadergrove/shared/validate';
 import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 import { GlContextRegistry } from '../../rendering/gl-context-registry';
-import { ShaderEngine, type EnginePass } from '../../rendering/shader-engine';
+import { ShaderEngine, type EnginePass } from '@shadergrove/rendering';
 import type { ActiveTemplate } from '../plugin-tools';
 import { ProjectRecipes, type RecipeOutcome, type RecipeTextKey } from './recipes';
 

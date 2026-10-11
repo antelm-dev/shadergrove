@@ -1,7 +1,10 @@
 <!-- The shader is the page: everything below is painted on top of it — until you
      detach it, at which point the same canvas becomes a window over the stage it
      was. The output window only ever gets the page. -->
-<app-preview-shell [stageOnly]="outputMode || commands.zen()" />
+<app-preview-shell
+  [stageOnly]="outputMode || commands.zen()"
+  [attr.inert]="nav.away() ? '' : null"
+/>
 <router-outlet />
 
 @if (!outputMode) {
@@ -41,11 +44,14 @@
        are working on (the document, centred, like any document window), and
        what you can do (the preview's transport, the view toggles, the account,
        Save). The menus are declared after the bar so they are not its children. -->
-  <mat-toolbar class="toolbar">
+  <!-- Routed pages start where this ends: measured, see `App`. -->
+  <mat-toolbar #toolbar class="toolbar" [class.away]="nav.away()">
     <div class="bar-start">
+      <!-- Hidden under a page, with the quick actions and transport: they act on the editor. -->
       <button
         matIconButton
         type="button"
+        class="browser-toggle"
         [matTooltip]="'toolbar.toggleBrowser' | translate"
         [attr.aria-label]="'toolbar.toggleBrowser' | translate"
         [attr.aria-expanded]="drawerOpen()"
@@ -62,25 +68,10 @@
         <img class="brand-mark" src="assets/shadergrove-logo.png" width="28" height="28" alt="" />
         <span class="brand-title">Shadergrove</span>
       </span>
-      } @if (explore().publicExplore) {
-      <a
-        matIconButton
-        routerLink="/explore"
-        [matTooltip]="'explore.title' | translate"
-        [attr.aria-label]="'explore.title' | translate"
-      >
-        <mat-icon>explore</mat-icon>
-      </a>
       }
-      <a
-        matIconButton
-        routerLink="/plugins"
-        data-testid="open-plugins"
-        [matTooltip]="'plugins.title' | translate"
-        [attr.aria-label]="'plugins.title' | translate"
-      >
-        <mat-icon>extension</mat-icon>
-      </a>
+
+      <!-- Editor / Explore / Plugins, as tabs over routed pages. -->
+      <app-navigation />
     </div>
 
     <div class="bar-center">
@@ -276,7 +267,9 @@
         (click)="store.save()"
       >
         <mat-icon>save</mat-icon>
-        {{ (store.saving() ? 'action.saving' : 'action.saveShader') | translate }}
+        <span class="save-label"
+          >{{ (store.saving() ? 'action.saving' : 'action.saveShader') | translate }}</span
+        >
       </button>
     </div>
 
@@ -485,7 +478,14 @@
     </button>
   </mat-menu>
 
-  <mat-sidenav-container class="body" [hasBackdrop]="isHandset()">
+  <!-- Under a page the workspace is kept, with its layout and drafts, but out of
+       sight, of the pointer and of the tab order. -->
+  <mat-sidenav-container
+    class="body"
+    [class.away]="nav.away()"
+    [attr.inert]="nav.away() ? '' : null"
+    [hasBackdrop]="isHandset()"
+  >
     <mat-sidenav
       class="drawer"
       [mode]="isHandset() ? 'over' : 'side'"

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.0](https://github.com/antelm-dev/shadergrove/compare/v2.11.0...v2.12.0) (2026-10-11)
+
+
+### Features
+
+* **studio:** keep Editor, Explore and Plugins in the top bar over every page ([#243](https://github.com/antelm-dev/shadergrove/issues/243)) ([7ffda04](https://github.com/antelm-dev/shadergrove/commit/7ffda0465aba9497eaa39fbd2005741daa4b4b62))
+
 ## [2.11.0](https://github.com/antelm-dev/shadergrove/compare/v2.10.0...v2.11.0) (2026-10-11)
 
 

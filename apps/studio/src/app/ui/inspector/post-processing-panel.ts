@@ -38,7 +38,7 @@ import { LIMITS } from '@shadergrove/shared/validate';
 import { I18n } from '../../i18n/i18n';
 import type { TranslationKey } from '../../i18n/keys';
 import { TranslatePipe } from '../../i18n/translate.pipe';
-import { effectDocId } from '../../rendering/engine/custom-effect-pass';
+import { effectDocId } from '@shadergrove/rendering';
 import { ShaderStore } from '../../workspace/shader-store';
 import { CustomEffectEditor, type CustomEffectEditorData } from './custom-effect-editor';
 

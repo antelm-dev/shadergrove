@@ -17,7 +17,7 @@ import {
 
 import { createFrontend, job } from '../../../../../libs/glsl-analysis/test/support/frontend';
 import type { GlslangRuntime } from '../../../../../libs/glsl-analysis/src/worker/runtime';
-import type { CapturedAccepted } from '../rendering/render-inspection';
+import type { CapturedAccepted } from '@shadergrove/rendering';
 import { GENERATED_PREFIX } from './glsl-analysis-source';
 import { buildObservation, mapCatalogue, preparedFragment } from './observation-source';
 
