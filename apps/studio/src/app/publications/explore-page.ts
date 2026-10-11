@@ -46,6 +46,10 @@ const SORT_LABELS: Record<PublicationSort, TranslationKey> = {
   published: 'explore.sortPublished',
 };
 
+/** What a visitor does to move the listing themselves; restoring the scroll stops at any of them. */
+const USER_SCROLLS = ['wheel', 'touchmove', 'keydown', 'pointerdown'] as const;
+const NOTHING = (): void => undefined;
+
 /**
  * `/explore`: every public shader, newest first, for anyone — no session, no
  * sign-in prompt. The cards are static thumbnails; nothing is compiled or
@@ -279,6 +283,8 @@ export class ExplorePage {
    * empty or being put back, when the browser clamps the scroll to the top and reports it.
    */
   private tracking = false;
+  /** Ends a restoration still waiting for the list to be tall enough (`reapply`). */
+  private stopRestoring = NOTHING;
 
   constructor() {
     // One component serves every search: Back, Forward and a typed address change `q` and `sort`, not the page.
@@ -286,6 +292,7 @@ export class ExplorePage {
     inject(DestroyRef).onDestroy(() => {
       this.generation += 1;
       this.tracking = false;
+      this.stopRestoring();
     });
   }
 
@@ -399,12 +406,51 @@ export class ExplorePage {
         write: () => {
           // A newer search owns the list now.
           if (generation !== this.generation) return;
+          this.stopRestoring();
           this.host.scrollTop = scrollTop;
-          this.tracking = true;
+          if (this.host.scrollTop < scrollTop - 1) this.reapply(scrollTop, generation);
+          else this.tracking = true;
         },
       },
       { injector: this.injector },
     );
+  }
+
+  /**
+   * The browser clamped the scroll because the list is not yet as tall as it will be: the first
+   * frame can lay the grid out wider, in more columns and fewer rows, than the settled page.
+   * Puts it back as the list grows, until it holds, the visitor scrolls, or a second has passed.
+   */
+  private reapply(scrollTop: number, generation: number): void {
+    const host = this.host;
+    let applied = host.scrollTop;
+    const apply = () => {
+      if (generation !== this.generation || host.scrollTop !== applied) return stop();
+      host.scrollTop = scrollTop;
+      applied = host.scrollTop;
+      if (applied >= scrollTop - 1) stop();
+    };
+    // Scrolled by anything but `apply`: the visitor's position wins.
+    const moved = () => {
+      if (host.scrollTop !== applied) stop();
+    };
+    const observer = new ResizeObserver(apply);
+    const timer = setTimeout(() => stop(), 1000);
+    const stop = () => {
+      observer.disconnect();
+      clearTimeout(timer);
+      host.removeEventListener('scroll', moved);
+      for (const type of USER_SCROLLS) host.removeEventListener(type, stop);
+      this.stopRestoring = NOTHING;
+      if (generation !== this.generation) return;
+      this.tracking = true;
+      this.scrolled();
+    };
+    this.stopRestoring = stop;
+    observer.observe(host);
+    for (const child of host.children) observer.observe(child);
+    host.addEventListener('scroll', moved, { passive: true });
+    for (const type of USER_SCROLLS) host.addEventListener(type, stop, { passive: true });
   }
 
   private show(page: PublicationPage, before: readonly PublicationSummary[]): void {
