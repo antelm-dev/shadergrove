@@ -6,6 +6,7 @@ import {
   afterRenderEffect,
   computed,
   effect,
+  Injector,
   inject,
   signal,
   untracked,
@@ -54,7 +55,6 @@ import { ResizeHandle } from './ui/layout/resize-handle';
 import { ShaderBrowser } from './ui/browser/shader-browser';
 import { TransportBar } from './ui/layout/transport-bar';
 import { StartupCoordinator } from './workspace/startup-coordinator';
-import { SessionHost } from './workspace/session-sync/session-host';
 import { WorkspaceActions } from './ui/workspace-actions';
 import { PluginCommands } from './plugins/plugin-commands';
 import { FALLBACK_LANGUAGE_ID } from '@shadergrove/shared/plugin';
@@ -111,7 +111,7 @@ export class App {
   protected readonly commands = inject(MenuCommands);
   protected readonly layout = inject(SurfaceLayoutService);
   private readonly surfaces = inject(SurfaceRegistry);
-  private readonly sessionHost = inject(SessionHost);
+  private readonly injector = inject(Injector);
   protected readonly i18n = inject(I18n);
   protected readonly outputMode = isOutputWindow();
   /** Which of Editor / Explore / Plugins is on screen, and where each link leads. */
@@ -426,8 +426,12 @@ export class App {
     // constructor. Nothing here needs to call anything on it.
     inject(StartupCoordinator);
 
-    // Feeds the native panel windows, which only the desktop opens.
-    if (this.desktop.available && !this.outputMode) this.sessionHost.start();
+    // Feeds the native panel windows, which only the desktop opens: loaded there only.
+    if (this.desktop.available && !this.outputMode) {
+      void import('./workspace/session-sync/session-host').then(({ SessionHost }) =>
+        this.injector.get(SessionHost).start(),
+      );
+    }
 
     // The hidden input the browser imports go through is in this template.
     if (!this.outputMode) {
