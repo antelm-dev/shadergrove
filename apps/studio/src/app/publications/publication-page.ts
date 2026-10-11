@@ -21,7 +21,7 @@ import { I18n } from '../i18n/i18n';
 import type { TranslationKey } from '../i18n/keys';
 import { TranslatePipe } from '../i18n/translate.pipe';
 import { ShaderStore } from '../workspace/shader-store';
-import { ExploreBrowseState } from './explore-browse-state';
+import { ExploreBrowseState, addressOf } from './explore-browse-state';
 import { PAGE_STYLES, serverState } from './page';
 import { PublicationApi } from './publication-api';
 import { PublicationPreview } from './publication-preview';
@@ -287,11 +287,8 @@ export class PublicationPage {
     new Date(this.publication()?.updatedAt ?? 0).toLocaleDateString(this.i18n.locale()),
   );
 
-  /** The search this visit came from; opened directly there is none, and the link is plain `/explore`. */
-  protected readonly back = computed(() => {
-    const q = this.browse.returnQuery();
-    return q ? { q } : {};
-  });
+  /** The search and order this visit came from; opened directly there is none, and the link is plain `/explore`. */
+  protected readonly back = computed(() => addressOf(this.browse.returnTo()));
 
   private id = '';
 

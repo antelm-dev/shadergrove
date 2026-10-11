@@ -108,6 +108,7 @@ function nextRequest(http: HttpTestingController) {
   expect(others, 'one request at a time').toHaveLength(0);
   return {
     search: request.request.params.get('search'),
+    sort: request.request.params.get('sort'),
     cursor: request.request.params.get('cursor'),
     flush: (body: PublicationPageDto) => request.flush(body),
     fail: () => request.error(new ProgressEvent('error')),
@@ -151,6 +152,26 @@ function loadMore(fixture: ComponentFixture<unknown>): void {
   );
   button?.click();
 }
+
+const sortBox = (fixture: ComponentFixture<unknown>) =>
+  (fixture.nativeElement as HTMLElement).querySelector('select#explore-sort') as HTMLSelectElement;
+
+function chooseSort(fixture: ComponentFixture<unknown>, sort: string): void {
+  const box = sortBox(fixture);
+  box.value = sort;
+  box.dispatchEvent(new Event('change'));
+}
+
+function clickButton(fixture: ComponentFixture<unknown>, label: string): void {
+  const button = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find(
+    (entry) => entry.textContent?.includes(label),
+  );
+  if (!button) throw new Error(`no ${label} button`);
+  button.click();
+}
+
+const backLink = (harness: RouterTestingHarness) =>
+  (harness.routeNativeElement as HTMLElement).querySelector('a.mat-mdc-button') as HTMLElement;
 
 afterEach(() => TestBed.resetTestingModule());
 
@@ -412,11 +433,222 @@ describe('Explore restoration', () => {
   });
 });
 
+describe('Explore order', () => {
+  it('lists recently updated by default, with no sort in the address or the request', async () => {
+    const { http, harness, location } = await visit('/explore');
+    const request = nextRequest(http);
+    expect(request.sort).toBeNull();
+    request.flush(page(['u1']));
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore');
+    expect(sortBox(harness.fixture).value).toBe('updated');
+    const label = (harness.fixture.nativeElement as HTMLElement).querySelector(
+      'label[for="explore-sort"]',
+    );
+    expect(label?.textContent?.trim()).toBe('explore.sort');
+    expect([...sortBox(harness.fixture).options].map((option) => option.value)).toEqual([
+      'updated',
+      'published',
+    ]);
+  });
+
+  it('asks for the q and sort a link carries, and shows both', async () => {
+    const { http, harness, location } = await visit('/explore?q=bloom&sort=published');
+    const request = nextRequest(http);
+    expect(request).toMatchObject({ search: 'bloom', sort: 'published', cursor: null });
+    request.flush(page(['p1']));
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore?q=bloom&sort=published');
+    expect(input(harness.fixture).value).toBe('bloom');
+    expect(sortBox(harness.fixture).value).toBe('published');
+  });
+
+  it('replaces an unknown or default sort in the address, adding no history entry', async () => {
+    const { http, harness, location } = await visit('/explore?q=aurora');
+    nextRequest(http).flush(page(['a1']));
+    await settle(harness.fixture);
+
+    await harness.navigateByUrl('/explore?q=bloom&sort=Published', ExplorePage);
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore?q=bloom');
+    const request = nextRequest(http);
+    expect(request).toMatchObject({ search: 'bloom', sort: null });
+    request.flush(page(['b1']));
+    await settle(harness.fixture);
+    expect(sortBox(harness.fixture).value).toBe('updated');
+
+    location.back();
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore?q=aurora');
+
+    // The default spelled out is the same listing, written the plain way.
+    await harness.navigateByUrl('/explore?q=aurora&sort=updated', ExplorePage);
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore?q=aurora');
+    expect(listing(http)).toHaveLength(0);
+    expect(titles(harness.fixture)).toEqual(['a1']);
+  });
+
+  it('pushes one entry per chosen order, from a fresh first page, and walks back to the other intact', async () => {
+    const { http, harness, location } = await visit('/explore?q=bloom');
+    nextRequest(http).flush(page(['u1', 'u2'], 'cu2'));
+    await settle(harness.fixture);
+    loadMore(harness.fixture);
+    nextRequest(http).flush(page(['u3'], 'cu3'));
+    await settle(harness.fixture);
+    scrollTo(harness, 300);
+
+    chooseSort(harness.fixture, 'published');
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore?q=bloom&sort=published');
+    const first = nextRequest(http);
+    // Page one of the new order: no cursor from the other, nothing of it on screen, at the top.
+    expect(first).toMatchObject({ search: 'bloom', sort: 'published', cursor: null });
+    expect(titles(harness.fixture)).toEqual([]);
+    expect(scroller(harness).scrollTop).toBe(0);
+    first.flush(page(['p1', 'p2'], 'cp2'));
+    await settle(harness.fixture);
+    expect(titles(harness.fixture)).toEqual(['p1', 'p2']);
+    loadMore(harness.fixture);
+    const more = nextRequest(http);
+    expect(more).toMatchObject({ sort: 'published', cursor: 'cp2' });
+    more.flush(page(['p3']));
+    await settle(harness.fixture);
+
+    location.back();
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore?q=bloom');
+    expect(listing(http)).toHaveLength(0);
+    expect(titles(harness.fixture)).toEqual(['u1', 'u2', 'u3']);
+    expect(sortBox(harness.fixture).value).toBe('updated');
+    expect(scroller(harness).scrollTop).toBe(300);
+
+    location.forward();
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore?q=bloom&sort=published');
+    expect(listing(http)).toHaveLength(0);
+    expect(titles(harness.fixture)).toEqual(['p1', 'p2', 'p3']);
+    expect(sortBox(harness.fixture).value).toBe('published');
+
+    location.back();
+    await settle(harness.fixture);
+    loadMore(harness.fixture);
+    expect(nextRequest(http)).toMatchObject({ sort: null, cursor: 'cu3' });
+  });
+
+  it('lists an order chosen again from its first page rather than from what was kept', async () => {
+    const { http, harness, location } = await visit('/explore?sort=published');
+    nextRequest(http).flush(page(['p1'], 'cp'));
+    await settle(harness.fixture);
+    chooseSort(harness.fixture, 'updated');
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore');
+    nextRequest(http).flush(page(['u1']));
+    await settle(harness.fixture);
+
+    chooseSort(harness.fixture, 'published');
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore?sort=published');
+    const again = nextRequest(http);
+    expect(again).toMatchObject({ sort: 'published', cursor: null });
+    again.flush(page(['p0', 'p1']));
+    await settle(harness.fixture);
+    expect(titles(harness.fixture)).toEqual(['p0', 'p1']);
+  });
+
+  it('never appends or keeps a response for an order the visitor has left', async () => {
+    const { http, harness, location } = await visit('/explore?q=bloom');
+    nextRequest(http).flush(page(['u1'], 'cu'));
+    await settle(harness.fixture);
+    loadMore(harness.fixture);
+    const pageTwo = nextRequest(http);
+    expect(pageTwo.cursor).toBe('cu');
+
+    chooseSort(harness.fixture, 'published');
+    await settle(harness.fixture);
+    const slowFirst = nextRequest(http);
+    expect(slowFirst.sort).toBe('published');
+
+    // Back to updated before published answers: both late pages land on nothing.
+    location.back();
+    await settle(harness.fixture);
+    pageTwo.flush(page(['u-late']));
+    slowFirst.flush(page(['p-late']));
+    await settle(harness.fixture);
+    expect(location.path()).toBe('/explore?q=bloom');
+    expect(titles(harness.fixture)).toEqual(['u1']);
+
+    // Published never completed, so it is fetched, not restored from the late answer.
+    location.forward();
+    await settle(harness.fixture);
+    const again = nextRequest(http);
+    expect(again).toMatchObject({ sort: 'published', cursor: null });
+    again.flush(page(['p1']));
+    await settle(harness.fixture);
+    expect(titles(harness.fixture)).toEqual(['p1']);
+  });
+
+  it('retries a failed listing in the same search and order', async () => {
+    const { http, harness } = await visit('/explore?q=bloom&sort=published');
+    nextRequest(http).fail();
+    await settle(harness.fixture);
+    clickButton(harness.fixture, 'explore.retry');
+    const retry = nextRequest(http);
+    expect(retry).toMatchObject({ search: 'bloom', sort: 'published', cursor: null });
+    retry.flush(page(['p1']));
+    await settle(harness.fixture);
+    expect(titles(harness.fixture)).toEqual(['p1']);
+  });
+
+  it('comes back from a publication to the same search, order, pages and scroll, by Back and by its link', async () => {
+    const detail = (http: HttpTestingController, id: string) =>
+      http
+        .expectOne(`/api/publications/${id}`)
+        .flush({ publication: { ...summary(id), shader: {} } });
+    const { http, harness, location } = await visit('/explore?q=bloom&sort=published');
+    nextRequest(http).flush(page(['p1', 'p2'], 'cp2'));
+    await settle(harness.fixture);
+    loadMore(harness.fixture);
+    nextRequest(http).flush(page(['p3'], 'cp3'));
+    await settle(harness.fixture);
+    scrollTo(harness, 240);
+
+    const open = () =>
+      (
+        (harness.fixture.nativeElement as HTMLElement).querySelector('.card') as HTMLElement
+      ).click();
+    const expectRestored = () => {
+      expect(location.path()).toBe('/explore?q=bloom&sort=published');
+      expect(listing(http)).toHaveLength(0);
+      expect(titles(harness.fixture)).toEqual(['p1', 'p2', 'p3']);
+      expect(input(harness.fixture).value).toBe('bloom');
+      expect(sortBox(harness.fixture).value).toBe('published');
+      expect(scroller(harness).scrollTop).toBe(240);
+    };
+
+    open();
+    await settle(harness.fixture);
+    detail(http, 'p1');
+    await settle(harness.fixture);
+    expect(backLink(harness).getAttribute('href')).toBe('/explore?q=bloom&sort=published');
+    location.back();
+    await settle(harness.fixture);
+    expectRestored();
+
+    open();
+    await settle(harness.fixture);
+    detail(http, 'p1');
+    await settle(harness.fixture);
+    backLink(harness).click();
+    await settle(harness.fixture);
+    expectRestored();
+    loadMore(harness.fixture);
+    expect(nextRequest(http)).toMatchObject({ search: 'bloom', sort: 'published', cursor: 'cp3' });
+  });
+});
+
 describe('Explore link on a publication', () => {
-  const backLink = (harness: RouterTestingHarness) =>
-    (harness.routeNativeElement as HTMLElement)
-      .querySelector('a.mat-mdc-button')
-      ?.getAttribute('href');
+  const href = (harness: RouterTestingHarness) => backLink(harness)?.getAttribute('href');
 
   it('returns to the search the visitor came from', async () => {
     const { http, harness } = await visit('/explore?q=bloom');
@@ -425,7 +657,7 @@ describe('Explore link on a publication', () => {
     await harness.navigateByUrl('/explore/b1');
     http.expectOne('/api/publications/b1').flush({ publication: { ...summary('b1'), shader: {} } });
     await settle(harness.fixture);
-    expect(backLink(harness)).toBe('/explore?q=bloom');
+    expect(href(harness)).toBe('/explore?q=bloom');
   });
 
   it('is plain Explore for a visitor who arrived on the publication directly', async () => {
@@ -433,7 +665,7 @@ describe('Explore link on a publication', () => {
     await harness.navigateByUrl('/explore/b1');
     http.expectOne('/api/publications/b1').flush({ publication: { ...summary('b1'), shader: {} } });
     await settle(harness.fixture);
-    expect(backLink(harness)).toBe('/explore');
+    expect(href(harness)).toBe('/explore');
   });
 
   it('still leads back when the publication is gone', async () => {
@@ -445,11 +677,9 @@ describe('Explore link on a publication', () => {
       .expectOne('/api/publications/gone')
       .flush({ error: { code: 'not_found', message: 'x' } }, { status: 404, statusText: 'x' });
     await settle(harness.fixture);
-    expect(backLink(harness)).toBe('/explore?q=bloom');
+    expect(href(harness)).toBe('/explore?q=bloom');
 
-    (
-      (harness.routeNativeElement as HTMLElement).querySelector('a.mat-mdc-button') as HTMLElement
-    ).click();
+    backLink(harness).click();
     await settle(harness.fixture);
     expect(location.path()).toBe('/explore?q=bloom');
     expect(listing(harness.fixture ? http : http)).toHaveLength(0);
@@ -462,7 +692,7 @@ describe('Explore server rendering', () => {
 
   it('starts from the page the server rendered for the same search', async () => {
     const http = configure();
-    TestBed.inject(TransferState).set(key, { query: 'bloom', page: page(['b1']) });
+    TestBed.inject(TransferState).set(key, { query: 'bloom', sort: 'updated', page: page(['b1']) });
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/explore?q=bloom', ExplorePage);
     await settle(harness.fixture);
@@ -472,7 +702,11 @@ describe('Explore server rendering', () => {
 
   it('does not show another search’s page, and fetches its own', async () => {
     const http = configure();
-    TestBed.inject(TransferState).set(key, { query: 'aurora', page: page(['a1']) });
+    TestBed.inject(TransferState).set(key, {
+      query: 'aurora',
+      sort: 'updated',
+      page: page(['a1']),
+    });
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/explore?q=bloom', ExplorePage);
     const request = nextRequest(http);
@@ -485,7 +719,11 @@ describe('Explore server rendering', () => {
 
   it('hydrates an untidy q from the page the server rendered for its tidy form, with no request', async () => {
     const http = configure();
-    TestBed.inject(TransferState).set(key, { query: 'bloom', page: page(['b1'], 'next') });
+    TestBed.inject(TransferState).set(key, {
+      query: 'bloom',
+      sort: 'updated',
+      page: page(['b1'], 'next'),
+    });
     const harness = await RouterTestingHarness.create();
     TestBed.inject(Router).initialNavigation();
     await harness.navigateByUrl('/explore?q=%20bloom%20', ExplorePage);
@@ -494,6 +732,52 @@ describe('Explore server rendering', () => {
     expect(listing(http)).toHaveLength(0);
     expect(titles(harness.fixture)).toEqual(['b1']);
     expect(input(harness.fixture).value).toBe('bloom');
+  });
+
+  it('does not hydrate one order from the page the server rendered for the other', async () => {
+    const http = configure();
+    TestBed.inject(TransferState).set(key, { query: 'bloom', sort: 'updated', page: page(['u1']) });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/explore?q=bloom&sort=published', ExplorePage);
+    const request = nextRequest(http);
+    expect(request).toMatchObject({ search: 'bloom', sort: 'published' });
+    request.flush(page(['p1']));
+    await settle(harness.fixture);
+    expect(titles(harness.fixture)).toEqual(['p1']);
+  });
+
+  it('hydrates a published listing from the page the server rendered for it, with no request', async () => {
+    const http = configure();
+    TestBed.inject(TransferState).set(key, {
+      query: 'bloom',
+      sort: 'published',
+      page: page(['p1'], 'cp'),
+    });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/explore?q=bloom&sort=published', ExplorePage);
+    await settle(harness.fixture);
+    expect(listing(http)).toHaveLength(0);
+    expect(titles(harness.fixture)).toEqual(['p1']);
+    expect(sortBox(harness.fixture).value).toBe('published');
+  });
+
+  it('renders the requested order on the server, selected in the HTML and transferred', async () => {
+    const { http, harness } = await start({ platform: 'server' });
+    await harness.navigateByUrl('/explore?sort=published', ExplorePage);
+    const request = nextRequest(http);
+    expect(request).toMatchObject({ search: null, sort: 'published' });
+    request.flush(page(['p1']));
+    await settle(harness.fixture);
+
+    expect(TestBed.inject(TransferState).get(key, null)).toEqual({
+      query: '',
+      sort: 'published',
+      page: page(['p1']),
+    });
+    const selected = [...sortBox(harness.fixture).options]
+      .filter((option) => option.hasAttribute('selected'))
+      .map((option) => option.value);
+    expect(selected).toEqual(['published']);
   });
 
   it('renders and transfers the first page of the requested q, and keeps nothing for the next request', async () => {
@@ -506,11 +790,14 @@ describe('Explore server rendering', () => {
 
     expect(TestBed.inject(TransferState).get(key, null)).toEqual({
       query: 'bloom',
+      sort: 'updated',
       page: page(['b1'], 'next'),
     });
     // The server has no address bar to tidy and no memory to share between requests.
     expect(TestBed.inject(Router).url).toBe('/explore?q=%20bloom');
-    expect(TestBed.inject(ExploreBrowseState).recall('bloom')).toBeNull();
-    expect(TestBed.inject(ExploreBrowseState).returnQuery()).toBe('');
+    expect(
+      TestBed.inject(ExploreBrowseState).recall({ query: 'bloom', sort: 'updated' }),
+    ).toBeNull();
+    expect(TestBed.inject(ExploreBrowseState).returnTo()).toEqual({ query: '', sort: 'updated' });
   });
 });

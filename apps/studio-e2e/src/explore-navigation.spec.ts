@@ -1,9 +1,10 @@
 // The data and DOM types are for the callbacks Playwright runs in the page.
 /// <reference lib="dom" />
 
-// Explore browsing, end to end in the browser: the search lives in the address,
-// and opening a publication and coming back (browser Back or the page's own
-// Explore link) puts back the same cards, cursor, search and scroll position.
+// Explore browsing, end to end in the browser: the search and its order live in
+// the address, and opening a publication and coming back (browser Back or the
+// page's own Explore link) puts back the same cards, cursor, search, order and
+// scroll position.
 //
 // Explore is switched off on this suite's shared server, so the public
 // endpoints the browser calls (`/api/capabilities`, `/api/publications…`) are
@@ -52,7 +53,9 @@ const summary = ({ id, title }: Published) => ({
 
 interface ListRequest {
   search: string | null;
+  sort: string | null;
   cursor: string | null;
+  status: number;
 }
 
 /** Answers the public Explore endpoints for a page, and remembers what it was asked. */
@@ -71,18 +74,26 @@ async function mockExplore(
     const url = new URL(route.request().url());
     if (url.pathname === '/api/publications') {
       const search = url.searchParams.get('search');
+      const sort = url.searchParams.get('sort');
       const cursor = url.searchParams.get('cursor');
-      listings.push({ search, cursor });
+      const order = sort ?? 'updated';
+      // Like the server's, a cursor only continues the order it came from (`u12`, `p12`).
+      const refused =
+        !['updated', 'published'].includes(order) || (cursor !== null && cursor[0] !== order[0]);
+      listings.push({ search, sort, cursor, status: refused ? 400 : 200 });
+      if (refused) return json(route, { error: { code: 'bad_request', message: 'No' } }, 400);
       const delay = slow[search ?? ''] ?? 0;
       if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
       const matches = library.filter(({ title }) =>
         title.toLowerCase().includes((search ?? '').toLowerCase()),
       );
+      // First published last: the other order of the same shaders.
+      if (order === 'published') matches.reverse();
       const from = cursor ? Number(cursor.slice(1)) : 0;
       const to = from + PAGE_SIZE;
       return json(route, {
         publications: matches.slice(from, to).map(summary),
-        nextCursor: to < matches.length ? `c${to}` : null,
+        nextCursor: to < matches.length ? `${order[0]}${to}` : null,
       });
     }
     const id = /^\/api\/publications\/([^/]+)$/.exec(url.pathname)?.[1];
@@ -137,7 +148,9 @@ async function expectDraft(page: Page, marker: string): Promise<void> {
 
 const cards = (page: Page) => page.locator('app-explore-page .card');
 const titles = (page: Page) => page.locator('app-explore-page .card-title').allTextContents();
-const search = (page: Page) => page.getByRole('searchbox', { name: 'Search public shaders' });
+const search = (page: Page) =>
+  page.getByRole('searchbox', { name: 'Search titles, descriptions and authors' });
+const sortBox = (page: Page) => page.getByRole('combobox', { name: 'Sort' });
 
 async function submitSearch(page: Page, text: string): Promise<void> {
   await search(page).fill(text);
@@ -351,4 +364,105 @@ test('a publication opened directly has no search to return to', async ({ page }
     .click();
   await expect(page).toHaveURL('/explore');
   await expect(search(page)).toHaveValue('');
+});
+
+test('switching the order after page two starts over, and every way back keeps each order', async ({
+  page,
+}) => {
+  const listings = await mockExplore(page);
+  await openEditor(page);
+  await makeDraft(page, 'sort draft');
+  await page.getByRole('link', { name: 'Explore', exact: true }).click();
+  await submitSearch(page, 'aurora');
+  await expect(page).toHaveURL('/explore?q=aurora');
+  await expect(sortBox(page)).toHaveValue('updated');
+  await page.getByRole('button', { name: 'Load more' }).click();
+  await expect(cards(page)).toHaveCount(PER_NAME);
+  const updatedScroll = await scrollExplore(page);
+
+  await sortBox(page).selectOption({ label: 'Recently published' });
+  await expect(page).toHaveURL('/explore?q=aurora&sort=published');
+  await expect(cards(page)).toHaveCount(PAGE_SIZE);
+  expect((await titles(page))[0]).toBe('Aurora 20');
+  expect(listings.at(-1)).toMatchObject({ search: 'aurora', sort: 'published', cursor: null });
+  await expect.poll(() => scrollOf(page)).toBe(0);
+  await page.getByRole('button', { name: 'Load more' }).click();
+  await expect(cards(page)).toHaveCount(PER_NAME);
+  expect(listings.at(-1)).toMatchObject({ sort: 'published', cursor: 'p12' });
+  const publishedScroll = await scrollExplore(page);
+  const requests = listings.length;
+
+  // Back and the Explore link from a publication both return to the published listing.
+  const opened = await cardOnScreen(page);
+  const title = (await titles(page))[opened];
+  await cards(page).nth(opened).click();
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL('/explore?q=aurora&sort=published');
+  await expect(cards(page)).toHaveCount(PER_NAME);
+  await expect(sortBox(page)).toHaveValue('published');
+  await expect.poll(() => scrollOf(page)).toBe(publishedScroll);
+
+  await cards(page).nth(opened).click();
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+  await page
+    .locator('app-publication-page .page-bar')
+    .getByRole('link', { name: 'Explore' })
+    .click();
+  await expect(page).toHaveURL('/explore?q=aurora&sort=published');
+  await expect(cards(page)).toHaveCount(PER_NAME);
+  await expect(sortBox(page)).toHaveValue('published');
+  await expect.poll(() => scrollOf(page)).toBe(publishedScroll);
+  expect((await titles(page))[0]).toBe('Aurora 20');
+
+  // Back through the history to the updated order of the same search, unmixed.
+  await page.goBack();
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL('/explore?q=aurora&sort=published');
+  await expect(cards(page)).toHaveCount(PER_NAME);
+  await page.goBack();
+  await expect(page).toHaveURL('/explore?q=aurora');
+  await expect(sortBox(page)).toHaveValue('updated');
+  await expect(cards(page)).toHaveCount(PER_NAME);
+  expect((await titles(page))[0]).toBe('Aurora 01');
+  await expect.poll(() => scrollOf(page)).toBe(updatedScroll);
+  await page.goForward();
+  await expect(page).toHaveURL('/explore?q=aurora&sort=published');
+  await expect(cards(page)).toHaveCount(PER_NAME);
+  expect((await titles(page))[0]).toBe('Aurora 20');
+
+  // Nothing was fetched again, and no cursor was ever sent to the other order.
+  expect(listings).toHaveLength(requests);
+  expect(listings.every(({ status }) => status === 200)).toBe(true);
+  await page.getByRole('link', { name: 'Back to the editor' }).click();
+  await expectDraft(page, 'sort draft');
+});
+
+test('a direct order link and a reload list that order; an unknown one is tidied away', async ({
+  page,
+}) => {
+  const listings = await mockExplore(page);
+  await page.goto('/explore?q=bloom&sort=published');
+  await expect(cards(page)).toHaveCount(PAGE_SIZE);
+  await expect(sortBox(page)).toHaveValue('published');
+  expect((await titles(page))[0]).toBe('Bloom 20');
+
+  await page.reload();
+  await expect(cards(page)).toHaveCount(PAGE_SIZE);
+  await expect(sortBox(page)).toHaveValue('published');
+  expect((await titles(page))[0]).toBe('Bloom 20');
+  expect(new Set(listings.map(({ search, sort }) => `${search} ${sort}`))).toEqual(
+    new Set(['bloom published']),
+  );
+
+  await page.goto('/explore?q=bloom&sort=oldest');
+  await expect(page).toHaveURL('/explore?q=bloom');
+  await expect(sortBox(page)).toHaveValue('updated');
+  await expect(cards(page)).toHaveCount(PAGE_SIZE);
+  expect((await titles(page))[0]).toBe('Bloom 01');
+  expect(listings.at(-1)).toMatchObject({ search: 'bloom', sort: null, status: 200 });
+  // Replaced, not stacked: Back is the published link from before.
+  await page.goBack();
+  await expect(page).toHaveURL('/explore?q=bloom&sort=published');
 });
