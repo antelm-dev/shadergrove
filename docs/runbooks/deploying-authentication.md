@@ -1,9 +1,16 @@
+---
+type: runbook
+area: deploy
+last_verified:
+related: []
+---
+
 # Deploying Shadergrove with accounts
 
 Each web user gets a private library. Desktop editing remains local and works
 offline. Desktop builds configured with `SHADER_STUDIO_ACCOUNT_URL` can sign in
 through the system browser and upload local shaders to an account; they do not
-yet download the full web library. See [desktop account setup](../README.md#desktop-accounts-and-uploads).
+yet download the full web library. See [desktop account setup](../../README.md#desktop-accounts-and-uploads).
 
 ## What you need before you start
 

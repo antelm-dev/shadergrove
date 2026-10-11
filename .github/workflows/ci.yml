@@ -93,6 +93,10 @@ jobs:
       - name: Format
         run: pnpm format:check
 
+      # Here rather than in studio-check so docs-only changes are checked too.
+      - name: Docs links and front matter
+        run: pnpm check:docs
+
       - name: Check SSR runtime lockfile
         run: |
           node .github/scripts/check-runtime-deps.mjs

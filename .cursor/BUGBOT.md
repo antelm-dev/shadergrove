@@ -1,5 +1,9 @@
 # Shadergrove Bugbot rules
 
+The canonical rules are in `docs/rules/` (start with `docs/rules/code-review.md`). This file keeps a
+self-contained copy because Bugbot reads it on its own; when a rule changes, change the note in
+`docs/rules/` first and mirror it here.
+
 Shadergrove is a pnpm 10/Nx monorepo for an Angular web application, an Electron desktop shell, an SSR server, and an MCP server.
 
 ## Review priorities

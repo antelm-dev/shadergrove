@@ -1,3 +1,10 @@
+---
+type: runbook
+area: deploy
+last_verified:
+related: [staging.md, deployment-rollback.md]
+---
+
 # PR preview environments
 
 Apply the `preview` label to a non-draft PR from this repository targeting

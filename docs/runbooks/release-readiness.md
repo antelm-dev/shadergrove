@@ -1,3 +1,10 @@
+---
+type: runbook
+area: release
+last_verified:
+related: []
+---
+
 # Release readiness
 
 Use this checklist for the exact commit being released. Record the commit,
@@ -16,7 +23,7 @@ an actual result; a passing unit suite does not replace a packaged-app check.
       This checks production startup, anonymous readiness, protected library access,
       sanitized initialization failure and retry recovery using disposable SQLite.
       When server dependencies change, also follow the
-      [server dependency checklist](../README.md#server-dependency-changes): this
+      [server dependency checklist](../../README.md#server-dependency-changes): this
       smoke does not exercise PostgreSQL or the Docker runtime dependency tree.
 - [ ] Run `pnpm smoke` for the real browser workflow and plugin sandbox probes.
 - [ ] Build the Windows package with `pnpm pack:win`. For an account-enabled
@@ -75,7 +82,7 @@ prepares the release PR; when a release is created, the workflow builds and
 publishes Windows installers plus the Linux/macOS platforms explicitly enabled
 in Actions variables. A shared publication job verifies all required installers
 and update manifests before making the draft public. See
-[website releases and desktop distribution](website-releases.md) for activation,
+[website releases and desktop distribution](../website-releases.md) for activation,
 signing prerequisites, catalogue URLs and changelog content.
 The MCP package has separate build/pack/verify
 commands; these release workflows do not publish it. CI's Docker job builds the

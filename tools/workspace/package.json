@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "pnpm check:i18n && pnpm check:fonts && pnpm check:ipc && pnpm check:plugins",
+    "check": "pnpm check:i18n && pnpm check:fonts && pnpm check:ipc && pnpm check:plugins && pnpm check:docs",
     "check:i18n": "tsx src/check/i18n.ts",
     "check:fonts": "tsx src/check/fonts.ts",
     "check:ipc": "tsx src/check/ipc.ts",
     "check:plugins": "tsx src/generate/official-plugins.ts --check",
+    "check:docs": "tsx src/check/docs.ts",
     "generate:fonts": "tsx src/generate/fonts.ts",
     "generate:plugins": "tsx src/generate/official-plugins.ts",
     "smoke": "tsx src/smoke.ts",
@@ -42,6 +43,9 @@
         "cache": false
       },
       "check:plugins": {
+        "cache": false
+      },
+      "check:docs": {
         "cache": false
       },
       "generate:plugins": {

@@ -121,7 +121,7 @@ Each web user gets a private library, so the deployment needs a few things
 before it will start: `BETTER_AUTH_SECRET`, the public `BETTER_AUTH_URL`, and an
 SMTP server for verification and password-reset mail. Compose refuses to come up
 without them rather than falling back to a development secret.
-**[docs/deploying-authentication.md](docs/deploying-authentication.md)** covers
+**[docs/runbooks/deploying-authentication.md](docs/runbooks/deploying-authentication.md)** covers
 the setup, what to do with shaders that predate accounts, and what each control
 enforces. Desktop editing remains local and works offline; builds configured
 with an account server can sign in and upload selected shaders (see [Desktop
@@ -159,7 +159,7 @@ NODE_ENV=production DATABASE_URL=postgres://user:pass@localhost:5432/shader_stud
 ```
 
 Configure the authentication and SMTP variables described in
-[the deployment guide](docs/deploying-authentication.md) before starting, and
+[the deployment guide](docs/runbooks/deploying-authentication.md) before starting, and
 serve the app through HTTPS. The Node server listens on port 4000 by default.
 When `DATABASE_URL` is set the server uses PostgreSQL; when it is **not** set the
 server falls back to a local SQLite file under `SHADER_DATA_DIR` (`./data`),
@@ -211,6 +211,10 @@ docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB
 # Restore (into an empty database)
 docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backup.sql
 ```
+
+Keep copies off the machine that runs PostgreSQL, and test that they restore. The
+[backup and restore runbook](docs/runbooks/database-backup-restore.md) covers
+compressed dumps, a restore drill and restoring over a live database.
 
 **SQLite (Desktop / dev)** lives at one file. On the desktop app it is
 `<userData>/library/shader-studio.sqlite` (`%APPDATA%/Shader Studio/library` on
@@ -498,7 +502,7 @@ image in different ways. When adding or upgrading one:
    the Docker runtime.
    For changes to runtime dependencies or their versions, also build and start
    the image in a disposable Compose deployment and check `/api/health` with
-   PostgreSQL configured (see `docs/release-readiness.md`).
+   PostgreSQL configured (see `docs/runbooks/release-readiness.md`).
 
 The Angular build imports the server entry to extract routes without initializing
 storage. That build can pass even when a dependency loaded only on the first API
@@ -943,7 +947,7 @@ and are licensed under Apache-2.0 with the rest of the project.
 
 ## Tests
 
-See [the release checklist](docs/release-readiness.md) for automated gates and
+See [the release checklist](docs/runbooks/release-readiness.md) for automated gates and
 manual validation required before publishing a release.
 
 ```bash

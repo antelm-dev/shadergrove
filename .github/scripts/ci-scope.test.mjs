@@ -62,7 +62,7 @@ test('shared configuration and CI changes validate both applications', () => {
 });
 
 test('docs-only changes skip app jobs; manual or initial runs validate everything', () => {
-  const docs = ['docs/website-vps.md', 'README.md', '.bruno/collection.bru', 'LICENSE'];
+  const docs = ['docs/runbooks/website-vps.md', 'README.md', '.bruno/collection.bru', 'LICENSE'];
   assert.deepEqual(classifyChanges(docs), { studio: false, website: false });
   assert.deepEqual(classifyChanges([]), { studio: false, website: false });
   assert.deepEqual(classifyChanges(docs, true), { studio: true, website: true });

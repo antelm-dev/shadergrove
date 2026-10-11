@@ -4,6 +4,7 @@
   "singleQuote": true,
   "ignorePatterns": [
     "docs/planning/archive/**",
+    "docs/.obsidian/**",
     "dist/**",
     "dist-main/**",
     "dist-renderer/**",

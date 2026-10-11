@@ -1,0 +1,25 @@
+filters:
+  and:
+    - file.inFolder("runbooks")
+    - file.ext == "md"
+    - type == "runbook"
+views:
+  - type: table
+    name: Stalest first
+    order:
+      - file.name
+      - area
+      - last_verified
+      - related
+    sort:
+      - property: last_verified
+        direction: ASC
+  - type: table
+    name: By area
+    order:
+      - file.name
+      - last_verified
+      - related
+    groupBy:
+      property: area
+      direction: ASC

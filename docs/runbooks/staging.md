@@ -1,30 +1,54 @@
+---
+type: runbook
+area: infra
+last_verified:
+related: [vps-security.md, website-vps.md, deployment-rollback.md, database-backup-restore.md]
+---
+
 # Staging on vps-lab-01
 
 The temporary staging origin is <https://staging.45-155-170-120.sslip.io/>. It
 points to the PulseHeberg VPS at `45.155.170.120`. Replace this hostname and
 `BETTER_AUTH_URL` when Shadergrove has its own domain. The VPS runs Dokploy,
 Traefik, the web application, PostgreSQL 16, and Mailpit. Only ports 22, 80,
-and 443 are open; PostgreSQL, Mailpit, and the Dokploy dashboard have no public
+and 443 are open (HTTPS also uses UDP 443); PostgreSQL, Mailpit, and the Dokploy dashboard have no public
 port or domain.
 
 ## Access
 
-The Dokploy dashboard is reachable through a local SSH tunnel. From PowerShell:
+Administration goes through a named account with sudo. Its name is not kept in this public
+repository: put it in a host entry in your SSH config (`~/.ssh/config`, or
+`%USERPROFILE%\.ssh\config` on Windows), replacing `ADMIN_USER`:
+
+```
+Host vps-lab-01
+  HostName 45.155.170.120
+  User ADMIN_USER
+  IdentityFile ~/.ssh/vps-lab-01
+```
+
+Every command in these runbooks connects with `ssh vps-lab-01`. The Dokploy dashboard is reachable
+through a local SSH tunnel:
 
 ```powershell
-ssh -N -i "$env:USERPROFILE\.ssh\vps-lab-01" -L 127.0.0.1:3000:172.18.0.4:3000 root@45.155.170.120
+ssh -N -L 127.0.0.1:3000:172.18.0.4:3000 vps-lab-01
 ```
 
 Open <http://127.0.0.1:3000/> in a browser. Mailpit, which captures staging
 verification and password-reset emails, uses a separate tunnel:
 
 ```powershell
-ssh -N -i "$env:USERPROFILE\.ssh\vps-lab-01" -L 127.0.0.1:8025:172.18.0.7:8025 root@45.155.170.120
+ssh -N -L 127.0.0.1:8025:172.18.0.7:8025 vps-lab-01
 ```
 
 Open <http://127.0.0.1:8025/>. The `172.18.0.x` addresses are Docker gateway
 addresses and can change when services are recreated. On the VPS, find the new
-address with `docker ps` followed by `nsenter -t $(docker inspect -f '{{.State.Pid}}' CONTAINER_ID) -n ip -4 addr`.
+address with `sudo docker ps` followed by
+`sudo nsenter -t $(sudo docker inspect -f '{{.State.Pid}}' CONTAINER_ID) -n ip -4 addr`.
+
+Root SSH accepts only keys with a forced command, preserving the restricted CI
+deployment key. See [VPS security](vps-security.md) for controls, maintenance,
+and recovery.
 
 ## Deployments
 
@@ -35,14 +59,14 @@ source has no provider push webhook configured. When studio inputs change,
 the `check`, `studio-check`, `smoke`, `e2e`, and `docker` GitHub Actions jobs
 must pass on a push to `develop` before `deploy-staging` queues the studio
 deployment. Website validation and deployment run independently; see
-[CI routing](ci.md). The restricted SSH command receives `studio COMMIT_SHA`
+[CI routing](../ci.md). The restricted SSH command receives `studio COMMIT_SHA`
 and queues only the studio service. The `staging` GitHub environment allows
 deployments only from
 `develop` and holds the CI private key in its `STAGING_DEPLOY_SSH_KEY` secret.
 Its public key in `/root/.ssh/authorized_keys` has a
 forced command and the OpenSSH `restrict` option, so that key can only execute
 `/usr/local/sbin/deploy-shadergrove-staging`. The script is versioned at
-[`ops/staging/deploy-on-vps.sh`](../ops/staging/deploy-on-vps.sh); copy changes to
+[`ops/staging/deploy-on-vps.sh`](../../ops/staging/deploy-on-vps.sh); copy changes to
 the same VPS path when updating it. The Dokploy deploy token lives only in
 `/root/.config/shadergrove-staging-deploy-token` (mode 600), not in GitHub.
 

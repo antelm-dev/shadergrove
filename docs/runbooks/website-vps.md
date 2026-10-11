@@ -1,3 +1,10 @@
+---
+type: runbook
+area: infra
+last_verified:
+related: []
+---
+
 # Website on vps-lab-01
 
 The public marketing website is available at
@@ -12,7 +19,7 @@ internal port 80. There is no published host port for the website container.
 
 The Dockerfile installs only the website and brand workspace dependencies,
 generates `apps/website/out`, and serves it with Nginx. Its configuration is
-[`ops/website/nginx.conf`](../ops/website/nginx.conf). `/_next/static/` assets
+[`ops/website/nginx.conf`](../../ops/website/nginx.conf). `/_next/static/` assets
 have immutable caching; pages use normal revalidation.
 
 The hero's **Start creating** link uses `NEXT_PUBLIC_STUDIO_URL`. In Dokploy,
@@ -31,12 +38,12 @@ For local development, copy `apps/website/.env.example` to
 On a push to `develop`, GitHub Actions selects the affected applications.
 Website or brand changes run website typechecks, brand tests and the website
 image build; studio browser tests and Windows packaging are skipped. Shared
-workspace configuration changes validate both applications. See [CI routing](ci.md).
+workspace configuration changes validate both applications. See [CI routing](../ci.md).
 Once the common lint/format checks and website checks pass, `deploy-website`
 uses the restricted SSH key to invoke `/usr/local/sbin/deploy-shadergrove-staging`
 with `website COMMIT_SHA`. It queues only the website, independently of studio
 validation and deployment. The script is versioned at
-[`ops/staging/deploy-on-vps.sh`](../ops/staging/deploy-on-vps.sh). Copy changes
+[`ops/staging/deploy-on-vps.sh`](../../ops/staging/deploy-on-vps.sh). Copy changes
 to the VPS path when updating it. Dokploy webhook tokens stay in separate
 root-owned files under `/root/.config/`, mode 600, and are not stored in GitHub.
 The CI job confirms that Dokploy accepted the request; check the website
