@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ShaderRecord } from '@shadergrove/shared/model';
+import type { PublicationPage } from '@shadergrove/shared/publication';
 
 import { ShaderLibrary } from '../library/shader-library';
 import type { ShaderRepository } from '../persistence/shader-repository';
@@ -24,6 +25,8 @@ export interface PublicationHarness {
   addUser(id: string): Promise<void>;
   /** Deletes an account the way account deletion does: its shaders, then the account. */
   removeUser(id: string): Promise<void>;
+  /** Sets a publication's times directly, so orders and ties do not depend on the clock. */
+  stamp(id: string, publishedAt: string, updatedAt: string): Promise<void>;
 }
 
 const ALICE = 'alice';
@@ -330,6 +333,179 @@ export function runPublicationConformance(
       expect((await pubs.adminList({})).publications).toHaveLength(5);
     });
 
+    // --- AC-P2-SEARCH / AC-P2-SORT / AC-P2-CURSOR -----------------------------
+
+    describe('public search and sort', () => {
+      const at = (second: number) => `2020-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;
+      /** title, description, author label, first published, last updated (seconds). */
+      const FIXTURE = [
+        ['Ember', 'A warm glow', 'Alice A.', 1, 9],
+        ['Frost', 'Cold, 50%_off', 'Zed', 2, 5],
+        ['Moss', 'Green', 'Alice A.', 3, 5],
+        ['Tide', 'Waves', 'Zed', 3, 7],
+        ['Hidden glow', 'Glow', 'Zed', 8, 10],
+        ['Gone glow', 'Glow', 'Zed', 6, 6],
+      ] as const;
+      let id: Record<string, string>;
+
+      beforeEach(async () => {
+        id = {};
+        for (const [title, description, authorLabel, published, updated] of FIXTURE) {
+          const shader = await alice.create({ name: title, description });
+          const { publication } = await pubs.publish(
+            ALICE,
+            shader.id,
+            terms({ expectedRevision: shader.revision, authorLabel }),
+          );
+          id[title] = publication.id;
+          await harness.stamp(publication.id, at(published), at(updated));
+        }
+        await pubs.moderate(ADMIN, id['Hidden glow'], {
+          hidden: true,
+          reason: 'No',
+          expectedModerationRevision: 1,
+        });
+        await pubs.unpublish(ALICE, 'gone-glow');
+      });
+
+      /** Tied times fall back to the id, descending. */
+      const byId = (...titles: string[]) => titles.sort((a, b) => (id[a] < id[b] ? 1 : -1));
+      const updatedOrder = () => ['Ember', 'Tide', ...byId('Frost', 'Moss')];
+      const publishedOrder = () => [...byId('Moss', 'Tide'), 'Frost', 'Ember'];
+
+      async function walk(query: Record<string, unknown>, limit: number): Promise<string[]> {
+        const seen: string[] = [];
+        let cursor: string | null = null;
+        do {
+          const page: PublicationPage = await pubs.listPublic({
+            ...query,
+            limit: String(limit),
+            ...(cursor ? { cursor } : {}),
+          });
+          seen.push(...page.publications.map((entry) => entry.title));
+          cursor = page.nextCursor;
+        } while (cursor);
+        return seen;
+      }
+
+      it('pages each order completely, ties included, defaulting to last update', async () => {
+        for (const limit of [1, 2, 3, 50]) {
+          expect(await walk({}, limit)).toEqual(updatedOrder());
+          expect(await walk({ sort: 'updated' }, limit)).toEqual(updatedOrder());
+          expect(await walk({ sort: 'published' }, limit)).toEqual(publishedOrder());
+        }
+        const [first] = (await pubs.listPublic({ sort: 'published', limit: '1' })).publications;
+        expect(first.publishedAt).toBe(at(3));
+        expect(first.updatedAt).toBe(at(first.title === 'Moss' ? 5 : 7));
+        expect(await code(pubs.listPublic({ sort: 'oldest' }))).toBe('invalid');
+        expect(await code(pubs.listPublic({ sort: ['updated', 'published'] }))).toBe('invalid');
+        expect(await code(pubs.listPublic({ sort: '' }))).toBe('invalid');
+      });
+
+      it('keeps the first-publication time through update, unpublish and republish', async () => {
+        const { revision } = await alice.update('ember', { name: 'Ember II' });
+        await pubs.publish(ALICE, 'ember', terms({ expectedRevision: revision }));
+        await pubs.unpublish(ALICE, 'ember');
+        await pubs.publish(ALICE, 'ember', terms({ expectedRevision: revision }));
+
+        expect((await walk({}, 2))[0]).toBe('Ember II');
+        expect(await walk({ sort: 'published' }, 2)).toEqual([
+          ...publishedOrder().slice(0, -1),
+          'Ember II',
+        ]);
+        expect((await pubs.readPublic(id['Ember'])).publishedAt).toBe(at(1));
+      });
+
+      it('searches title, description and author label of visible snapshots only', async () => {
+        const titles = async (search: string, sort = 'updated') =>
+          (await pubs.listPublic({ search, sort })).publications.map((entry) => entry.title);
+        expect(await titles('glow')).toEqual(['Ember']);
+        expect(await titles('ZED')).toEqual(['Tide', 'Frost']);
+        expect(await titles('zed', 'published')).toEqual(['Tide', 'Frost']);
+        expect(await titles('moss')).toEqual(['Moss']);
+        // LIKE wildcards and the escape character are literal.
+        expect(await titles('50%_')).toEqual(['Frost']);
+        expect(await titles('%')).toEqual(['Frost']);
+        expect(await titles('!')).toEqual([]);
+        expect(await titles('o_d')).toEqual([]);
+        // Only the published snapshot is searched: not a hidden one, nor a later private edit.
+        expect(await titles('hidden')).toEqual([]);
+        await alice.update('moss', { description: 'Secret draft' });
+        expect(await titles('secret')).toEqual([]);
+        expect(await walk({ search: 'a.' }, 1)).toEqual(['Ember', 'Moss']);
+
+        // The moderators' search stays on titles, across every state.
+        const admin = async (search: string) =>
+          (await pubs.adminList({ search })).publications.map((entry) => entry.title).sort();
+        expect(await admin('glow')).toEqual(['Gone glow', 'Hidden glow']);
+        expect(await admin('zed')).toEqual([]);
+      });
+
+      it('binds new cursors to their sort and search, and takes old ones in updated order', async () => {
+        const page = await pubs.listPublic({ search: ' ZED ', limit: '1' });
+        const cursor = page.nextCursor!;
+        expect(JSON.parse(Buffer.from(cursor, 'base64url').toString())).toEqual({
+          v: 2,
+          sort: 'updated',
+          search: 'zed',
+          at: at(7),
+          id: id['Tide'],
+        });
+        const next = (query: Record<string, unknown>) =>
+          code(pubs.listPublic({ limit: '1', cursor, ...query }));
+        expect(await next({ search: 'Zed' })).toBe('ok');
+        expect(await next({ search: 'zed', sort: 'published' })).toBe('invalid');
+        expect(await next({ search: 'ze' })).toBe('invalid');
+        expect(await next({})).toBe('invalid');
+
+        const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+        // A cursor from before sorting existed: no version, no search, updated order only.
+        const legacy = encode({ at: at(7), id: id['Tide'] });
+        const after = await pubs.listPublic({ cursor: legacy });
+        expect(after.publications.map((entry) => entry.title)).toEqual(updatedOrder().slice(2));
+        expect(await code(pubs.listPublic({ cursor: legacy, search: 'zed' }))).toBe('ok');
+        expect(await code(pubs.listPublic({ cursor: legacy, sort: 'published' }))).toBe('invalid');
+
+        const good = { v: 2, sort: 'updated', search: '', at: at(7), id: id['Tide'] };
+        expect(await code(pubs.listPublic({ cursor: encode(good) }))).toBe('ok');
+        const forged: unknown[] = [
+          { ...good, v: 1 },
+          { ...good, v: 3 },
+          { ...good, v: '2' },
+          { ...good, sort: 'oldest' },
+          { ...good, search: 1 },
+          { ...good, at: '2020-01-01' },
+          { ...good, at: '2020-13-45T00:00:00.000Z' },
+          { ...good, at: 7 },
+          { ...good, id: 'not-an-id' },
+          { ...good, id: "' OR 1=1 --" },
+          { ...good, extra: true },
+          { at: at(7), id: id['Tide'], extra: true },
+          [at(7), id['Tide']],
+          null,
+          'text',
+        ];
+        for (const bad of forged) {
+          const outcome = await code(pubs.listPublic({ cursor: encode(bad) }));
+          expect(`${JSON.stringify(bad)}: ${outcome}`).toBe(`${JSON.stringify(bad)}: invalid`);
+        }
+        for (const raw of ['%7B', 'a b', 'x'.repeat(1025), ['a', 'b'], 42]) {
+          expect(await code(pubs.listPublic({ cursor: raw }))).toBe('invalid');
+        }
+
+        // The moderators' cursors are unchanged: plain `{ at, id }`, read as before.
+        const adminCursor = (await pubs.adminList({ limit: '1' })).nextCursor!;
+        expect(JSON.parse(Buffer.from(adminCursor, 'base64url').toString())).toEqual({
+          at: expect.any(String),
+          id: expect.any(String),
+        });
+        expect(
+          (await pubs.adminList({ limit: '1', cursor: adminCursor })).publications,
+        ).toHaveLength(1);
+        expect((await pubs.listReports({ status: 'all', cursor: legacy })).reports).toEqual([]);
+        expect((await pubs.listAudit({ cursor: legacy })).entries).toEqual([]);
+      });
+    });
     // --- copy ----------------------------------------------------------------
 
     it('copies a snapshot into a private library with fidelity and credit', async () => {

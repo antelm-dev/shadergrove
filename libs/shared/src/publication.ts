@@ -33,7 +33,18 @@ export const PUBLICATION_LIMITS = {
   searchLength: 64,
   pageSize: 24,
   maxPageSize: 50,
+  /** Longer than any cursor the server emits; anything past it is refused unread. */
+  cursorLength: 1024,
 } as const;
+
+/**
+ * How the public listing is ordered, newest first either way: by the last
+ * explicit update of the snapshot, or by when it was first published (which
+ * no update, unpublish or republish ever moves).
+ */
+export const PUBLICATION_SORTS = ['updated', 'published'] as const;
+export type PublicationSort = (typeof PUBLICATION_SORTS)[number];
+export const DEFAULT_PUBLICATION_SORT: PublicationSort = 'updated';
 
 /** `GET /api/capabilities` — what this server offers the caller. Anonymous callers never get `admin`. */
 export interface ExploreCapabilities {

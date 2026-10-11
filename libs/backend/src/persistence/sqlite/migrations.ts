@@ -179,4 +179,13 @@ export const SQLITE_MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 6,
+    name: 'publications-by-first-publication',
+    up(exec) {
+      // Additive: lets public Explore page newest-first by first publication the
+      // way `idx_publications_listing` pages it by last update. No row changes.
+      exec('CREATE INDEX idx_publications_published ON publications(published_at DESC, id DESC)');
+    },
+  },
 ];

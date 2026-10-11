@@ -7,8 +7,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { ShaderLibrary } from '../../library/shader-library';
 import { runShaderLibraryConformance, type ConformanceHarness } from '../../library/conformance';
+import { targetVersion } from '../migration-runner';
 import type { AssetKey } from '../shader-repository';
 import { LOCAL_SCOPE } from '../user-scope';
+import { SQLITE_MIGRATIONS } from './migrations';
 import { SqliteRepository } from './sqlite-repository';
 
 function newHarness(): ConformanceHarness {
@@ -95,7 +97,9 @@ describe('shader history migration (sqlite)', () => {
     await library.create({ name: 'Old Shader' });
     await library.close();
     const db = new DatabaseSync(file);
-    db.exec('DROP TABLE shader_history; PRAGMA user_version = 4');
+    db.exec(
+      'DROP TABLE shader_history; DROP INDEX idx_publications_published; PRAGMA user_version = 4',
+    );
     db.close();
     return file;
   }
@@ -122,7 +126,7 @@ describe('shader history migration (sqlite)', () => {
 
     const db = new DatabaseSync(file);
     try {
-      expect(version(db)).toBe(5);
+      expect(version(db)).toBe(targetVersion(SQLITE_MIGRATIONS));
     } finally {
       db.close();
     }
