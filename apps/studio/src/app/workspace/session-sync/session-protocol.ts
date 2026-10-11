@@ -9,6 +9,7 @@ import {
   type TextureChannels,
 } from '@shadergrove/shared/model';
 import type { BottomPanelTab, InspectorTab } from '@shadergrove/shared/panel-prefs';
+import type { SatelliteKind } from '../../output-mode';
 import type { OutputLogEntry } from '../../ui/bottom-panel/output-log';
 import type { InspectedShader, SystemSettings } from '../../ui/inspector/inspector-session';
 import { IDLE_PROFILER, type ProfilerState } from '../../ui/inspector/profiler-session';
@@ -107,6 +108,13 @@ export type SessionCommand =
       /** The shader the edit was typed in: an edit never lands in another one. */
       readonly shaderId: string;
       readonly docId: string;
+      /**
+       * `textFingerprint` of the text the edit was typed on. The main window takes
+       * the edit only while its document still has that text, so a change made
+       * there in the meantime (an agent's patch, the Config builder, a newer
+       * version loaded after a reload) is never overwritten.
+       */
+      readonly base: string;
       /** The document's whole text, so replaying an edit is harmless. */
       readonly source: string;
     }
@@ -129,17 +137,42 @@ export const REPLAYABLE_COMMANDS: ReadonlySet<SessionCommandKind> = new Set<Sess
   'inspector-tab',
 ]);
 
+/** Why the main window refused a command; a panel window says so. */
+export type SessionRefusal =
+  /** The document changed in the main window since the edit was typed. */
+  | 'conflict'
+  | 'too-large'
+  /** The main window has another shader open (or none). */
+  | 'other-shader'
+  | 'invalid'
+  /** Accepted, but failed (a save that did not go through). */
+  | 'failed';
+
 export type SessionMessage =
   // Main window → panel windows.
-  /** The main window (re)started; `ready` once its session has a shader loaded. */
+  /**
+   * The main window (re)started; `ready` once its session has settled: a shader
+   * loaded and no draft-recovery question pending (or, failing that, a few seconds).
+   */
   | { readonly kind: 'host'; readonly ready: boolean }
   | { readonly kind: 'state'; readonly patch: Partial<SessionState> }
-  /** A command was carried out (`ok`) or refused. */
-  | { readonly kind: 'done'; readonly client: string; readonly seq: number; readonly ok: boolean }
+  /**
+   * A command was carried out (`ok`) or refused (`reason`). A refusal follows
+   * the main window's whole state, so the panel window drops what it showed
+   * ahead of the answer.
+   */
+  | {
+      readonly kind: 'done';
+      readonly client: string;
+      readonly seq: number;
+      readonly ok: boolean;
+      readonly reason?: SessionRefusal;
+    }
   /** Show a line in the detached editor, e.g. for a diagnostic clicked anywhere. */
   | { readonly kind: 'reveal-in-editor'; readonly docId: string; readonly line: number }
   // Panel windows → main window.
-  | { readonly kind: 'hello'; readonly client: string }
+  /** `window` says which panel's window it is, so what waits for that window can follow. */
+  | { readonly kind: 'hello'; readonly client: string; readonly window?: SatelliteKind }
   | {
       readonly kind: 'command';
       readonly client: string;
@@ -196,4 +229,17 @@ function sameShape(empty: unknown, value: unknown, field: SessionField): boolean
       : typeof value === 'object' && !Array.isArray(value);
   }
   return typeof value === typeof empty && Array.isArray(value) === Array.isArray(empty);
+}
+
+/**
+ * A short, stable stand-in for a document's text (length and FNV-1a hash), so
+ * an edit can name the text it was typed on without sending it twice.
+ */
+export function textFingerprint(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${text.length}:${(hash >>> 0).toString(36)}`;
 }

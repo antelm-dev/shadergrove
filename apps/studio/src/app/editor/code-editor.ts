@@ -157,6 +157,13 @@ export class CodeEditor {
   /** The `scope` each model was last synchronised under. */
   private readonly scopes = new Map<string, string>();
 
+  /**
+   * Each model's text as of its last exchange with the outside: what it was
+   * given, or what it last reported. During a `valueChange`, the text the
+   * reported edit was made on (`textBefore`).
+   */
+  private readonly synced = new Map<string, string>();
+
   /** Which document's model is currently in the editor. */
   private mounted: string | null = null;
 
@@ -227,6 +234,7 @@ export class CodeEditor {
           this.unbind.delete(id);
           model.dispose();
           this.models.delete(id);
+          this.synced.delete(id);
           this.viewStates.delete(id);
           this.scopes.delete(id);
         }
@@ -322,6 +330,7 @@ export class CodeEditor {
         this.applying = true;
         model.setValue(doc.value);
         this.applying = false;
+        this.synced.set(doc.id, model.getValue());
       }
       this.rememberScope(doc);
       this.flushPendingReveal(doc.id);
@@ -342,6 +351,7 @@ export class CodeEditor {
       this.applying = true;
       model.setValue(doc.value);
       this.applying = false;
+      this.synced.set(doc.id, model.getValue());
     }
     this.rememberScope(doc);
 
@@ -531,8 +541,23 @@ export class CodeEditor {
       this.applying = false;
     }
 
-    this.valueChange.emit({ id: docId, value: model.getValue() });
+    this.report(docId, model);
     return true;
+  }
+
+  /**
+   * The text a document had before the edit `valueChange` is reporting right
+   * now — what the user typed on, which may not be what the `doc` input says if
+   * newer text arrived and is not in the model yet.
+   */
+  textBefore(docId: string): string | undefined {
+    return this.synced.get(docId);
+  }
+
+  private report(id: string, model: Monaco.editor.ITextModel): void {
+    const value = model.getValue();
+    this.valueChange.emit({ id, value });
+    this.synced.set(id, value);
   }
 
   /**
@@ -575,7 +600,7 @@ export class CodeEditor {
       if (this.applying) return;
       const id = this.mounted;
       const model = id ? this.models.get(id) : null;
-      if (id && model) this.valueChange.emit({ id, value: model.getValue() });
+      if (id && model) this.report(id, model);
     });
 
     // A resize changes which lines are on screen without scrolling.
@@ -593,6 +618,7 @@ export class CodeEditor {
       this.unbind.clear();
       for (const model of this.models.values()) model.dispose();
       this.models.clear();
+      this.synced.clear();
       this.viewStates.clear();
     });
   }
@@ -622,6 +648,7 @@ export class CodeEditor {
   private createModel(monaco: MonacoApi, doc: EditorDoc): Monaco.editor.ITextModel {
     const model = monaco.editor.createModel(doc.value, this.monacoLanguage(doc.language));
     if (doc.language === 'json') model.setEOL(monaco.editor.EndOfLineSequence.LF);
+    this.synced.set(doc.id, model.getValue());
     return model;
   }
 

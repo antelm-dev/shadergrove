@@ -57,7 +57,7 @@ export class InspectorWindow {
   protected readonly surfaceId = WELL_KNOWN_SURFACE_IDS.inspector;
 
   constructor() {
-    inject(SessionMirror).start();
+    inject(SessionMirror).start('inspector');
     const i18n = inject(I18n);
     const title = inject(Title);
     effect(() => title.setTitle(`${i18n.t('workspace.inspector')} — Shadergrove`));

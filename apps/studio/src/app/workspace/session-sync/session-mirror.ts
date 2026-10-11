@@ -8,14 +8,23 @@ import {
   type SessionCommand,
   type SessionField,
   type SessionMessage,
+  type SessionRefusal,
   type SessionState,
 } from './session-protocol';
+import type { SatelliteKind } from '../../output-mode';
 
 interface Pending {
   readonly command: SessionCommand;
   /** Changed here ahead of the answer: the main window's state waits until it confirms. */
   readonly local: boolean;
   readonly resolve: (ok: boolean) => void;
+}
+
+/** A command the main window refused, for this window to say so. */
+export interface SessionRefusalNotice {
+  readonly reason: SessionRefusal;
+  /** New for every refusal, so the same reason twice is still two notices. */
+  readonly id: number;
 }
 
 /** A line the main window asks the detached editor to show. */
@@ -50,24 +59,39 @@ export class SessionMirror {
   private held: Partial<SessionState> = {};
   private seq = 0;
   private readonly pending = new Map<number, Pending>();
+  /**
+   * Between a main window's restart and its session settling: commands wait
+   * here, in order, and go to the new main window once it is ready.
+   */
+  private rejoining: Pending[] | null = null;
   private readonly fields = new Map<SessionField, Signal<unknown>>();
+  private window: SatelliteKind | undefined;
+
+  private refusalId = 0;
+  /** The last command the main window refused, if any. */
+  readonly refusal = signal<SessionRefusalNotice | null>(null);
 
   private revealId = 0;
   readonly revealRequest = signal<EditorRevealRequest | null>(null);
 
-  start(): void {
+  /** `window` names this panel window to the main window, for what waits on that window. */
+  start(window?: SatelliteKind): void {
     if (typeof BroadcastChannel === 'undefined' || this.channel) return;
+    this.window = window;
     const channel = new BroadcastChannel(SESSION_CHANNEL);
     this.channel = channel;
     channel.onmessage = ({ data }: MessageEvent<SessionMessage>) => this.receive(data);
     this.destroyRef.onDestroy(() => {
       channel.close();
       this.channel = null;
-      for (const pending of this.pending.values()) pending.resolve(false);
+      for (const pending of [...this.pending.values(), ...(this.rejoining ?? [])]) {
+        pending.resolve(false);
+      }
       this.pending.clear();
+      this.rejoining = null;
     });
     // Whatever the main window already has: it answers with all of it.
-    this.post({ kind: 'hello', client: this.client });
+    this.hello();
   }
 
   /** One field of the main window's session, as this window shows it. */
@@ -91,6 +115,10 @@ export class SessionMirror {
   }
 
   private dispatch(pending: Pending): void {
+    if (this.rejoining) {
+      this.rejoining.push(pending);
+      return;
+    }
     const seq = ++this.seq;
     this.pending.set(seq, pending);
     this.post({ kind: 'command', client: this.client, seq, command: pending.command });
@@ -110,6 +138,10 @@ export class SessionMirror {
         if (!pending) return;
         this.pending.delete(message.seq);
         pending.resolve(message.ok === true);
+        // The main window's whole state came just before: it replaces what was shown ahead.
+        if (message.ok !== true) {
+          this.refusal.set({ reason: message.reason ?? 'invalid', id: ++this.refusalId });
+        }
         if (!this.waiting()) this.release();
         return;
       }
@@ -140,21 +172,41 @@ export class SessionMirror {
   }
 
   /**
-   * The main window restarted, so nothing it had not answered will be answered.
-   * Once its session is back, what only sets a value (an edit's whole text, a
-   * parameter) is sent again; the rest is reported as not done.
+   * `ready: false`: the main window restarted, so nothing it had not answered
+   * will be answered. What only sets a value (an edit's whole text, a parameter)
+   * waits, with every command sent from now on, for its session to settle; the
+   * rest is reported as not done. This window keeps showing what it had: the
+   * new main window publishes nothing before it settles.
+   *
+   * `ready: true`: the session settled. The waiting commands go out in order —
+   * an edit still names the text it was typed on, so one the reload overtook is
+   * refused rather than replayed over newer text — and this window asks for the
+   * whole state again.
    */
   private rejoin(ready: boolean): void {
-    if (ready) {
+    if (!ready) {
       const unanswered = [...this.pending.values()];
       this.pending.clear();
-      this.held = {};
+      this.release();
+      this.rejoining ??= [];
       for (const pending of unanswered) {
-        if (REPLAYABLE_COMMANDS.has(pending.command.kind)) this.dispatch(pending);
+        if (REPLAYABLE_COMMANDS.has(pending.command.kind)) this.rejoining.push(pending);
         else pending.resolve(false);
       }
+      return;
     }
-    this.post({ kind: 'hello', client: this.client });
+    const waiting = this.rejoining ?? [];
+    this.rejoining = null;
+    for (const pending of waiting) this.dispatch(pending);
+    this.hello();
+  }
+
+  private hello(): void {
+    this.post({
+      kind: 'hello',
+      client: this.client,
+      ...(this.window ? { window: this.window } : {}),
+    });
   }
 
   private post(message: SessionMessage): void {

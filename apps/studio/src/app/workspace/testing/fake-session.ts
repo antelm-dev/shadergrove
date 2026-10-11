@@ -45,6 +45,7 @@ export class FakeMainSession {
     updatedAt: '2024-01-01T00:00:00.000Z',
   });
   readonly loading = signal(false);
+  readonly staleRecovery = signal<object | null>(null);
   readonly saving = signal(false);
   readonly dirty = signal(false);
   readonly allDiagnostics = signal<readonly CompileDiagnostic[]>([]);
@@ -61,12 +62,15 @@ export class FakeMainSession {
   readonly preferences = signal<WorkspacePreferences>(createDefaultWorkspacePreferences());
   readonly native = signal({ bottomPanel: false, inspector: false, editor: false });
   readonly inspectorTab = signal<InspectorTab>('controls');
+  /** Whether each native panel's window is open, for the layout's `isWindowOpen`. */
+  readonly windowOpen = signal(true);
   readonly fps = signal(60);
 
   readonly store = {
     record: this.record,
     selectedId: computed(() => this.record()?.id ?? null),
     loading: this.loading,
+    staleRecovery: this.staleRecovery,
     saving: this.saving,
     dirty: this.dirty,
     allDiagnostics: this.allDiagnostics,
@@ -105,6 +109,8 @@ export class FakeMainSession {
   readonly layout = {
     bottomPanelId: 'surface:bottom-panel',
     inspectorId: 'surface:inspector',
+    editorId: 'surface:editor:editor-group:default',
+    isWindowOpen: () => this.windowOpen(),
     bottomPanelNative: computed(() => this.native().bottomPanel),
     inspectorNative: computed(() => this.native().inspector),
     editorNative: computed(() => this.native().editor),

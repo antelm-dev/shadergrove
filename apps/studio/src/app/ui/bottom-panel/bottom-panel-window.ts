@@ -194,7 +194,7 @@ export class BottomPanelWindow {
   });
 
   constructor() {
-    this.mirror.start();
+    this.mirror.start('bottom-panel');
     const title = inject(Title);
     effect(() => title.setTitle(`${this.i18n.t(TAB_META[this.tab()].label)} — Shadergrove`));
   }

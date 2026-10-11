@@ -29,6 +29,7 @@ import {
 } from '../../ui/inspector/inspector-session';
 import { IDLE_PROFILER, ProfilerSession } from '../../ui/inspector/profiler-session';
 import { ShaderStore } from '../shader-store';
+import type { EditorDocument } from '../state/document-state';
 import {
   MAX_MIRRORED,
   SESSION_CHANNEL,
@@ -36,11 +37,19 @@ import {
   type SessionCommand,
   type SessionField,
   type SessionMessage,
+  type SessionRefusal,
   type SessionState,
+  textFingerprint,
 } from './session-protocol';
 
 /** The System folder's resolution scale range. */
 const SCALE_RANGE = { min: 0.25, max: 2 } as const;
+
+/** How long a (re)started session may take to settle before panel windows are told anyway. */
+const SETTLE_TIMEOUT_MS = 5_000;
+
+/** What a command came to: carried out, or refused and why. */
+type Outcome = true | SessionRefusal;
 
 /**
  * The main window's half of the session channel: it publishes its session to
@@ -72,6 +81,14 @@ export class SessionHost {
   /** What each field was when last posted: a flush posts only what changed. */
   private readonly posted = new Map<SessionField, unknown>();
   private sources: { readonly [K in SessionField]: Signal<SessionState[K]> } | null = null;
+  /**
+   * Whether the session has settled once since this window started: until then
+   * it holds whatever a reload left half-loaded, which must not replace what the
+   * panel windows kept showing.
+   */
+  private readonly settled = signal(false);
+  /** A reveal for an editor window that was not open to hear it: sent when it says hello. */
+  private pendingReveal: { docId: string; line: number } | null = null;
 
   start(): void {
     if (typeof BroadcastChannel === 'undefined' || this.channel) return;
@@ -100,7 +117,7 @@ export class SessionHost {
     // Only while a panel is detached: docked, there is nobody to tell.
     effect(
       () => {
-        if (!this.layout.anyNative()) return;
+        if (!this.layout.anyNative() || !this.settled()) return;
         for (const field of SESSION_FIELDS) this.sources![field]();
         untracked(() => this.flush());
       },
@@ -110,11 +127,24 @@ export class SessionHost {
     // A reload of this window leaves the panel windows open: they say hello again, and once
     // the session is back they resend what this window never confirmed.
     this.post({ kind: 'host', ready: false });
-    const ready = computed(() => !this.store.loading() && this.store.record() !== null);
+    const timedOut = signal(false);
+    const timer = setTimeout(() => timedOut.set(true), SETTLE_TIMEOUT_MS);
+    this.destroyRef.onDestroy(() => clearTimeout(timer));
+    // A recovered draft waiting for the user's answer is not settled: nothing may replay onto it.
+    const ready = computed(
+      () =>
+        !this.store.loading() &&
+        this.store.staleRecovery() === null &&
+        (this.store.record() !== null || timedOut()),
+    );
     const announce = effect(
       () => {
         if (!ready()) return;
-        untracked(() => this.post({ kind: 'host', ready: true }));
+        untracked(() => {
+          clearTimeout(timer);
+          this.settled.set(true);
+          this.post({ kind: 'host', ready: true });
+        });
         announce.destroy();
       },
       { injector: this.injector },
@@ -143,7 +173,8 @@ export class SessionHost {
       activePresetId: inspector.activePresetId,
       fps: inspector.fps,
       system: inspector.system,
-      documents: store.documents,
+      // By content: a render or parameter change makes a new array of the same documents.
+      documents: computed(() => store.documents(), { equal: sameDocuments }),
       activeDocId: computed(() => store.activeDoc()?.id ?? null),
       dirty: store.dirty,
       saving: computed(() => store.saving()),
@@ -187,6 +218,11 @@ export class SessionHost {
           if (!target) return;
           this.store.selectDoc(target.docId);
           this.flush();
+          // A hidden editor's window is only now reopening: it gets the reveal when it says hello.
+          if (!this.layout.isWindowOpen(this.layout.editorId)) {
+            this.pendingReveal = { docId: target.docId, line: target.line };
+            return;
+          }
           this.post({ kind: 'reveal-in-editor', docId: target.docId, line: target.line });
         });
       },
@@ -196,9 +232,17 @@ export class SessionHost {
 
   private receive(message: SessionMessage): void {
     switch (message?.kind) {
-      case 'hello':
+      case 'hello': {
+        // Before the session settles there is nothing worth showing: `host ready` asks again.
+        if (!this.settled()) return;
         this.flush(true);
+        const reveal = this.pendingReveal;
+        if (reveal && message.window === 'editor') {
+          this.pendingReveal = null;
+          this.post({ kind: 'reveal-in-editor', ...reveal });
+        }
         return;
+      }
       case 'command':
         if (typeof message.client !== 'string' || !Number.isInteger(message.seq)) return;
         void this.answer(message.client, message.seq, message.command);
@@ -207,19 +251,26 @@ export class SessionHost {
   }
 
   private async answer(client: string, seq: number, command: SessionCommand): Promise<void> {
-    let ok = false;
+    let outcome: Outcome;
     try {
-      ok = await this.run(command);
+      const result = await this.run(command);
+      outcome = result === true ? true : result === false ? 'invalid' : result;
     } catch {
-      ok = false;
+      outcome = 'failed';
     }
-    // What the command changed goes out first: see the class comment.
-    this.flush();
-    this.post({ kind: 'done', client, seq, ok });
+    // What the command changed goes out first: see the class comment. A refusal sends
+    // everything, so the panel window drops whatever it showed ahead of the answer.
+    if (outcome === true) {
+      this.flush();
+      this.post({ kind: 'done', client, seq, ok: true });
+    } else {
+      this.flush(true);
+      this.post({ kind: 'done', client, seq, ok: false, reason: outcome });
+    }
   }
 
-  /** Carries out one command on this window's session; `false` when refused. */
-  private run(command: SessionCommand): boolean | Promise<boolean> {
+  /** Carries out one command on this window's session; `false` (or why) when refused. */
+  private run(command: SessionCommand): boolean | Outcome | Promise<boolean | Outcome> {
     switch (command?.kind) {
       case 'reveal': {
         if (typeof command.docId !== 'string' || !Number.isInteger(command.line)) return false;
@@ -308,15 +359,14 @@ export class SessionHost {
         this.inspector.editControls();
         return true;
       case 'edit': {
-        // The shader the edit was typed in, and a document it still has: never another's.
-        if (
-          typeof command.source !== 'string' ||
-          command.source.length > LIMITS.sourceLength ||
-          command.shaderId !== this.store.record()?.id ||
-          !this.store.documents().some((document) => document.id === command.docId)
-        ) {
-          return false;
-        }
+        // The shader the edit was typed in, a document it still has, and the very text it
+        // was typed on: never another shader's, and never over a change made here since.
+        if (typeof command.source !== 'string' || typeof command.base !== 'string') return false;
+        if (command.source.length > LIMITS.sourceLength) return 'too-large';
+        if (command.shaderId !== this.store.record()?.id) return 'other-shader';
+        const document = this.store.documents().find((each) => each.id === command.docId);
+        if (!document) return false;
+        if (textFingerprint(document.source) !== command.base) return 'conflict';
         this.store.setDocSource(command.docId, command.source);
         return true;
       }
@@ -327,7 +377,7 @@ export class SessionHost {
         this.store.selectDoc(command.docId);
         return true;
       case 'save':
-        return this.store.save();
+        return this.store.save().then((saved): Outcome => saved || 'failed');
       default:
         return false;
     }
@@ -358,4 +408,24 @@ function systemPatch(input: unknown): Partial<SystemSettings> | null {
   if (typeof paused === 'boolean') patch.paused = paused;
   if (typeof autoRipples === 'boolean') patch.autoRipples = autoRipples;
   return Object.keys(patch).length > 0 ? patch : null;
+}
+
+/** Same documents, same text: what a panel window would show is unchanged. */
+function sameDocuments(a: readonly EditorDocument[], b: readonly EditorDocument[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((document, index) => {
+      const other = b[index];
+      return (
+        document.id === other.id &&
+        document.source === other.source &&
+        document.name === other.name &&
+        document.kind === other.kind &&
+        document.language === other.language &&
+        document.enabled === other.enabled &&
+        document.passKind === other.passKind &&
+        document.slot === other.slot
+      );
+    })
+  );
 }

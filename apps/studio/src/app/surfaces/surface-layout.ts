@@ -379,6 +379,11 @@ export class SurfaceLayoutService {
 
   // --- Native panel windows (desktop main window only) ---------------------
 
+  /** Whether a panel's native window is open now (it may be shown and still opening). */
+  isWindowOpen(id: SurfaceId): boolean {
+    return this.windows().has(id);
+  }
+
   /** Whether a surface is placed in a native window of its own — shown or hidden. */
   isNative(id: SurfaceId): boolean {
     const surface = this.registry.get(id);

@@ -86,7 +86,9 @@ describe('BottomPanelWindow (the bottom panel in its own window)', () => {
   it('offers every tab of the docked panel, without the workspace session, and says hello', async () => {
     const { root } = await mount();
 
-    expect(received).toEqual([{ kind: 'hello', client: expect.any(String) }]);
+    expect(received).toEqual([
+      { kind: 'hello', client: expect.any(String), window: 'bottom-panel' },
+    ]);
     expect(
       [...root.querySelectorAll('[role="tab"] > span:first-of-type')].map((label) =>
         label.textContent?.trim(),

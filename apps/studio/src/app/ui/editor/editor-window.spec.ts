@@ -17,6 +17,7 @@ import {
   type SessionMessage,
 } from '../../workspace/session-sync/session-protocol';
 import { FakeBroadcastChannel } from '../../workspace/testing/fake-broadcast-channel';
+import { textFingerprint } from '../../workspace/session-sync/session-protocol';
 import { FAKE_DOCUMENTS } from '../../workspace/testing/fake-session';
 import { forbidMainWindowOnly } from '../../workspace/testing/main-window-only';
 import { EditorWindow } from './editor-window';
@@ -112,7 +113,7 @@ describe('EditorWindow (the editor in its own window)', () => {
   };
 
   it("edits the main window's document, scoped to its shader, with no session of its own", () => {
-    expect(received[0]).toEqual({ kind: 'hello', client: expect.any(String) });
+    expect(received[0]).toEqual({ kind: 'hello', client: expect.any(String), window: 'editor' });
     expect(
       [...root().querySelectorAll('[role="tab"] .name')].map((tab) => tab.textContent),
     ).toEqual(['Image', 'Config']);
@@ -123,8 +124,49 @@ describe('EditorWindow (the editor in its own window)', () => {
       kind: 'edit',
       shaderId: 'waves',
       docId: 'image',
+      base: textFingerprint(IMAGE),
       source: `${IMAGE} // a`,
     });
+  });
+
+  it('names the text a keystroke was typed on, even when newer text has not reached the editor yet', () => {
+    // The main window's change has arrived, but no change detection has put it in the model.
+    publish({
+      kind: 'state',
+      patch: {
+        documents: FAKE_DOCUMENTS.map((document) =>
+          document.id === 'image' ? { ...document, source: 'PATCHED BY MAIN' } : document,
+        ),
+      },
+    });
+    type(image(), 'x');
+
+    expect(commands().at(-1)?.command).toMatchObject({
+      kind: 'edit',
+      base: textFingerprint(IMAGE),
+      source: `${IMAGE}x`,
+    });
+  });
+
+  it("says why a keystroke was refused, and shows the main window's text", async () => {
+    const model = image();
+    type(model, ' // a');
+    const [sent] = commands();
+    publish({
+      kind: 'state',
+      patch: {
+        documents: FAKE_DOCUMENTS.map((document) =>
+          document.id === 'image' ? { ...document, source: 'PATCHED BY MAIN' } : document,
+        ),
+      },
+    });
+    publish({ kind: 'done', client: sent.client, seq: sent.seq, ok: false, reason: 'conflict' });
+    await settle();
+
+    expect(model.getValue()).toBe('PATCHED BY MAIN');
+    expect(root().querySelector('app-satellite-controls .notice')?.textContent?.trim()).toBe(
+      'This document changed in the main window. Your last edit was not applied; the editor now shows the main window’s text.',
+    );
   });
 
   it("keeps what was typed and its undo history while the main window's answer is on its way", async () => {

@@ -17,7 +17,10 @@ import {
   SESSION_FIELDS,
   type SessionCommand,
   type SessionMessage,
+  textFingerprint,
 } from './session-protocol';
+
+const IMAGE = 'void main() {}';
 
 const diagnostic = (line: number): CompileDiagnostic => ({
   severity: 'error',
@@ -138,6 +141,7 @@ describe('SessionHost (main window)', () => {
       kind: 'edit',
       shaderId: 'waves',
       docId: 'image',
+      base: textFingerprint(IMAGE),
       source: 'void main() { /* new */ }',
     });
 
@@ -150,21 +154,127 @@ describe('SessionHost (main window)', () => {
     expect(done).toEqual({ kind: 'done', client: 'panel', seq: 1, ok: true });
   });
 
-  it('refuses an edit for another shader, an unknown document or an oversized text', async () => {
+  it('refuses an edit for another shader, an unknown document, an oversized text or a changed one', async () => {
+    start();
+    const satellite = peer();
+    const base = textFingerprint(IMAGE);
+
+    const refused: [SessionCommand, string][] = [
+      [{ kind: 'edit', shaderId: 'other', docId: 'image', base, source: 'x' }, 'other-shader'],
+      [{ kind: 'edit', shaderId: 'waves', docId: 'nope', base, source: 'x' }, 'invalid'],
+      [
+        { kind: 'edit', shaderId: 'waves', docId: 'image', base, source: 'x'.repeat(200_001) },
+        'too-large',
+      ],
+      [
+        { kind: 'edit', shaderId: 'waves', docId: 'image', base, source: 42 as unknown as string },
+        'invalid',
+      ],
+      [
+        {
+          kind: 'edit',
+          shaderId: 'waves',
+          docId: 'image',
+          base: textFingerprint('typed on another text'),
+          source: 'x',
+        },
+        'conflict',
+      ],
+    ];
+    for (const [index, [each, reason]] of refused.entries()) {
+      const replies = await command(satellite, each, index + 1);
+      expect(replies.at(-1)).toEqual({
+        kind: 'done',
+        client: 'panel',
+        seq: index + 1,
+        ok: false,
+        reason,
+      });
+    }
+    expect(session.store.setDocSource).not.toHaveBeenCalled();
+  });
+
+  it('answers a refusal with its whole state, so the panel window drops what it showed', async () => {
     start();
     const satellite = peer();
 
-    const refused: SessionCommand[] = [
-      { kind: 'edit', shaderId: 'other', docId: 'image', source: 'x' },
-      { kind: 'edit', shaderId: 'waves', docId: 'nope', source: 'x' },
-      { kind: 'edit', shaderId: 'waves', docId: 'image', source: 'x'.repeat(200_001) },
-      { kind: 'edit', shaderId: 'waves', docId: 'image', source: 42 as unknown as string },
-    ];
-    for (const [index, each] of refused.entries()) {
-      const replies = await command(satellite, each, index + 1);
-      expect(replies.at(-1)).toEqual({ kind: 'done', client: 'panel', seq: index + 1, ok: false });
+    const replies = await command(satellite, { kind: 'set-param', key: 'speed', value: 'fast' });
+
+    const [state, done] = replies;
+    expect(state.kind === 'state' && Object.keys(state.patch).sort()).toEqual(
+      [...SESSION_FIELDS].sort(),
+    );
+    expect(done).toMatchObject({ kind: 'done', ok: false, reason: 'invalid' });
+  });
+
+  it('says nothing before its session settles, and holds back while a recovered draft waits', () => {
+    session.staleRecovery.set({});
+    const satellite = peer();
+    start();
+    satellite.channel.postMessage({ kind: 'hello', client: 'panel' });
+    session.native.set({ bottomPanel: true, inspector: false, editor: false });
+    TestBed.tick();
+    expect(satellite.received).toEqual([{ kind: 'host', ready: false }]);
+
+    session.staleRecovery.set(null);
+    TestBed.tick();
+    expect(satellite.received[1]).toEqual({ kind: 'host', ready: true });
+    satellite.channel.postMessage({ kind: 'hello', client: 'panel' });
+    expect(satellite.received.at(-1)?.kind).toBe('state');
+  });
+
+  it('settles after a few seconds without a shader, so panel windows are never left waiting', () => {
+    vi.useFakeTimers();
+    try {
+      session.record.set(null);
+      const satellite = peer();
+      start();
+      vi.advanceTimersByTime(5_000);
+      TestBed.tick();
+      expect(satellite.received).toEqual([
+        { kind: 'host', ready: false },
+        { kind: 'host', ready: true },
+      ]);
+    } finally {
+      vi.useRealTimers();
     }
-    expect(session.store.setDocSource).not.toHaveBeenCalled();
+  });
+
+  it('keeps a reveal for a detached editor whose window is reopening until it says hello', () => {
+    session.native.set({ bottomPanel: false, inspector: false, editor: true });
+    session.windowOpen.set(false);
+    start();
+    const satellite = peer();
+
+    TestBed.inject(EditorNavigation).reveal('image', 9);
+    TestBed.tick();
+    expect(satellite.received.some((message) => message.kind === 'reveal-in-editor')).toBe(false);
+
+    satellite.channel.postMessage({ kind: 'hello', client: 'inspector', window: 'inspector' });
+    expect(satellite.received.some((message) => message.kind === 'reveal-in-editor')).toBe(false);
+    satellite.channel.postMessage({ kind: 'hello', client: 'editor', window: 'editor' });
+    expect(satellite.received.at(-1)).toEqual({
+      kind: 'reveal-in-editor',
+      docId: 'image',
+      line: 9,
+    });
+  });
+
+  it('does not re-send the documents when only the render changed', () => {
+    session.native.set({ bottomPanel: false, inspector: true, editor: true });
+    const satellite = peer();
+    start();
+    satellite.received.length = 0;
+
+    session.documents.set(session.documents().map((document) => ({ ...document })));
+    session.render.set({ ...session.render() });
+    TestBed.tick();
+
+    const patches = satellite.received.flatMap((message) =>
+      message.kind === 'state' ? Object.keys(message.patch) : [],
+    );
+    expect(patches).toContain('render');
+    expect(patches).not.toContain('documents');
   });
 
   it('validates every inspector change before making it', async () => {
@@ -381,26 +491,32 @@ describe('SessionMirror (panel window)', () => {
 
   it('resends what only sets a value once a restarted main window is back, and drops the rest', async () => {
     const mirror = start();
-    const edit = mirror.send(
-      { kind: 'edit', shaderId: 'waves', docId: 'image', source: 'typed' },
-      { documents: [] },
-    );
-    const save = mirror.send({ kind: 'save' });
-    main.received.length = 0;
-
-    publish({ kind: 'host', ready: false });
-    expect(main.received).toEqual([{ kind: 'hello', client: mirror.client }]);
-
-    publish({ kind: 'host', ready: true });
-    expect(await save).toBe(false);
-    const [resent] = commands();
-    expect(resent.command).toEqual({
+    const typed: SessionCommand = {
       kind: 'edit',
       shaderId: 'waves',
       docId: 'image',
+      base: textFingerprint(IMAGE),
       source: 'typed',
-    });
+    };
+    const edit = mirror.send(typed, { documents: [] });
+    const save = mirror.send({ kind: 'save' });
+    main.received.length = 0;
+
+    // Restarted: nothing goes out until its session settles, and the view is live again.
+    publish({ kind: 'host', ready: false });
+    expect(await save).toBe(false);
+    const param = mirror.send({ kind: 'set-param', key: 'speed', value: 2 });
+    publish({ kind: 'state', patch: { fps: 42 } });
+    expect(mirror.field('fps')()).toBe(42);
+    expect(main.received).toEqual([]);
+
+    publish({ kind: 'host', ready: true });
+    const [resent, then] = commands();
+    expect(resent.command).toEqual(typed);
+    expect(then.command).toEqual({ kind: 'set-param', key: 'speed', value: 2 });
     expect(main.received.at(-1)).toEqual({ kind: 'hello', client: mirror.client });
+    publish({ kind: 'done', client: mirror.client, seq: then.seq, ok: true });
+    expect(await param).toBe(true);
 
     publish({ kind: 'done', client: mirror.client, seq: resent.seq, ok: true });
     expect(await edit).toBe(true);
@@ -458,9 +574,10 @@ describe('SessionHost and SessionMirror together', () => {
       const documents = mirror
         .field('documents')()
         .map((document) => (document.id === 'image' ? { ...document, source: text } : document));
+      const base = textFingerprint(mirror.field('documents')()[0].source);
       answers.push(
         mirror.send(
-          { kind: 'edit', shaderId: 'waves', docId: 'image', source: text },
+          { kind: 'edit', shaderId: 'waves', docId: 'image', base, source: text },
           { documents },
         ),
       );

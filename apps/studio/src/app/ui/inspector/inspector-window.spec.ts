@@ -95,7 +95,11 @@ describe('InspectorWindow (the inspector in its own window)', () => {
   it('shows the same inspector on the mirrored session, without a session of its own', async () => {
     const { root } = await mount();
 
-    expect(received[0]).toEqual({ kind: 'hello', client: expect.any(String) });
+    expect(received[0]).toEqual({
+      kind: 'hello',
+      client: expect.any(String),
+      window: 'inspector',
+    });
     expect(root.querySelector('app-inspector-panel')).not.toBeNull();
     expect(root.querySelector('app-gui-panel .edit-controls')).not.toBeNull();
     // The controls tab counts the main window's controls.

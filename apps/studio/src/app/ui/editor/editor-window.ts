@@ -9,6 +9,7 @@ import { CodeEditor, type EditorDoc } from '../../editor/code-editor';
 import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 import { SessionMirror } from '../../workspace/session-sync/session-mirror';
+import { textFingerprint } from '../../workspace/session-sync/session-protocol';
 import { SatelliteControls } from '../layout/satellite-controls';
 
 /**
@@ -243,7 +244,7 @@ export class EditorWindow {
   });
 
   constructor() {
-    this.mirror.start();
+    this.mirror.start('editor');
 
     const i18n = inject(I18n);
     const title = inject(Title);
@@ -273,15 +274,22 @@ export class EditorWindow {
 
   /**
    * One keystroke: the document's whole text goes to the main window, for the
-   * shader it was typed in. It shows here at once.
+   * shader it was typed in and naming the text it was typed on — the model's,
+   * which may be older than what just arrived from the main window. It shows
+   * here at once; the main window refuses it if its text has moved on, and this
+   * window then shows the main window's text.
    */
   protected edit(docId: string, source: string): void {
     const shaderId = this.shader()?.id;
-    if (!shaderId) return;
+    const typedOn =
+      this.editor()?.textBefore(docId) ??
+      this.documents().find((document) => document.id === docId)?.source;
+    if (!shaderId || typedOn === undefined) return;
     const documents = this.documents().map((document) =>
       document.id === docId ? { ...document, source } : document,
     );
-    void this.mirror.send({ kind: 'edit', shaderId, docId, source }, { documents });
+    const base = textFingerprint(typedOn);
+    void this.mirror.send({ kind: 'edit', shaderId, docId, base, source }, { documents });
   }
 
   /** Saved by the main window, after every edit sent before it. */
