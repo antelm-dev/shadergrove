@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.0](https://github.com/antelm-dev/shadergrove/compare/v2.10.0...v2.11.0) (2026-10-11)
+
+
+### Features
+
+* **plugins:** split Plugins into Browse and Installed tabs ([#240](https://github.com/antelm-dev/shadergrove/issues/240)) ([f752981](https://github.com/antelm-dev/shadergrove/commit/f752981aad59f71c545f030521a5d588a0072d65))
+
 ## [2.10.0](https://github.com/antelm-dev/shadergrove/compare/v2.9.0...v2.10.0) (2026-10-11)
 
 
