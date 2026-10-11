@@ -42,13 +42,17 @@ test('an existing French 1.0.1 profile can update to the inspector translations'
   // feature currently uses the built-in English fallback in a French profile.
   await expect(page.locator('app-render-inspection-panel .capture')).toHaveText('Capture frame');
   await page.getByTestId('open-plugins').click();
+  await page.getByTestId('plugins-tab-installed').click();
   await expect(toggle).toBeChecked();
+  await page.getByTestId('plugins-tab-browse').click();
   await expect(page.getByTestId(`available-${FRENCH}`)).toBeVisible();
   // Seeding must preserve the old installed package, but the catalogue must offer
   // a newer immutable version containing the feature's French strings.
   const update = page.getByTestId(`install-available-${FRENCH}`);
   await expect(update).toBeVisible();
   await update.click();
+  await expect(page.getByTestId(`available-installed-${FRENCH}`)).toBeVisible();
+  await page.getByTestId('plugins-tab-installed').click();
   await expect(toggle).not.toBeChecked();
   await toggle.click();
   await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
