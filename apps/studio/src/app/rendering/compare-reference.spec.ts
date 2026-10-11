@@ -150,6 +150,21 @@ describe('CompareReference', () => {
       expect(compare.reference()).toBeNull();
     });
 
+    it('resolves false, leaving the current reference, when the frame cannot be read or decoded', async () => {
+      await compare.pin();
+      const kept = compare.reference();
+
+      vi.mocked(createImageBitmap).mockRejectedValueOnce(
+        new DOMException('bad', 'InvalidStateError'),
+      );
+      expect(await compare.pin()).toBe(false);
+      captureFrameBlob.mockRejectedValueOnce(new Error('lost'));
+      expect(await compare.pin()).toBe(false);
+
+      expect(compare.reference()).toBe(kept);
+      expect(decoded[0].close).not.toHaveBeenCalled();
+    });
+
     it('drops, and closes, a frame whose shader was left while it was read', async () => {
       const pending = compare.pin();
       open('plasma');

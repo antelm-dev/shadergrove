@@ -81,25 +81,25 @@ export function fitReference(source: Size, target: Size): ReferenceFit {
       @if (aspectMismatch()) {
         <span class="note">{{ text.aspectMismatch }}</span>
       }
-      @if (!compare.holding()) {
-        <div
-          class="handle"
-          role="slider"
-          tabindex="0"
-          aria-orientation="horizontal"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          [attr.aria-valuenow]="percent()"
-          [attr.aria-valuetext]="percent() + '%'"
-          [attr.aria-label]="text.handle"
-          [style.left.%]="percent()"
-          (pointerdown)="onPointerDown($event)"
-          (pointermove)="onPointerMove($event)"
-          (pointerup)="onPointerUp($event)"
-          (pointercancel)="onPointerUp($event)"
-          (keydown)="onKeyDown($event)"
-        ></div>
-      }
+      <!-- Hidden by opacity, not removed, while held: a focused handle keeps its focus. -->
+      <div
+        class="handle"
+        [class.held]="compare.holding()"
+        role="slider"
+        tabindex="0"
+        aria-orientation="horizontal"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        [attr.aria-valuenow]="percent()"
+        [attr.aria-valuetext]="percent() + '%'"
+        [attr.aria-label]="text.handle"
+        [style.left.%]="percent()"
+        (pointerdown)="onPointerDown($event)"
+        (pointermove)="onPointerMove($event)"
+        (pointerup)="onPointerUp($event)"
+        (pointercancel)="onPointerUp($event)"
+        (keydown)="onKeyDown($event)"
+      ></div>
     }
   `,
   styles: `
@@ -153,6 +153,11 @@ export function fitReference(source: Size, target: Size): ReferenceFit {
       width: 2px;
       background: #fff;
       box-shadow: 0 0 2px rgb(0 0 0 / 80%);
+    }
+
+    .handle.held {
+      opacity: 0;
+      pointer-events: none;
     }
 
     .handle:focus-visible {
@@ -209,9 +214,13 @@ export class CompareOverlay {
 
   protected onPointerDown(event: PointerEvent): void {
     if (event.button !== 0) return;
+    const handle = event.currentTarget as HTMLElement;
+    // Preventing the default (no text selection) also prevents focus, so take it
+    // explicitly: the arrows fine-tune what the drag left. The event still bubbles
+    // to PreviewShell's activate(), which raises a floating preview.
+    handle.focus({ preventScroll: true });
     event.preventDefault();
-    event.stopPropagation();
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    handle.setPointerCapture(event.pointerId);
   }
 
   protected onPointerMove(event: PointerEvent): void {

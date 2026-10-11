@@ -54,10 +54,10 @@ export class CompareReference {
     // A reference whose shader left the library goes with it. The open one is
     // kept until the selection moves on, as the session snapshots do.
     effect(() => {
-      const live = new Set(this.state.shaders().map((shader) => shader.id));
-      const selected = this.state.selectedId();
       const shaderId = this.current()?.shaderId;
-      if (shaderId !== undefined && !live.has(shaderId) && shaderId !== selected) {
+      if (shaderId === undefined) return;
+      const live = this.state.shaders().some((shader) => shader.id === shaderId);
+      if (!live && shaderId !== this.state.selectedId()) {
         untracked(() => this.unpin());
       }
     });
@@ -82,18 +82,20 @@ export class CompareReference {
 
   /**
    * Pin the open shader's current frame, at drawing-buffer size. Playback,
-   * pause and pointer state are left alone. `false` when there is no document
-   * or nothing rendering, or when the selection moved or the reference was
-   * cleared while the frame was being read.
+   * pause and pointer state are left alone. `false` when there is no document,
+   * nothing rendering or a frame that cannot be decoded, or when the selection
+   * moved or the reference was cleared while the frame was being read.
    */
   async pin(label?: string): Promise<boolean> {
     const shaderId = this.state.selectedId();
     if (shaderId === null || this.destroyed) return false;
     const generation = this.generation;
 
-    const frame = await this.renderer.captureFrameBlob();
+    // A frame that cannot be read or decoded is a failed pin, not an error to surface.
+    const frame = await this.renderer.captureFrameBlob().catch(() => null);
     if (!frame) return false;
-    const bitmap = await createImageBitmap(frame);
+    const bitmap = await createImageBitmap(frame).catch(() => null);
+    if (!bitmap) return false;
     if (this.destroyed || generation !== this.generation || this.state.selectedId() !== shaderId) {
       bitmap.close();
       return false;

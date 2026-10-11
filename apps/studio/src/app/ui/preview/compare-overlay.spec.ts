@@ -216,9 +216,12 @@ describe('CompareOverlay', () => {
     expect(canvas()?.style.clipPath).toBe('inset(0 41% 0 0)');
   });
 
-  it('drags the split with pointer capture', async () => {
+  it('drags the split with pointer capture, then nudges it from the keyboard', async () => {
     await pin();
     const target = handle() as HTMLElement;
+    // The preview shell's activate() listens on its host: the grab must still reach it.
+    const bubbled = vi.fn();
+    el().addEventListener('pointerdown', bubbled);
     const captured = new Set<number>();
     target.setPointerCapture = (id) => captured.add(id);
     target.hasPointerCapture = (id) => captured.has(id);
@@ -246,6 +249,12 @@ describe('CompareOverlay', () => {
     pointer('pointermove', 300);
     expect(compare.split()).toBe(1);
     expect(captured.size).toBe(0);
+    expect(bubbled).toHaveBeenCalledTimes(1);
+
+    // The drag focused the slider, so the arrows work without tabbing to it first.
+    expect(document.activeElement).toBe(target);
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', cancelable: true }));
+    expect(compare.split()).toBeCloseTo(0.99);
   });
 
   it('flips sides when swapped and covers the stage while held', async () => {
@@ -255,13 +264,21 @@ describe('CompareOverlay', () => {
     await settle();
     expect(canvas()?.style.clipPath).toBe('inset(0 0 0 25%)');
 
+    const focused = handle() as HTMLElement;
+    focused.focus();
     compare.hold(true);
     await settle();
     expect(canvas()?.style.clipPath).toBe('none');
-    expect(handle()).toBeNull();
+    // Hidden, not removed: the focused handle keeps its focus through the hold.
+    expect(handle()).toBe(focused);
+    expect(focused.classList).toContain('held');
+    expect(document.activeElement).toBe(focused);
 
     compare.hold(false);
     await settle();
+    expect(handle()).toBe(focused);
+    expect(focused.classList).not.toContain('held');
+    expect(document.activeElement).toBe(focused);
     expect(canvas()?.style.clipPath).toBe('inset(0 0 0 25%)');
   });
 
