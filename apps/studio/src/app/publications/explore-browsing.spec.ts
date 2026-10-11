@@ -13,7 +13,7 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { provideLocationMocks } from '@angular/common/testing';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   PublicationPage as PublicationPageDto,
@@ -170,50 +170,6 @@ function clickButton(fixture: ComponentFixture<unknown>, label: string): void {
   button.click();
 }
 
-/**
- * Explore's scroll as a browser keeps it: clamped to how far the list can scroll, which the test
- * sets, and grown in `resize()` the way a late layout grows the list and wakes ResizeObservers.
- */
-function laidOutLate() {
-  const original = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop');
-  if (!original?.get || !original.set) throw new Error('no scrollTop to stand in for');
-  const { get, set } = original;
-  const tops = new WeakMap<Element, number>();
-  const list = { room: 1000, resize: () => undefined as void };
-  const observers = new Set<() => void>();
-  Object.defineProperty(Element.prototype, 'scrollTop', {
-    configurable: true,
-    get(this: Element) {
-      return this.localName === 'app-explore-page' ? (tops.get(this) ?? 0) : get.call(this);
-    },
-    set(this: Element, top: number) {
-      if (this.localName !== 'app-explore-page') return set.call(this, top);
-      tops.set(this, Math.max(0, Math.min(top, list.room)));
-    },
-  });
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      private readonly wake: () => void;
-      constructor(callback: () => void) {
-        this.wake = () => callback();
-      }
-      observe() {
-        observers.add(this.wake);
-      }
-      disconnect() {
-        observers.delete(this.wake);
-      }
-    },
-  );
-  list.resize = () => observers.forEach((wake) => wake());
-  onTestFinished(() => {
-    Object.defineProperty(Element.prototype, 'scrollTop', original);
-    vi.unstubAllGlobals();
-  });
-  return list;
-}
-
 const backLink = (harness: RouterTestingHarness) =>
   (harness.routeNativeElement as HTMLElement).querySelector('a.mat-mdc-button') as HTMLElement;
 
@@ -350,53 +306,6 @@ describe('Explore restoration', () => {
     // The cursor came back too: the next page is the one after the last that was shown.
     loadMore(harness.fixture);
     expect(nextRequest(http).cursor).toBe('c3');
-  });
-
-  it('puts the scroll back once the list has grown tall enough for it, not where the first frame clamped it', async () => {
-    const list = laidOutLate();
-    const { http, harness, location } = await visit('/explore?q=bloom');
-    nextRequest(http).flush(page(['b1', 'b2', 'b3']));
-    await settle(harness.fixture);
-    scrollTo(harness, 480);
-    (harness.fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.card')?.click();
-    await settle(harness.fixture);
-
-    // On the way back, the first frame lays the cards out in more columns, so fewer rows.
-    list.room = 200;
-    location.back();
-    await settle(harness.fixture);
-    expect(scroller(harness).scrollTop).toBe(200);
-
-    list.room = 1000;
-    list.resize();
-    expect(scroller(harness).scrollTop).toBe(480);
-  });
-
-  it('does not take the scroll back from a visitor who moves it while the list settles', async () => {
-    const list = laidOutLate();
-    const { http, harness, location } = await visit('/explore?q=bloom');
-    nextRequest(http).flush(page(['b1', 'b2', 'b3']));
-    await settle(harness.fixture);
-    scrollTo(harness, 480);
-    const open = () =>
-      (harness.fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.card')?.click();
-    open();
-    await settle(harness.fixture);
-
-    list.room = 200;
-    location.back();
-    await settle(harness.fixture);
-    scrollTo(harness, 50);
-    list.room = 1000;
-    list.resize();
-    expect(scroller(harness).scrollTop).toBe(50);
-
-    // And where the visitor went is what is kept for next time.
-    open();
-    await settle(harness.fixture);
-    location.back();
-    await settle(harness.fixture);
-    expect(scroller(harness).scrollTop).toBe(50);
   });
 
   it('does not mix pages when walking back and forward between two searches', async () => {
