@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AsyncBroadcastChannel } from '../testing/async-broadcast-channel';
-import { FAKE_DOCUMENTS, FakeMainSession } from '../testing/fake-session';
+import { FAKE_DOCUMENTS, FakeMainSession, explorerProject } from '../testing/fake-session';
 import { SessionHost } from './session-host';
 import { SessionMirror } from './session-mirror';
 import {
@@ -73,6 +73,124 @@ describe('the session channel, delivered asynchronously', () => {
       .map((document) => (document.id === 'image' ? { ...document, source } : document));
     return mirror.send(command, { documents });
   };
+
+  const textOf = (mirror: SessionMirror, docId: string) =>
+    mirror
+      .field('documents')()
+      .find((document) => document.id === docId)?.source;
+
+  /** A keystroke in any document, as the editor window sends it. */
+  const typeIn = (mirror: SessionMirror, docId: string, source: string) => {
+    const typedOn = textOf(mirror, docId) ?? '';
+    const documents = mirror
+      .field('documents')()
+      .map((document) => (document.id === docId ? { ...document, source } : document));
+    return mirror.send(
+      { kind: 'edit', shaderId: 'waves', docId, base: textFingerprint(typedOn), source },
+      { documents },
+    );
+  };
+
+  it('drops a keystroke for a document the main window deleted meanwhile, and moves off it', async () => {
+    session.useProject(explorerProject());
+    startHost();
+    const mirror = startMirror();
+    await settle();
+    await mirror.send({ kind: 'select-doc', docId: 'buf-a' }, { activeDocId: 'buf-a' });
+
+    const first = typeIn(mirror, 'buf-a', 'a1');
+    await turn();
+    // The main window deletes the buffer before the editor has heard of its answer…
+    session.store.removeBufferPass('buf-a');
+    // …and the editor, not knowing yet, types on.
+    const second = typeIn(mirror, 'buf-a', 'a12');
+    await settle();
+
+    expect(await first).toBe(true);
+    expect(await second).toBe(false);
+    expect(mirror.refusal()?.reason).toBe('conflict');
+    expect(session.store.setDocSource).toHaveBeenCalledTimes(1);
+    expect(session.documents().some((document) => document.id === 'buf-a')).toBe(false);
+    // The editor shows the main window's documents, on the one the main window moved to.
+    expect(textOf(mirror, 'buf-a')).toBeUndefined();
+    expect(mirror.field('activeDocId')()).toBe('image');
+    const passes = mirror.field('explorer')().tree.nodes[0];
+    expect(passes.children.map((node) => node.id)).toEqual(['image', 'buf-b']);
+  });
+
+  it('keeps typing into a document the main window renamed meanwhile: a rename keeps its id', async () => {
+    session.useProject(explorerProject());
+    startHost();
+    const mirror = startMirror();
+    await settle();
+
+    const first = typeIn(mirror, 'file-1', 'float noise; // a');
+    await turn();
+    session.store.renameSourceFile('file-1', 'hash.glsl');
+    const second = typeIn(mirror, 'file-1', 'float noise; // ab');
+    await settle();
+
+    expect(await Promise.all([first, second])).toEqual([true, true]);
+    expect(mirror.refusal()).toBeNull();
+    const file = session.documents().find((document) => document.id === 'file-1');
+    expect(file).toMatchObject({ name: 'hash.glsl', source: 'float noise; // ab' });
+    expect(
+      mirror
+        .field('documents')()
+        .find((document) => document.id === 'file-1'),
+    ).toMatchObject({ name: 'hash.glsl', source: 'float noise; // ab' });
+  });
+
+  it("changes the main window's documents from the editor window, in order with its keystrokes", async () => {
+    session.useProject(explorerProject());
+    startHost();
+    const mirror = startMirror();
+    await settle();
+
+    // Typed, then deleted, then typed again before any answer came back.
+    const typed = typeIn(mirror, 'file-1', 'float noise; // kept?');
+    const deleted = mirror.send({ kind: 'delete-doc', shaderId: 'waves', docId: 'file-1' });
+    const late = typeIn(mirror, 'file-1', 'float noise; // late');
+    const added = mirror.send({ kind: 'add-file', shaderId: 'waves', name: 'fresh.glsl' });
+    await settle();
+
+    expect(await Promise.all([typed, deleted, late, added])).toEqual([true, true, false, true]);
+    expect(session.documents().map((document) => document.name)).toEqual([
+      'Image',
+      'Buffer A',
+      'Buffer B',
+      'fresh.glsl',
+      'Config',
+    ]);
+    // The new file is open in both windows, and its row is the active one.
+    const created = session.documents().find((document) => document.name === 'fresh.glsl')!;
+    expect(mirror.field('activeDocId')()).toBe(created.id);
+    const includes = mirror.field('explorer')().tree.nodes[1];
+    expect(includes.children.map((node) => [node.name, node.status.active])).toEqual([
+      ['fresh.glsl', true],
+    ]);
+  });
+
+  it('never lets an answer asked for in one shader land in the one the main window switched to', async () => {
+    session.useProject(explorerProject());
+    startHost();
+    const mirror = startMirror();
+    await settle();
+
+    // The user answers a rename prompt after the main window opened another shader.
+    session.record.set({ id: 'other', updatedAt: '2024-02-01T00:00:00.000Z' });
+    const renamed = mirror.send({
+      kind: 'rename-doc',
+      shaderId: 'waves',
+      docId: 'buf-a',
+      name: 'Blur',
+    });
+    await settle();
+
+    expect(await renamed).toBe(false);
+    expect(mirror.refusal()?.reason).toBe('other-shader');
+    expect(session.store.renamePassById).not.toHaveBeenCalled();
+  });
 
   it('never overwrites a change the main window made while the editor was typing (F1)', async () => {
     startHost();

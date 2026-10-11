@@ -23,6 +23,9 @@ import { EditorSettings } from '../../editor/editor-settings';
 import { Preferences } from '../../prefs/preferences';
 import { SurfaceLayoutService } from '../../surfaces/surface-layout';
 import { OutputLog } from '../../ui/bottom-panel/output-log';
+import { bufferConsumers } from '../../ui/dialogs/document-dialogs';
+import { isExplorerViewMode } from '../../ui/file-explorer/contract';
+import { buildExplorerTree } from '../../ui/file-explorer/project-explorer';
 import {
   WorkspaceInspectorSession,
   type SystemSettings,
@@ -34,6 +37,8 @@ import {
   MAX_MIRRORED,
   SESSION_CHANNEL,
   SESSION_FIELDS,
+  type DocumentCommand,
+  type ExplorerState,
   type SessionCommand,
   type SessionField,
   type SessionMessage,
@@ -183,6 +188,39 @@ export class SessionHost {
       dirty: store.dirty,
       saving: computed(() => store.saving()),
       editorAppearance: this.settings.effective,
+      // By content: the tree is rebuilt on every keystroke, and mostly comes out the same.
+      explorer: computed(() => this.explorerState(), { equal: sameJson }),
+    };
+  }
+
+  /** The explorer as the docked editor would show it, with what deleting a buffer asks. */
+  private explorerState(): ExplorerState {
+    const store = this.store;
+    const project = store.project();
+    const documents = store.documents();
+    const consumers: Record<string, readonly string[]> = {};
+    if (project) {
+      for (const document of documents) {
+        if (document.passKind === 'buffer') {
+          consumers[document.id] = bufferConsumers(project, document.id);
+        }
+      }
+    }
+    return {
+      tree: buildExplorerTree({
+        view: this.preferences.value().fileExplorerView,
+        loading: store.loading(),
+        project,
+        documents,
+        activeDocId: store.activeDoc()?.id ?? null,
+        dirty: store.dirty(),
+        compiling: store.compiling(),
+        errorCountFor: (docId) => store.errorCountFor(docId),
+        renderOrder: store.renderOrder(),
+        canAddBuffer: store.canAddBuffer(),
+      }),
+      canAddBuffer: store.canAddBuffer(),
+      consumers,
     };
   }
 
@@ -368,7 +406,8 @@ export class SessionHost {
         if (command.source.length > LIMITS.sourceLength) return 'too-large';
         if (command.shaderId !== this.store.record()?.id) return 'other-shader';
         const document = this.store.documents().find((each) => each.id === command.docId);
-        if (!document) return false;
+        // Deleted here since (or never one): the editor drops it for this window's documents.
+        if (!document) return 'conflict';
         // Already there (a keystroke the reloaded draft carried, replayed): nothing to apply.
         if (document.source === command.source) return true;
         if (textFingerprint(document.source) !== command.base) return 'conflict';
@@ -385,6 +424,76 @@ export class SessionHost {
         // A save already running is not a failure: this one only asked for the same thing.
         if (this.store.saving()) return true;
         return this.store.save().then((saved): Outcome => saved || 'failed');
+      case 'explorer-view':
+        if (!isExplorerViewMode(command.view)) return false;
+        this.preferences.patch({ fileExplorerView: command.view });
+        return true;
+      case 'add-file': {
+        if (command.shaderId !== this.store.record()?.id) return 'other-shader';
+        const name = documentName(command.name);
+        if (!name) return false;
+        this.store.addSourceFile(name);
+        return true;
+      }
+      case 'add-buffer':
+        if (command.shaderId !== this.store.record()?.id) return 'other-shader';
+        if (!this.store.canAddBuffer()) return false;
+        this.store.addBufferPass();
+        return true;
+      case 'rename-doc':
+      case 'duplicate-doc':
+      case 'delete-doc':
+      case 'set-doc-enabled':
+      case 'move-doc':
+        return this.changeDocument(command);
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * What the explorer may do to a file or a buffer, and nothing else: the
+   * Image, Common, vertex and Config documents are neither renamed, copied,
+   * deleted, disabled nor moved. A document is named by id, which a rename
+   * keeps; one deleted here since is refused like an edit to it.
+   */
+  private changeDocument(command: DocumentCommand): Outcome | false {
+    if (command.shaderId !== this.store.record()?.id) return 'other-shader';
+    const documents = this.store.documents();
+    const document = documents.find((each) => each.id === command.docId);
+    if (!document) return 'conflict';
+    const list = listOf(document);
+    if (!list) return false;
+    const store = this.store;
+    switch (command.kind) {
+      case 'rename-doc': {
+        const name = documentName(command.name);
+        if (!name) return false;
+        if (list === 'file') store.renameSourceFile(document.id, name);
+        else store.renamePassById(document.id, name);
+        return true;
+      }
+      case 'duplicate-doc':
+        if (list === 'buffer' && !store.canAddBuffer()) return false;
+        if (list === 'file') store.duplicateSourceFile(document.id);
+        else store.duplicateBufferPass(document.id);
+        return true;
+      case 'delete-doc':
+        if (list === 'file') store.removeSourceFile(document.id);
+        else store.removeBufferPass(document.id);
+        return true;
+      case 'set-doc-enabled':
+        if (list !== 'buffer' || typeof command.enabled !== 'boolean') return false;
+        store.setPassEnabledById(document.id, command.enabled);
+        return true;
+      case 'move-doc': {
+        const peers = documents.filter((each) => listOf(each) === list);
+        const index = peers.findIndex((each) => each.id === command.targetDocId);
+        if (command.list !== list || index < 0) return false;
+        if (list === 'file') store.moveSourceFile(document.id, index);
+        else store.movePassTo(document.id, index);
+        return true;
+      }
       default:
         return false;
     }
@@ -415,6 +524,22 @@ function systemPatch(input: unknown): Partial<SystemSettings> | null {
   if (typeof paused === 'boolean') patch.paused = paused;
   if (typeof autoRipples === 'boolean') patch.autoRipples = autoRipples;
   return Object.keys(patch).length > 0 ? patch : null;
+}
+
+/** Which explorer list a document is in: only files and buffers can be changed from there. */
+function listOf(document: EditorDocument): 'buffer' | 'file' | null {
+  if (document.kind === 'file') return 'file';
+  return document.passKind === 'buffer' ? 'buffer' : null;
+}
+
+/** A file or pass name a panel window may give: trimmed, not empty, within the library limit. */
+function documentName(input: unknown): string | null {
+  const name = typeof input === 'string' ? input.trim() : '';
+  return name && name.length <= LIMITS.nameLength ? name : null;
+}
+
+function sameJson<T>(a: T, b: T): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 /** Same documents, same text: what a panel window would show is unchanged. */

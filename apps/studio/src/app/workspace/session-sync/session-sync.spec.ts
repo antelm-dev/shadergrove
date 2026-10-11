@@ -7,7 +7,7 @@ import { validateRender } from '@shadergrove/shared/validate';
 import { EditorNavigation } from '../../editor/editor-navigation';
 import { OutputLog } from '../../ui/bottom-panel/output-log';
 import { FakeBroadcastChannel } from '../testing/fake-broadcast-channel';
-import { FakeMainSession } from '../testing/fake-session';
+import { FakeMainSession, explorerProject } from '../testing/fake-session';
 import { SessionHost } from './session-host';
 import { SessionMirror } from './session-mirror';
 import {
@@ -154,14 +154,15 @@ describe('SessionHost (main window)', () => {
     expect(done).toEqual({ kind: 'done', client: 'panel', seq: 1, ok: true });
   });
 
-  it('refuses an edit for another shader, an unknown document, an oversized text or a changed one', async () => {
+  it('refuses an edit for another shader, a deleted document, an oversized text or a changed one', async () => {
     start();
     const satellite = peer();
     const base = textFingerprint(IMAGE);
 
     const refused: [SessionCommand, string][] = [
       [{ kind: 'edit', shaderId: 'other', docId: 'image', base, source: 'x' }, 'other-shader'],
-      [{ kind: 'edit', shaderId: 'waves', docId: 'nope', base, source: 'x' }, 'invalid'],
+      // Deleted here meanwhile: the editor drops it for this window's documents.
+      [{ kind: 'edit', shaderId: 'waves', docId: 'nope', base, source: 'x' }, 'conflict'],
       [
         { kind: 'edit', shaderId: 'waves', docId: 'image', base, source: 'x'.repeat(200_001) },
         'too-large',
@@ -192,6 +193,142 @@ describe('SessionHost (main window)', () => {
       });
     }
     expect(session.store.setDocSource).not.toHaveBeenCalled();
+  });
+
+  it('publishes the explorer as the main window shows it, with what deleting a buffer asks', () => {
+    session.useProject(explorerProject());
+    session.dirty.set(true);
+    session.allDiagnostics.set([{ ...diagnostic(3), docId: 'buf-a' }]);
+    start();
+    const satellite = peer();
+
+    satellite.channel.postMessage({ kind: 'hello', client: 'panel' });
+
+    const [state] = satellite.received;
+    const explorer = state.kind === 'state' ? state.patch.explorer : undefined;
+    expect(explorer?.canAddBuffer).toBe(true);
+    expect(explorer?.consumers).toEqual({ 'buf-a': ['Buffer B'], 'buf-b': [] });
+    expect(explorer?.tree.view).toBe('files');
+    const [passes, includes] = explorer?.tree.nodes ?? [];
+    expect(passes.children.map((node) => node.name)).toEqual(['Image', 'Buffer A', 'Buffer B']);
+    expect(passes.children[0].status).toMatchObject({ active: true, dirty: true, errorCount: 0 });
+    expect(passes.children[1].status).toMatchObject({ active: false, errorCount: 1 });
+    expect(includes.children.map((node) => node.name)).toEqual(['noise.glsl']);
+  });
+
+  it("carries out the explorer's document commands on the main window's store", async () => {
+    session.useProject(explorerProject());
+    start();
+    const satellite = peer();
+    const accepted: SessionCommand[] = [
+      { kind: 'rename-doc', shaderId: 'waves', docId: 'file-1', name: '  util.glsl ' },
+      { kind: 'rename-doc', shaderId: 'waves', docId: 'buf-a', name: 'Blur' },
+      { kind: 'set-doc-enabled', shaderId: 'waves', docId: 'buf-b', enabled: false },
+      { kind: 'move-doc', shaderId: 'waves', docId: 'buf-b', targetDocId: 'buf-a', list: 'buffer' },
+      { kind: 'duplicate-doc', shaderId: 'waves', docId: 'file-1' },
+      { kind: 'add-file', shaderId: 'waves', name: 'extra.glsl' },
+      { kind: 'add-buffer', shaderId: 'waves' },
+      { kind: 'delete-doc', shaderId: 'waves', docId: 'buf-a' },
+      { kind: 'explorer-view', view: 'pipeline' },
+    ];
+    for (const [index, each] of accepted.entries()) {
+      const replies = await command(satellite, each, index + 1);
+      expect(replies.at(-1)).toMatchObject({ kind: 'done', seq: index + 1, ok: true });
+    }
+
+    const store = session.store;
+    expect(store.renameSourceFile).toHaveBeenCalledWith('file-1', 'util.glsl');
+    expect(store.renamePassById).toHaveBeenCalledWith('buf-a', 'Blur');
+    expect(store.setPassEnabledById).toHaveBeenCalledWith('buf-b', false);
+    expect(store.movePassTo).toHaveBeenCalledWith('buf-b', 0);
+    expect(store.duplicateSourceFile).toHaveBeenCalledWith('file-1');
+    expect(store.addSourceFile).toHaveBeenCalledWith('extra.glsl');
+    expect(store.addBufferPass).toHaveBeenCalledOnce();
+    expect(store.removeBufferPass).toHaveBeenCalledWith('buf-a');
+    expect(session.preferences().fileExplorerView).toBe('pipeline');
+    expect(session.documents().map((document) => document.name)).toEqual([
+      'Image',
+      'Buffer B',
+      'Buffer C',
+      'util.glsl',
+      'extra.glsl',
+      'Config',
+    ]);
+  });
+
+  it('refuses an explorer command for another shader, a deleted document or what the explorer cannot do', async () => {
+    session.useProject(explorerProject());
+    start();
+    const satellite = peer();
+    const shaderId = 'waves';
+    const refused: [SessionCommand, string][] = [
+      [{ kind: 'rename-doc', shaderId: 'other', docId: 'file-1', name: 'x' }, 'other-shader'],
+      [{ kind: 'add-file', shaderId: 'other', name: 'x' }, 'other-shader'],
+      [{ kind: 'add-buffer', shaderId: 'other' }, 'other-shader'],
+      [{ kind: 'delete-doc', shaderId, docId: 'gone' }, 'conflict'],
+      // Image, Config and the vertex shader are neither renamed, copied, deleted nor moved.
+      [{ kind: 'rename-doc', shaderId, docId: 'image', name: 'x' }, 'invalid'],
+      [{ kind: 'delete-doc', shaderId, docId: '@config' }, 'invalid'],
+      [{ kind: 'duplicate-doc', shaderId, docId: 'image' }, 'invalid'],
+      [{ kind: 'rename-doc', shaderId, docId: 'file-1', name: '   ' }, 'invalid'],
+      [{ kind: 'rename-doc', shaderId, docId: 'file-1', name: 'x'.repeat(65) }, 'invalid'],
+      [{ kind: 'rename-doc', shaderId, docId: 'file-1', name: 7 as unknown as string }, 'invalid'],
+      [{ kind: 'add-file', shaderId, name: '' }, 'invalid'],
+      [{ kind: 'set-doc-enabled', shaderId, docId: 'file-1', enabled: false }, 'invalid'],
+      [
+        { kind: 'set-doc-enabled', shaderId, docId: 'buf-a', enabled: 'no' as unknown as boolean },
+        'invalid',
+      ],
+      [
+        { kind: 'move-doc', shaderId, docId: 'buf-a', targetDocId: 'file-1', list: 'buffer' },
+        'invalid',
+      ],
+      [
+        { kind: 'move-doc', shaderId, docId: 'file-1', targetDocId: 'file-1', list: 'buffer' },
+        'invalid',
+      ],
+      [{ kind: 'explorer-view', view: 'tree' as 'files' }, 'invalid'],
+    ];
+    for (const [index, [each, reason]] of refused.entries()) {
+      const replies = await command(satellite, each, index + 1);
+      expect(replies.at(-1)).toEqual({
+        kind: 'done',
+        client: 'panel',
+        seq: index + 1,
+        ok: false,
+        reason,
+      });
+    }
+
+    // With all four buffer slots taken, nothing makes a fifth.
+    await command(satellite, { kind: 'add-buffer', shaderId }, 100);
+    await command(satellite, { kind: 'add-buffer', shaderId }, 101);
+    const full = [
+      await command(satellite, { kind: 'add-buffer', shaderId }, 102),
+      await command(satellite, { kind: 'duplicate-doc', shaderId, docId: 'buf-a' }, 103),
+    ];
+    expect(full.map((replies) => replies.at(-1))).toMatchObject([
+      { ok: false, reason: 'invalid' },
+      { ok: false, reason: 'invalid' },
+    ]);
+
+    const store = session.store;
+    for (const spy of [
+      store.renameSourceFile,
+      store.renamePassById,
+      store.removeSourceFile,
+      store.removeBufferPass,
+      store.duplicateSourceFile,
+      store.duplicateBufferPass,
+      store.setPassEnabledById,
+      store.moveSourceFile,
+      store.movePassTo,
+      store.addSourceFile,
+    ]) {
+      expect(spy).not.toHaveBeenCalled();
+    }
+    expect(store.addBufferPass).toHaveBeenCalledTimes(2);
+    expect(session.preferences().fileExplorerView).toBe('files');
   });
 
   it('answers a refusal with its whole state, so the panel window drops what it showed', async () => {
@@ -480,6 +617,7 @@ describe('SessionMirror (panel window)', () => {
           { id: 2, timestamp: 0, level: 'shout', source: 'compiler', message: 'bad' },
         ],
         surprise: 1,
+        explorer: { tree: { nodes: 'none' }, canAddBuffer: true, consumers: {} },
       } as unknown as Record<string, unknown>,
     });
 

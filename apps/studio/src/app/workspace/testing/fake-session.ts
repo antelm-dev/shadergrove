@@ -12,6 +12,21 @@ import {
   type ShaderParams,
 } from '@shadergrove/shared/model';
 import type { InspectorTab } from '@shadergrove/shared/panel-prefs';
+import {
+  addBuffer,
+  addFile,
+  NO_BINDING,
+  PROJECT_VERSION,
+  displayPasses,
+  freeSlot,
+  makePass,
+  removeFile,
+  removePass,
+  renameFile,
+  renamePass,
+  setPassEnabled,
+  type ShaderProject,
+} from '@shadergrove/shared/project';
 import { EditorSettings } from '../../editor/editor-settings';
 import {
   Preferences,
@@ -33,6 +48,35 @@ export const FAKE_DOCUMENTS: EditorDocument[] = [
   { id: 'image', kind: 'pass', name: 'Image', language: 'glsl', source: 'void main() {}' },
   { id: '@config', kind: 'config', name: 'Config', language: 'json', source: '[]' },
 ];
+
+/**
+ * A project with what the explorer can change: Image, two buffers (B samples A)
+ * and an included file. Show it with `FakeMainSession.useProject`.
+ */
+export function explorerProject(): ShaderProject {
+  return {
+    version: PROJECT_VERSION,
+    vertex: '',
+    passes: [
+      makePass({ id: 'image', kind: 'image', name: 'Image', source: FAKE_DOCUMENTS[0].source }),
+      makePass({ id: 'buf-a', kind: 'buffer', name: 'Buffer A', slot: 'A', source: 'a' }),
+      makePass({
+        id: 'buf-b',
+        kind: 'buffer',
+        name: 'Buffer B',
+        slot: 'B',
+        source: 'b',
+        channels: [
+          { kind: 'buffer', passId: 'buf-a', feedback: false },
+          NO_BINDING,
+          NO_BINDING,
+          NO_BINDING,
+        ],
+      }),
+    ],
+    files: [{ id: 'file-1', name: 'noise.glsl', source: 'float noise;' }],
+  };
+}
 
 /**
  * The main window's session as `SessionHost` and the inspector's main-window
@@ -65,6 +109,48 @@ export class FakeMainSession {
   /** Whether each native panel's window is open, for the layout's `isWindowOpen`. */
   readonly windowOpen = signal(true);
   readonly fps = signal(60);
+  /** The project behind `documents`, once a test gives one (`useProject`); the explorer's source. */
+  readonly project = signal<ShaderProject | null>(null);
+
+  /** Shows a project, its documents derived from it as the store derives them. */
+  useProject(project: ShaderProject): void {
+    this.project.set(project);
+    this.documents.set([
+      ...displayPasses(project).map(
+        (pass): EditorDocument => ({
+          id: pass.id,
+          kind: 'pass',
+          name: pass.name,
+          language: 'glsl',
+          source: pass.source,
+          passKind: pass.kind,
+          slot: pass.slot,
+          enabled: pass.enabled,
+        }),
+      ),
+      ...project.files.map(
+        (file): EditorDocument => ({
+          id: file.id,
+          kind: 'file',
+          name: file.name,
+          language: 'glsl',
+          source: file.source,
+        }),
+      ),
+      FAKE_DOCUMENTS[1],
+    ]);
+  }
+
+  /** A change to the project, as the store makes it; `select` opens a document, as it does. */
+  private change(next: (project: ShaderProject) => ShaderProject, select?: string): void {
+    const project = this.project();
+    if (!project) return;
+    this.useProject(next(project));
+    if (select) this.activeDocId.set(select);
+    else if (!this.documents().some((document) => document.id === this.activeDocId())) {
+      this.activeDocId.set('image');
+    }
+  }
 
   readonly store = {
     record: this.record,
@@ -86,11 +172,23 @@ export class FakeMainSession {
     ),
     passes: () => [],
     notice: this.notice,
-    setDocSource: vi.fn((docId: string, source: string) =>
+    setDocSource: vi.fn((docId: string, source: string) => {
+      const project = this.project();
+      // A pass or file of a shown project is written there, so a later rename keeps the text.
+      if (project && [...project.passes, ...project.files].some((each) => each.id === docId)) {
+        const write = <T extends { id: string }>(each: T) =>
+          each.id === docId ? { ...each, source } : each;
+        this.useProject({
+          ...project,
+          passes: project.passes.map(write),
+          files: project.files.map(write),
+        });
+        return;
+      }
       this.documents.update((documents) =>
         documents.map((document) => (document.id === docId ? { ...document, source } : document)),
-      ),
-    ),
+      );
+    }),
     selectDoc: vi.fn((docId: string) => this.activeDocId.set(docId)),
     setParam: vi.fn((key: string, value: ShaderParams[string]) =>
       this.params.update((params) => ({ ...params, [key]: value })),
@@ -104,6 +202,45 @@ export class FakeMainSession {
     clearTextureImage: vi.fn(async () => undefined),
     setChannelSettings: vi.fn(async () => undefined),
     save: vi.fn(async () => true),
+    // The explorer.
+    project: this.project,
+    compiling: signal<ReadonlySet<string>>(new Set()),
+    errorCountFor: (docId: string) =>
+      this.allDiagnostics().filter(
+        (diagnostic) => diagnostic.docId === docId && diagnostic.severity === 'error',
+      ).length,
+    renderOrder: computed(() => this.project()?.passes.filter((pass) => pass.enabled) ?? []),
+    canAddBuffer: computed(() => {
+      const project = this.project();
+      return project !== null && freeSlot(project) !== null;
+    }),
+    addSourceFile: vi.fn((name: string) => {
+      const project = this.project();
+      if (!project) return;
+      const next = addFile(project, name);
+      this.change(() => next, next.files.at(-1)?.id);
+    }),
+    addBufferPass: vi.fn(() => {
+      const project = this.project();
+      if (!project) return;
+      const next = addBuffer(project);
+      this.change(() => next, next.passes.at(-1)?.id);
+    }),
+    renameSourceFile: vi.fn((id: string, name: string) =>
+      this.change((project) => renameFile(project, id, name)),
+    ),
+    renamePassById: vi.fn((id: string, name: string) =>
+      this.change((project) => renamePass(project, id, name)),
+    ),
+    duplicateSourceFile: vi.fn(),
+    duplicateBufferPass: vi.fn(),
+    removeSourceFile: vi.fn((id: string) => this.change((project) => removeFile(project, id))),
+    removeBufferPass: vi.fn((id: string) => this.change((project) => removePass(project, id))),
+    setPassEnabledById: vi.fn((id: string, enabled: boolean) =>
+      this.change((project) => setPassEnabled(project, id, enabled)),
+    ),
+    moveSourceFile: vi.fn(),
+    movePassTo: vi.fn(),
   };
 
   readonly layout = {

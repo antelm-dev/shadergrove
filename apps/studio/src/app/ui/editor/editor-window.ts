@@ -6,8 +6,16 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { DEFAULT_EDITOR_GROUP_ID, editorSurfaceId } from '@shadergrove/shared/surfaces';
 import { CodeEditor, type EditorDoc } from '../../editor/code-editor';
 import { TranslatePipe } from '../../i18n/translate.pipe';
+import { Preferences } from '../../prefs/preferences';
 import { SessionMirror } from '../../workspace/session-sync/session-mirror';
 import { textFingerprint } from '../../workspace/session-sync/session-protocol';
+import { DocumentDialogs } from '../dialogs/document-dialogs';
+import type {
+  ExplorerCommandEvent,
+  ExplorerReorderIntent,
+  ExplorerViewMode,
+} from '../file-explorer/contract';
+import { ExplorerPanel } from '../file-explorer/explorer-panel';
 import { SatelliteControls } from '../layout/satellite-controls';
 import { SatelliteTitlebar } from '../layout/satellite-titlebar';
 
@@ -28,6 +36,7 @@ import { SatelliteTitlebar } from '../layout/satellite-titlebar';
   selector: 'app-root',
   imports: [
     CodeEditor,
+    ExplorerPanel,
     MatButtonModule,
     MatIconModule,
     MatTooltipModule,
@@ -43,6 +52,18 @@ import { SatelliteTitlebar } from '../layout/satellite-titlebar';
     />
 
     <header class="header">
+      @if (!explorerOpen()) {
+        <button
+          matIconButton
+          type="button"
+          class="explorer-reopen"
+          [matTooltip]="'explorer.expand' | translate"
+          [attr.aria-label]="'explorer.expand' | translate"
+          (click)="setExplorerOpen(true)"
+        >
+          <mat-icon>folder_open</mat-icon>
+        </button>
+      }
       <div class="tablist" role="tablist" [attr.aria-label]="'editor.documents' | translate">
         @for (document of documents(); track document.id) {
           @let selected = document.id === activeDoc()?.id;
@@ -91,18 +112,34 @@ import { SatelliteTitlebar } from '../layout/satellite-titlebar';
       />
     </header>
 
-    @if (editorDoc(); as doc) {
-      <app-code-editor
-        class="code"
-        [doc]="doc"
-        [liveIds]="liveIds()"
-        [diagnostics]="activeDiagnostics()"
-        [appearance]="appearance()"
-        (valueChange)="edit($event.id, $event.value)"
-      />
-    } @else {
-      <p class="empty">{{ 'editor.empty' | translate }}</p>
-    }
+    <div class="body">
+      @if (explorerOpen()) {
+        <app-explorer-panel
+          class="explorer"
+          [style.width.px]="explorerWidth()"
+          [tree]="explorer().tree"
+          [canCreateBuffer]="explorer().canAddBuffer"
+          (viewChange)="setExplorerView($event)"
+          (select)="select($event.docId)"
+          (command)="onExplorerCommand($event)"
+          (reorder)="onExplorerReorder($event)"
+          (collapse)="setExplorerOpen(false)"
+        />
+      }
+
+      @if (editorDoc(); as doc) {
+        <app-code-editor
+          class="code"
+          [doc]="doc"
+          [liveIds]="liveIds()"
+          [diagnostics]="activeDiagnostics()"
+          [appearance]="appearance()"
+          (valueChange)="edit($event.id, $event.value)"
+        />
+      } @else {
+        <p class="empty">{{ 'editor.empty' | translate }}</p>
+      }
+    </div>
   `,
   styles: `
     :host {
@@ -184,7 +221,8 @@ import { SatelliteTitlebar } from '../layout/satellite-titlebar';
       white-space: nowrap;
     }
 
-    .save {
+    .save,
+    .explorer-reopen {
       width: 28px;
       height: 28px;
       padding: 4px;
@@ -197,8 +235,22 @@ import { SatelliteTitlebar } from '../layout/satellite-titlebar';
       }
     }
 
+    .body {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .explorer {
+      flex: 0 0 auto;
+      min-width: 0;
+      max-width: 50%;
+      border-right: 1px solid var(--mat-sys-outline-variant);
+    }
+
     .code {
       flex: 1;
+      min-width: 0;
       min-height: 0;
     }
 
@@ -224,6 +276,13 @@ export class EditorWindow {
   protected readonly saving = this.mirror.field('saving');
   protected readonly appearance = this.mirror.field('editorAppearance');
   private readonly diagnostics = this.mirror.field('diagnostics');
+  protected readonly explorer = this.mirror.field('explorer');
+
+  private readonly preferences = inject(Preferences);
+  private readonly dialogs = inject(DocumentDialogs);
+  /** Open or collapsed, and how wide: this window's own, never saved (a panel window saves nothing). */
+  protected readonly explorerOpen = computed(() => this.preferences.value().fileExplorerOpen);
+  protected readonly explorerWidth = computed(() => this.preferences.value().fileExplorerWidth);
 
   protected readonly activeDoc = computed(() => {
     const documents = this.documents();
@@ -292,6 +351,73 @@ export class EditorWindow {
     );
     const base = textFingerprint(typedOn);
     void this.mirror.send({ kind: 'edit', shaderId, docId, base, source }, { documents });
+  }
+
+  protected setExplorerOpen(open: boolean): void {
+    this.preferences.patch({ fileExplorerOpen: open });
+  }
+
+  /** The main window's explorer view: its tree is built there. */
+  protected setExplorerView(view: ExplorerViewMode): void {
+    void this.mirror.send({ kind: 'explorer-view', view });
+  }
+
+  /**
+   * The explorer's commands, as in the docked editor: a question (a name, a
+   * confirmation) is asked here, where the user is, and only the answer goes
+   * to the main window, which checks it against its own documents. Each names
+   * the shader it was asked in, so an answer never lands in another one.
+   */
+  protected async onExplorerCommand({ command, docId }: ExplorerCommandEvent): Promise<void> {
+    const shaderId = this.shader()?.id;
+    if (!shaderId) return;
+    if (command === 'create-file') {
+      const name = await this.dialogs.askNewFileName();
+      if (name) void this.mirror.send({ kind: 'add-file', shaderId, name });
+      return;
+    }
+    if (command === 'create-buffer') {
+      void this.mirror.send({ kind: 'add-buffer', shaderId });
+      return;
+    }
+    const doc = this.documents().find((document) => document.id === docId);
+    if (!doc) return;
+    switch (command) {
+      case 'rename': {
+        const name = await this.dialogs.askRename(doc);
+        if (name) void this.mirror.send({ kind: 'rename-doc', shaderId, docId: doc.id, name });
+        return;
+      }
+      case 'duplicate':
+        void this.mirror.send({ kind: 'duplicate-doc', shaderId, docId: doc.id });
+        return;
+      case 'delete':
+        if (await this.dialogs.confirmDelete(doc, this.explorer().consumers[doc.id] ?? [])) {
+          void this.mirror.send({ kind: 'delete-doc', shaderId, docId: doc.id });
+        }
+        return;
+      case 'enable':
+      case 'disable':
+        void this.mirror.send({
+          kind: 'set-doc-enabled',
+          shaderId,
+          docId: doc.id,
+          enabled: command === 'enable',
+        });
+        return;
+    }
+  }
+
+  protected onExplorerReorder(intent: ExplorerReorderIntent): void {
+    const shaderId = this.shader()?.id;
+    if (!shaderId) return;
+    void this.mirror.send({
+      kind: 'move-doc',
+      shaderId,
+      docId: intent.sourceDocId,
+      targetDocId: intent.targetDocId,
+      list: intent.list,
+    });
   }
 
   /** Saved by the main window, after every edit sent before it. */

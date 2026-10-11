@@ -11,6 +11,7 @@ import {
 import type { BottomPanelTab, InspectorTab } from '@shadergrove/shared/panel-prefs';
 import type { SatelliteKind } from '../../output-mode';
 import type { OutputLogEntry } from '../../ui/bottom-panel/output-log';
+import type { ExplorerTree, ExplorerViewMode } from '../../ui/file-explorer/contract';
 import type { InspectedShader, SystemSettings } from '../../ui/inspector/inspector-session';
 import { IDLE_PROFILER, type ProfilerState } from '../../ui/inspector/profiler-session';
 import type { EditorDocument } from '../state/document-state';
@@ -27,6 +28,15 @@ export const SESSION_CHANNEL = 'shader-studio.session';
 
 /** At most this many diagnostics or log entries cross the channel (the log itself keeps 500). */
 export const MAX_MIRRORED = 500;
+
+/** The editor's project explorer, as the main window shows it. */
+export interface ExplorerState {
+  /** The main window's tree, in its explorer view, with its markers (active, unsaved, errors). */
+  readonly tree: ExplorerTree;
+  readonly canAddBuffer: boolean;
+  /** For each buffer, the passes sampling it: deleting it says what it would unbind. */
+  readonly consumers: Readonly<Record<string, readonly string[]>>;
+}
 
 /** Everything a panel window may show of the main window's session. */
 export interface SessionState {
@@ -52,6 +62,7 @@ export interface SessionState {
   readonly dirty: boolean;
   readonly saving: boolean;
   readonly editorAppearance: EditorAppearance;
+  readonly explorer: ExplorerState;
 }
 
 export type SessionField = keyof SessionState;
@@ -77,6 +88,11 @@ export const EMPTY_SESSION: SessionState = {
   dirty: false,
   saving: false,
   editorAppearance: DEFAULT_EDITOR_APPEARANCE,
+  explorer: {
+    tree: { view: 'files', nodes: [], emptyReason: 'loading' },
+    canAddBuffer: false,
+    consumers: {},
+  },
 };
 
 export const SESSION_FIELDS = Object.keys(EMPTY_SESSION) as readonly SessionField[];
@@ -119,7 +135,37 @@ export type SessionCommand =
       readonly source: string;
     }
   | { readonly kind: 'select-doc'; readonly docId: string }
-  | { readonly kind: 'save' };
+  | { readonly kind: 'save' }
+  // The editor's explorer. Each names the shader it was asked in, like an edit.
+  | { readonly kind: 'explorer-view'; readonly view: ExplorerViewMode }
+  | { readonly kind: 'add-file'; readonly shaderId: string; readonly name: string }
+  | { readonly kind: 'add-buffer'; readonly shaderId: string }
+  | DocumentCommand;
+
+/** A change to one file or buffer of the shader, by id: ids survive a rename. */
+export type DocumentCommand =
+  | {
+      readonly kind: 'rename-doc';
+      readonly shaderId: string;
+      readonly docId: string;
+      readonly name: string;
+    }
+  | { readonly kind: 'duplicate-doc'; readonly shaderId: string; readonly docId: string }
+  | { readonly kind: 'delete-doc'; readonly shaderId: string; readonly docId: string }
+  | {
+      readonly kind: 'set-doc-enabled';
+      readonly shaderId: string;
+      readonly docId: string;
+      readonly enabled: boolean;
+    }
+  | {
+      /** Moves the document to where `targetDocId` is, within its own list. */
+      readonly kind: 'move-doc';
+      readonly shaderId: string;
+      readonly docId: string;
+      readonly targetDocId: string;
+      readonly list: 'buffer' | 'file';
+    };
 
 export type SessionCommandKind = SessionCommand['kind'];
 
@@ -135,6 +181,7 @@ export const REPLAYABLE_COMMANDS: ReadonlySet<SessionCommandKind> = new Set<Sess
   'set-system',
   'bottom-panel-tab',
   'inspector-tab',
+  'explorer-view',
 ]);
 
 /** Why the main window refused a command; a panel window says so. */
@@ -194,6 +241,7 @@ export function acceptPatch(patch: unknown): Partial<SessionState> {
     if (!Object.hasOwn(patch, field)) continue;
     const value = (patch as Record<string, unknown>)[field];
     if (!sameShape(EMPTY_SESSION[field], value, field)) continue;
+    if (field === 'explorer' && !isExplorerState(value)) continue;
     accepted[field] =
       field === 'entries'
         ? (value as OutputLogEntry[])
@@ -210,6 +258,19 @@ export function acceptPatch(patch: unknown): Partial<SessionState> {
           : value;
   }
   return accepted as Partial<SessionState>;
+}
+
+/** Enough of a tree for the explorer to render: anything else is not taken. */
+function isExplorerState(value: unknown): boolean {
+  const { tree, canAddBuffer, consumers } = value as Record<string, unknown>;
+  return (
+    !!tree &&
+    typeof tree === 'object' &&
+    Array.isArray((tree as { nodes?: unknown }).nodes) &&
+    typeof canAddBuffer === 'boolean' &&
+    !!consumers &&
+    typeof consumers === 'object'
+  );
 }
 
 /** Nullable fields take `null` or an object; the rest keep their empty value's type. */

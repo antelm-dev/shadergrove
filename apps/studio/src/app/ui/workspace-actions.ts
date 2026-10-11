@@ -22,6 +22,7 @@ import type { ConfirmDialogData } from './dialogs/confirm-dialog';
 import type { DeleteLinkedDialogData } from './dialogs/delete-linked-dialog';
 import type { HistoryDialogData } from './dialogs/history-dialog';
 import type { NewShaderDialogResult } from './dialogs/new-shader-dialog';
+import { DocumentDialogs, bufferConsumers } from './dialogs/document-dialogs';
 import { PresetDialogs } from './dialogs/preset-dialogs';
 import type { PromptDialogData, PromptDialogResult } from './dialogs/prompt-dialog';
 import type { UnsavedChoice } from './dialogs/unsaved-changes-dialog';
@@ -52,6 +53,7 @@ export class WorkspaceActions {
   private readonly i18n = inject(I18n);
   private readonly openDocs = inject(OpenDocuments);
   private readonly presetDialogs = inject(PresetDialogs);
+  private readonly documentDialogs = inject(DocumentDialogs);
   private readonly auth = inject(AuthService);
   private readonly sync = inject(DesktopSync);
   private readonly account = inject(DesktopAccount);
@@ -328,76 +330,26 @@ export class WorkspaceActions {
 
   async createFile(): Promise<void> {
     if (!this.store.draft()) return;
-
-    const name = await this.prompt({
-      title: this.i18n.t('dialog.newFile'),
-      label: this.i18n.t('dialog.fileName'),
-      value: 'untitled.glsl',
-      confirmText: this.i18n.t('action.create'),
-      hint: this.i18n.t('dialog.newFileHint'),
-    });
+    const name = await this.documentDialogs.askNewFileName();
     if (name) this.store.addSourceFile(name);
   }
 
   async renameDocument(doc: EditorDocument): Promise<void> {
-    const name = await this.prompt({
-      title: this.i18n.t(doc.kind === 'file' ? 'dialog.renameFile' : 'dialog.renamePass'),
-      label: this.i18n.t('dialog.name'),
-      value: doc.name,
-      confirmText: this.i18n.t('dialog.renameConfirm'),
-      hint: this.i18n.t(doc.kind === 'file' ? 'dialog.renameFileHint' : 'dialog.renamePassHint'),
-    });
-    if (!name || name === doc.name) return;
+    const name = await this.documentDialogs.askRename(doc);
+    if (!name) return;
 
     if (doc.kind === 'file') this.store.renameSourceFile(doc.id, name);
     else this.store.renamePassById(doc.id, name);
   }
 
-  /**
-   * Deleting a buffer is not the same size of action as deleting a file, and the
-   * confirmation says so: a file is text, but a buffer is something other passes
-   * may be *sampling*, and removing it silently unbinds every channel that named
-   * it. Naming those consumers is the difference between a confirmation and a
-   * formality.
-   */
   async deleteDocument(doc: EditorDocument): Promise<void> {
     const project = this.store.project();
     if (!project) return;
 
-    if (doc.kind === 'file') {
-      const confirmed = await this.confirm({
-        title: this.i18n.t('dialog.deleteFile'),
-        message: this.i18n.t('dialog.deleteFileMessage', { name: doc.name }),
-        confirmText: this.i18n.t('action.delete'),
-        destructive: true,
-      });
-      if (confirmed) this.store.removeSourceFile(doc.id);
-      return;
-    }
-
-    const consumers = project.passes
-      .filter(
-        (pass) =>
-          pass.id !== doc.id &&
-          pass.channels.some((binding) => binding.kind === 'buffer' && binding.passId === doc.id),
-      )
-      .map((pass) => pass.name);
-
-    const confirmed = await this.confirm({
-      title: this.i18n.t('dialog.deleteBuffer'),
-      message:
-        this.i18n.t('dialog.deleteBufferMessage', { name: doc.name }) +
-        (consumers.length === 0
-          ? ''
-          : consumers.length === 1
-            ? this.i18n.t('dialog.deleteBufferConsumersOne', { name: consumers[0] })
-            : this.i18n.t('dialog.deleteBufferConsumersMany', {
-                names: this.i18n.formatList(consumers),
-              })),
-      confirmText: this.i18n.t('action.delete'),
-      destructive: true,
-    });
-    if (confirmed) this.store.removeBufferPass(doc.id);
+    const consumers = doc.kind === 'file' ? [] : bufferConsumers(project, doc.id);
+    if (!(await this.documentDialogs.confirmDelete(doc, consumers))) return;
+    if (doc.kind === 'file') this.store.removeSourceFile(doc.id);
+    else this.store.removeBufferPass(doc.id);
   }
 
   // --- File explorer ------------------------------------------------------

@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { Title } from '@angular/platform-browser';
+import { By, Title } from '@angular/platform-browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_EDITOR_GROUP_ID, editorSurfaceId } from '@shadergrove/shared/surfaces';
@@ -19,8 +19,14 @@ import {
 } from '../../workspace/session-sync/session-protocol';
 import { FakeBroadcastChannel } from '../../workspace/testing/fake-broadcast-channel';
 import { textFingerprint } from '../../workspace/session-sync/session-protocol';
-import { FAKE_DOCUMENTS } from '../../workspace/testing/fake-session';
+import {
+  FAKE_DOCUMENTS,
+  FakeMainSession,
+  explorerProject,
+} from '../../workspace/testing/fake-session';
 import { forbidMainWindowOnly } from '../../workspace/testing/main-window-only';
+import { DocumentDialogs } from '../dialogs/document-dialogs';
+import { ExplorerPanel, buildExplorerTree } from '../file-explorer';
 import { EditorWindow } from './editor-window';
 
 const IMAGE = 'void main() {}';
@@ -34,6 +40,12 @@ describe('EditorWindow (the editor in its own window)', () => {
     returnSurface: vi.fn(async () => ({ status: 'returned', surfaceId: '' })),
     closeSurface: vi.fn(async () => ({ status: 'closed', surfaceId: '' })),
   };
+  const dialogs = {
+    askNewFileName: vi.fn(async (): Promise<string | undefined> => 'fresh.glsl'),
+    askRename: vi.fn(async (): Promise<string | undefined> => 'Blur'),
+    confirmDelete: vi.fn(async () => true),
+  };
+  let preferences: ReturnType<typeof signal<Record<string, unknown>>>;
   let main: FakeBroadcastChannel;
   let received: SessionMessage[];
   let fixture: ComponentFixture<EditorWindow>;
@@ -46,6 +58,11 @@ describe('EditorWindow (the editor in its own window)', () => {
     desktop.closeSurface.mockClear();
     desktop.minimize.mockClear();
     desktop.toggleMaximize.mockClear();
+    preferences = signal<Record<string, unknown>>({
+      ...speaking('en'),
+      fileExplorerOpen: false,
+      fileExplorerWidth: 240,
+    });
     main = new FakeBroadcastChannel(SESSION_CHANNEL);
     received = [];
     main.onmessage = ({ data }) => received.push(data as SessionMessage);
@@ -57,9 +74,14 @@ describe('EditorWindow (the editor in its own window)', () => {
         provideTestLanguages(),
         {
           provide: Preferences,
-          useValue: { value: signal(speaking('en')).asReadonly(), patch: () => undefined },
+          useValue: {
+            value: preferences.asReadonly(),
+            patch: (patch: Record<string, unknown>) =>
+              preferences.update((value) => ({ ...value, ...patch })),
+          },
         },
         { provide: DesktopPlatform, useValue: desktop },
+        { provide: DocumentDialogs, useValue: dialogs },
         { provide: MONACO_LOADER, useValue: async () => fakeMonaco },
         { provide: AppThemes, useValue: { attachMonaco: vi.fn() } },
         { provide: FontLoader, useValue: { load: async () => 'idle' } },
@@ -279,5 +301,105 @@ describe('EditorWindow (the editor in its own window)', () => {
     // Close hides the editor's window; the editor stays detached.
     expect(desktop.closeSurface).toHaveBeenCalledWith(editorSurfaceId(DEFAULT_EDITOR_GROUP_ID));
     expect(desktop.returnSurface).not.toHaveBeenCalled();
+  });
+
+  describe('the project explorer', () => {
+    const fake = new FakeMainSession();
+    fake.useProject(explorerProject());
+    const documents = fake.documents();
+    const explorer = {
+      tree: buildExplorerTree({
+        view: 'files',
+        project: explorerProject(),
+        documents,
+        activeDocId: 'image',
+        dirty: true,
+        compiling: new Set(),
+        errorCountFor: (docId) => (docId === 'buf-a' ? 2 : 0),
+        renderOrder: [],
+        canAddBuffer: true,
+      }),
+      canAddBuffer: true,
+      consumers: { 'buf-a': ['Buffer B'], 'buf-b': [] },
+    };
+
+    beforeEach(async () => {
+      dialogs.askNewFileName.mockClear();
+      dialogs.askRename.mockClear();
+      dialogs.confirmDelete.mockClear();
+      publish({ kind: 'state', patch: { documents, explorer } });
+      await settle();
+    });
+
+    const panel = () =>
+      fixture.debugElement.query(By.directive(ExplorerPanel))?.componentInstance as
+        | ExplorerPanel
+        | undefined;
+    const row = (id: string) =>
+      root().querySelector<HTMLElement>(`[role="treeitem"][data-node-id="${id}"]`);
+    const sent = () => commands().map((message) => message.command);
+
+    it("shows the main window's tree, with its markers, and opens what is clicked", async () => {
+      expect(panel()).toBeUndefined();
+      root().querySelector<HTMLButtonElement>('button.explorer-reopen')!.click();
+      await settle();
+
+      expect(row('buf-a')?.getAttribute('aria-label')).toContain('2');
+      expect(row('image')?.classList.contains('active')).toBe(true);
+      row('file-1')!.click();
+      await settle();
+      expect(sent().at(-1)).toEqual({ kind: 'select-doc', docId: 'file-1' });
+      expect(root().querySelector('[role="tab"].active .name')?.textContent).toBe('noise.glsl');
+    });
+
+    it('asks its questions here and sends only the answers, for the shader they were asked in', async () => {
+      preferences.update((value) => ({ ...value, fileExplorerOpen: true }));
+      await settle();
+      const explorerPanel = panel()!;
+
+      explorerPanel.command.emit({ command: 'rename', docId: 'buf-a' });
+      explorerPanel.command.emit({ command: 'delete', docId: 'buf-a' });
+      explorerPanel.command.emit({ command: 'duplicate', docId: 'file-1' });
+      explorerPanel.command.emit({ command: 'disable', docId: 'buf-b' });
+      explorerPanel.command.emit({ command: 'create-file' });
+      explorerPanel.command.emit({ command: 'create-buffer' });
+      explorerPanel.reorder.emit({ sourceDocId: 'buf-b', targetDocId: 'buf-a', list: 'buffer' });
+      explorerPanel.viewChange.emit('pipeline');
+      await settle();
+
+      expect(dialogs.askRename).toHaveBeenCalledWith(expect.objectContaining({ id: 'buf-a' }));
+      expect(dialogs.confirmDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'buf-a' }), [
+        'Buffer B',
+      ]);
+      const shaderId = 'waves';
+      expect(sent()).toEqual(
+        expect.arrayContaining([
+          { kind: 'rename-doc', shaderId, docId: 'buf-a', name: 'Blur' },
+          { kind: 'delete-doc', shaderId, docId: 'buf-a' },
+          { kind: 'duplicate-doc', shaderId, docId: 'file-1' },
+          { kind: 'set-doc-enabled', shaderId, docId: 'buf-b', enabled: false },
+          { kind: 'add-file', shaderId, name: 'fresh.glsl' },
+          { kind: 'add-buffer', shaderId },
+          { kind: 'move-doc', shaderId, docId: 'buf-b', targetDocId: 'buf-a', list: 'buffer' },
+          { kind: 'explorer-view', view: 'pipeline' },
+        ]),
+      );
+    });
+
+    it('sends nothing for a question the user cancelled', async () => {
+      preferences.update((value) => ({ ...value, fileExplorerOpen: true }));
+      await settle();
+      dialogs.askRename.mockResolvedValueOnce(undefined);
+      dialogs.confirmDelete.mockResolvedValueOnce(false);
+      dialogs.askNewFileName.mockResolvedValueOnce(undefined);
+      const before = sent().length;
+
+      panel()!.command.emit({ command: 'rename', docId: 'file-1' });
+      panel()!.command.emit({ command: 'delete', docId: 'file-1' });
+      panel()!.command.emit({ command: 'create-file' });
+      await settle();
+
+      expect(sent()).toHaveLength(before);
+    });
   });
 });
