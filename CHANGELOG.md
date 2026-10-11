@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.0](https://github.com/antelm-dev/shadergrove/compare/v2.12.0...v2.13.0) (2026-10-11)
+
+
+### Features
+
+* **studio:** detach the bottom panel, inspector and editor into native windows ([#247](https://github.com/antelm-dev/shadergrove/issues/247)) ([b1bb563](https://github.com/antelm-dev/shadergrove/commit/b1bb563b1d40a409c7e3fc9b69ca8e1164fa8de7))
+
 ## [2.12.0](https://github.com/antelm-dev/shadergrove/compare/v2.11.0...v2.12.0) (2026-10-11)
 
 
