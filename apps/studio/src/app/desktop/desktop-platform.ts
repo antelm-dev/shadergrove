@@ -212,6 +212,12 @@ export class DesktopPlatform {
     return window.electron.bridge.window.surfaceClose(surfaceId);
   }
 
+  /** Asks the main window to dock a satellite back; the main process then closes its window. */
+  returnSurface(surfaceId: string): Promise<NativeSurfaceResult> {
+    if (!this.available) return Promise.resolve({ status: 'rejected', reason: 'unavailable' });
+    return window.electron.bridge.window.surfaceReturn(surfaceId);
+  }
+
   onSurfaceChanged(listener: (event: NativeSurfaceChangedEvent) => void): () => void {
     return this.available
       ? window.electron.bridge.window.onSurfaceChanged(listener)

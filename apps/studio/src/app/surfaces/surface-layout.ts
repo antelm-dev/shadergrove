@@ -37,6 +37,7 @@ import {
 } from '@shadergrove/shared/surfaces';
 
 import { DesktopPlatform } from '../desktop/desktop-platform';
+import { BOTTOM_PANEL_PATH } from '../output-mode';
 import { Preferences } from '../prefs/preferences';
 import {
   SurfaceController,
@@ -50,8 +51,7 @@ export const PREVIEW_SURFACE_ID = WELL_KNOWN_SURFACE_IDS.preview;
 export const DEFAULT_EDITOR_SURFACE_ID = editorSurfaceId(DEFAULT_EDITOR_GROUP_ID);
 export const INSPECTOR_SURFACE_ID = WELL_KNOWN_SURFACE_IDS.inspector;
 export const BOTTOM_PANEL_SURFACE_ID = WELL_KNOWN_SURFACE_IDS.bottomPanel;
-/** The bottom panel's native window route: a bare app pathname, as `assertSafeSurfacePath` requires. */
-export const BOTTOM_PANEL_SURFACE_PATH = '/bottom-panel';
+export const BOTTOM_PANEL_SURFACE_PATH = BOTTOM_PANEL_PATH;
 
 @Injectable({ providedIn: 'root' })
 export class SurfaceLayoutService {
@@ -136,8 +136,10 @@ export class SurfaceLayoutService {
     });
     this.registry.ensure('inspector');
     // A native window never outlives the app, so a panel saved as detached docks back on launch.
+    // After a reload of this window the old one may still be open: close it rather than show two.
     if (isNativePlacement(this.registry.ensure('bottom-panel').placement)) {
       this.controller.returnToWorkspace(this.bottomPanelId);
+      void this.desktop.closeSurface(this.bottomPanelId).catch(() => undefined);
     }
     this.registry.repairEditorLayout();
   }

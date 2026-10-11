@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { isOutputWindow } from './output-mode';
+import { isBottomPanelWindow, isOutputWindow } from './output-mode';
 
 /**
  * The secondary Electron output window is detected by pathname, not by a
@@ -35,5 +35,33 @@ describe('isOutputWindow', () => {
 
     vi.stubGlobal('window', { location: { pathname: '/output-extra' } });
     expect(isOutputWindow()).toBe(false);
+  });
+});
+
+describe('isBottomPanelWindow', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('is true for /bottom-panel in the desktop app only', () => {
+    vi.stubGlobal('window', { electron: {}, location: { pathname: '/bottom-panel' } });
+    expect(isBottomPanelWindow()).toBe(true);
+
+    vi.stubGlobal('window', { electron: {}, location: { pathname: '/bottom-panel/' } });
+    expect(isBottomPanelWindow()).toBe(true);
+
+    // On the web the path is an unknown route that boots the workspace, as before.
+    vi.stubGlobal('window', { location: { pathname: '/bottom-panel' } });
+    expect(isBottomPanelWindow()).toBe(false);
+  });
+
+  it('is false for SSR and every other desktop route', () => {
+    vi.stubGlobal('window', undefined);
+    expect(isBottomPanelWindow()).toBe(false);
+
+    for (const pathname of ['/', '/output', '/bottom-panel-extra', '/shaders/bottom-panel']) {
+      vi.stubGlobal('window', { electron: {}, location: { pathname } });
+      expect(isBottomPanelWindow()).toBe(false);
+    }
   });
 });

@@ -486,14 +486,16 @@ describe('SurfaceLayoutService native bottom panel', () => {
     expect(desktop.closes).toEqual([id]);
   });
 
-  it('docks a panel saved as detached back on launch', async () => {
+  it('docks a panel saved as detached back on launch, closing a window a reload left open', async () => {
     await layout.detachBottomPanel();
     expect(savedPlacementHost()).toBe('native');
+    expect(desktop.closes).toEqual([]);
 
     layout.hydrateFromPreferences();
 
     expect(layout.bottomPanelNative()).toBe(false);
     expect(docked()).toBe('bottom');
+    expect(desktop.closes).toEqual([id]);
   });
 });
 
