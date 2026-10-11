@@ -59,6 +59,8 @@ describe('PluginsPage tabs and deep links', () => {
   const catalogue = signal<CatalogueState>({ status: 'idle' });
   const install = vi.fn();
   const installReviewedUpdate = vi.fn();
+  /** Holds every catalogue fetch until released; open by default. */
+  let fetched: Promise<void> = Promise.resolve();
 
   beforeEach(async () => {
     scrolled.length = 0;
@@ -67,6 +69,7 @@ describe('PluginsPage tabs and deep links', () => {
     catalogue.set({ status: 'ready', packages: [entry(FIRST), entry(SECOND)] });
     install.mockReset();
     installReviewedUpdate.mockReset();
+    fetched = Promise.resolve();
     // The test DOM has neither `CSS.escape` nor layout; ids here need no escaping.
     vi.stubGlobal('CSS', { escape: (value: string) => value });
     Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
@@ -75,7 +78,10 @@ describe('PluginsPage tabs and deep links', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
-        provideRouter([{ path: 'plugins', component: PluginsPage }]),
+        provideRouter([
+          { path: 'plugins', component: PluginsPage },
+          { path: '', children: [] },
+        ]),
         I18n,
         { provide: Preferences, useValue: { value: signal({ language: 'en' }).asReadonly() } },
         {
@@ -102,7 +108,10 @@ describe('PluginsPage tabs and deep links', () => {
           useValue: {
             state: catalogue,
             load: async () => undefined,
-            fetchPackage: async (item: CatalogueEntry) => new TextEncoder().encode(item.id),
+            fetchPackage: async (item: CatalogueEntry) => {
+              await fetched;
+              return new TextEncoder().encode(item.id);
+            },
           },
         },
         {
@@ -279,6 +288,21 @@ describe('PluginsPage tabs and deep links', () => {
       'Updated',
     );
   });
+
+  it('does not pull the user back when an install finishes after they left the page', async () => {
+    let release: () => void = () => undefined;
+    fetched = new Promise((done) => (release = done));
+    install.mockImplementation(async () => plugins.set([installed(FIRST)]));
+    const { harness } = await open('/plugins');
+    click(harness, `install-available-${FIRST}`);
+
+    await harness.navigateByUrl('/');
+    release();
+    await settle(harness);
+    await settle(harness);
+    expect(install).toHaveBeenCalledOnce();
+    expect(TestBed.inject(Router).url).toBe('/');
+  });
 });
 /**
  * A language pack in Plugins: its locale and native name, and a plain choice
@@ -381,6 +405,7 @@ describe('PluginsPage project importers', () => {
         provideZonelessChangeDetection(),
         provideRouter([
           { path: 'plugins', component: PluginsPage },
+          { path: 'explore', children: [] },
           { path: '', children: [] },
         ]),
         I18n,
@@ -465,5 +490,16 @@ describe('PluginsPage project importers', () => {
     button(harness)!.click();
     await new Promise((done) => setTimeout(done, 0));
     expect(TestBed.inject(Router).url).toBe('/');
+  });
+
+  it('does not go to the editor for a dialog that closes after the user left the page', async () => {
+    let finish: (result: unknown) => void = () => undefined;
+    openImport.mockReturnValueOnce(new Promise((done) => (finish = done)));
+    const harness = await show();
+    button(harness)!.click();
+    await harness.navigateByUrl('/explore');
+    finish({ imported: { name: 'Parity', warnings: [] }, toEditor: true });
+    await new Promise((done) => setTimeout(done, 0));
+    expect(TestBed.inject(Router).url).toBe('/explore');
   });
 });

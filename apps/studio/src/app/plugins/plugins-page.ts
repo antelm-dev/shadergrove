@@ -1,6 +1,7 @@
 import { NgTemplateOutlet, isPlatformBrowser } from '@angular/common';
 import {
   Component,
+  DestroyRef,
   ElementRef,
   afterNextRender,
   computed,
@@ -742,6 +743,12 @@ export class PluginsPage {
   private readonly router = inject(Router);
 
   private readonly route = inject(ActivatedRoute);
+  /**
+   * Left behind: an install or import that finishes after the user has gone
+   * elsewhere must not navigate — `relativeTo` would still point at `/plugins`
+   * and pull them back, over the entry they went to.
+   */
+  private gone = false;
   /** Followed, not read once: a link to another package or tab while this page is open reuses the page. */
   private readonly query = toSignal(this.route.queryParamMap, {
     initialValue: this.route.snapshot.queryParamMap,
@@ -813,6 +820,7 @@ export class PluginsPage {
       this.installations.profile();
       untracked(() => this.review.set(null));
     });
+    inject(DestroyRef).onDestroy(() => (this.gone = true));
     void this.catalogue.load();
     // The address says which tab is shown: an unknown or spelled-out default `tab`, or one the
     // linked package is not listed in, is tidied in place — never while a navigation (the
@@ -939,6 +947,7 @@ export class PluginsPage {
    * a new install (still off) on Installed, is no new place in the history.
    */
   private replaceQuery(queryParams: Params): void {
+    if (this.gone) return;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams,
@@ -972,7 +981,7 @@ export class PluginsPage {
       importer.id,
     );
     if (result?.toEditor) {
-      void this.router.navigateByUrl('/');
+      if (!this.gone) void this.router.navigateByUrl('/');
     } else if (result?.imported) {
       this.reportOutcome({
         status: 'imported',
