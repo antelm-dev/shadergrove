@@ -1,6 +1,7 @@
 import { NgTemplateOutlet, isPlatformBrowser } from '@angular/common';
 import {
   Component,
+  DestroyRef,
   ElementRef,
   afterNextRender,
   computed,
@@ -15,8 +16,8 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { map } from 'rxjs';
+import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
+import { ActivatedRoute, Router, RouterLink, type Params } from '@angular/router';
 
 import type { CustomEffect, ShaderControl, ShaderParams } from '@shadergrove/shared/model';
 import {
@@ -56,10 +57,13 @@ import { RecipeCard } from './tools/recipes-panel';
 
 type Message = { text: string; error: boolean; warnings?: readonly string[] };
 type AvailableState = 'install' | 'update' | 'installed';
+/** The page's two views, kept in the address as `?tab=` (Browse, the default, is never written). */
+type Tab = 'browse' | 'installed';
 
 /**
- * `/plugins`: the locally installed plugins, laid over the editor like
- * Explore so the open shader — the one effects are added to — stays where it is.
+ * `/plugins`: the official plugins to install (Browse) and the locally installed
+ * ones (Installed), laid over the editor like Explore so the open shader — the
+ * one effects are added to — stays where it is.
  *
  * Everything shown is built by the host from a package's manifest: its
  * identity, what it contributes, and for each importer or exporter a form made
@@ -75,6 +79,9 @@ type AvailableState = 'install' | 'update' | 'installed';
     MatButtonModule,
     MatIconModule,
     MatSlideToggleModule,
+    MatTabLink,
+    MatTabNav,
+    MatTabNavPanel,
     PluginToolsOutlet,
     RecipeCard,
     RouterLink,
@@ -90,76 +97,7 @@ type AvailableState = 'install' | 'update' | 'installed';
     </header>
 
     <main [attr.aria-busy]="installations.loading()">
-      <h2 class="section">{{ 'plugins.available' | translate }}</h2>
-      <p class="hint">{{ 'plugins.availableHint' | translate }}</p>
-      @switch (catalogue.state().status) {
-        @case ('ready') {
-          @if (available().length === 0) {
-            <p class="status">{{ 'plugins.availableEmpty' | translate }}</p>
-          }
-        }
-        @case ('error') {
-          <p class="error" role="alert" data-testid="catalogue-error">
-            {{ 'plugins.availableError' | translate: { message: catalogueError() } }}
-          </p>
-        }
-        @default {
-          <p class="status">{{ 'plugins.availableLoading' | translate }}</p>
-        }
-      }
-      @for (entry of available(); track entry.id) {
-        @let state = availableState(entry);
-        <article
-          class="plugin available"
-          [class.focused]="focus() === entry.id"
-          [attr.id]="'available-' + entry.id"
-          [attr.data-testid]="'available-' + entry.id"
-          [attr.aria-label]="entry.name"
-        >
-          <header>
-            <div class="identity">
-              <h3>{{ entry.name }}</h3>
-              <p>{{ entry.description }}</p>
-              <p class="muted">
-                {{ entry.id }} · {{ 'plugins.version' | translate: { version: entry.version } }} ·
-                {{ 'plugins.by' | translate: { publisher: entry.publisher } }} ·
-                {{ 'plugins.license' | translate: { license: entry.license } }}
-              </p>
-              <p class="muted">{{ 'plugins.official' | translate }}</p>
-            </div>
-            @switch (state) {
-              @case ('installed') {
-                <span class="muted" [attr.data-testid]="'available-installed-' + entry.id">
-                  {{ 'plugins.upToDate' | translate }}
-                </span>
-              }
-              @default {
-                <button
-                  matButton="tonal"
-                  type="button"
-                  [attr.data-testid]="'install-available-' + entry.id"
-                  [disabled]="busy() !== null || installations.loading()"
-                  (click)="installAvailable(entry)"
-                >
-                  {{
-                    state === 'update'
-                      ? ('plugins.updateTo' | translate: { version: entry.version })
-                      : ('plugins.installAvailable' | translate: { name: entry.name })
-                  }}
-                </button>
-              }
-            }
-          </header>
-          <ul class="contributions">
-            @for (contribution of entry.contributions; track contribution.id) {
-              <li>
-                <strong>{{ kindName(contribution.kind) }}</strong> — {{ contribution.name }}
-              </li>
-            }
-          </ul>
-        </article>
-      }
-
+      <!-- Shared by both tabs: one file install, one review, one message. -->
       <section class="install" [attr.aria-label]="'plugins.installFromFile' | translate">
         <button
           matButton="tonal"
@@ -268,227 +206,324 @@ type AvailableState = 'install' | 'update' | 'installed';
         </div>
       }
 
-      <h2 class="section">{{ 'plugins.installed' | translate }}</h2>
-      @if (installations.plugins().length === 0 && !installations.loading()) {
-        <p class="status">{{ 'plugins.empty' | translate }}</p>
-      }
-
-      @for (installed of installations.plugins(); track installed.id) {
-        <article
-          class="plugin"
-          [class.focused]="focus() === installed.id"
-          [attr.id]="'installed-' + installed.id"
-          [attr.data-testid]="'plugin-' + installed.id"
-          [attr.aria-label]="title(installed)"
-        >
-          <header>
-            <div class="identity">
-              <h3>{{ title(installed) }}</h3>
-              @if (installed.plugin; as plugin) {
-                <p class="muted">
-                  {{ plugin.manifest.id }} ·
-                  {{ 'plugins.version' | translate: { version: plugin.manifest.version } }} ·
-                  {{ 'plugins.by' | translate: { publisher: plugin.manifest.publisher } }} ·
-                  {{ 'plugins.license' | translate: { license: plugin.manifest.license } }}
-                </p>
+      <nav
+        mat-tab-nav-bar
+        mat-stretch-tabs="false"
+        [tabPanel]="panel"
+        [attr.aria-label]="'plugins.title' | translate"
+      >
+        @for (option of tabs; track option.id) {
+          <a
+            mat-tab-link
+            [routerLink]="[]"
+            [queryParams]="tabParams(option.id)"
+            queryParamsHandling="merge"
+            [active]="tab() === option.id"
+            [attr.data-testid]="'plugins-tab-' + option.id"
+          >
+            {{ option.label | translate }}
+          </a>
+        }
+      </nav>
+      <mat-tab-nav-panel #panel>
+        <!-- Only the selected tab is on the page: the other's controls cannot take focus. -->
+        @if (tab() === 'browse') {
+          <p class="hint">{{ 'plugins.availableHint' | translate }}</p>
+          @switch (catalogue.state().status) {
+            @case ('ready') {
+              @if (available().length === 0) {
+                <p class="status">{{ 'plugins.availableEmpty' | translate }}</p>
               }
-              @if (installed.problem) {
-                <p class="error" role="alert">{{ installed.problem }}</p>
-              }
-            </div>
-            <mat-slide-toggle
-              [attr.data-testid]="'plugin-enable-' + installed.id"
-              [attr.aria-label]="'plugins.enable' | translate: { name: title(installed) }"
-              [disabled]="installed.problem !== null || busy() !== null"
-              [ngModel]="installed.active"
-              (ngModelChange)="setEnabled(installed, $event)"
-            />
-            <button
-              matIconButton
-              type="button"
-              [attr.data-testid]="'plugin-remove-' + installed.id"
-              [attr.aria-label]="'plugins.remove' | translate: { name: title(installed) }"
-              [disabled]="busy() !== null"
-              (click)="remove(installed)"
-            >
-              <mat-icon>delete</mat-icon>
-            </button>
-          </header>
-
-          @if (installed.plugin; as plugin) {
-            <ul class="contributions">
-              @for (contribution of plugin.manifest.contributions; track contribution.id) {
-                @let key = installed.id + '/' + contribution.id;
-                <li class="contribution" [attr.data-testid]="'contribution-' + key">
-                  <div>
-                    @if (contribution.kind === 'theme') {
-                      @let palette = asTheme(contribution).ui;
-                      <span
-                        class="swatch"
-                        aria-hidden="true"
-                        [style.background]="palette.background"
-                      >
-                        <i [style.background]="palette['surface-container-high']"></i>
-                        <i [style.background]="palette.primary"></i>
-                        <i [style.background]="palette['on-surface']"></i>
-                      </span>
-                    }
-                    <strong>{{ kindLabel(contribution) }}</strong> — {{ contribution.name }}
-                    <span class="muted">{{ detail(contribution) }}</span>
-                  </div>
-                  @if (!installed.active) {
-                    <p class="muted">{{ 'plugins.enableToUse' | translate }}</p>
-                  } @else {
-                    @switch (contribution.kind) {
-                      @case ('effect') {
-                        <button
-                          matButton="tonal"
-                          type="button"
-                          [attr.data-testid]="'add-' + key"
-                          [disabled]="busy() !== null"
-                          (click)="addEffect(installed, asEffect(contribution))"
-                        >
-                          {{ 'plugins.addToShader' | translate }}
-                        </button>
-                      }
-                      @case ('importer') {
-                        @let importer = asImporter(contribution);
-                        <ng-container
-                          [ngTemplateOutlet]="paramsForm"
-                          [ngTemplateOutletContext]="{ key, controls: importer.params }"
-                        />
-                        <button
-                          matButton="tonal"
-                          type="button"
-                          [attr.data-testid]="'import-' + key"
-                          [disabled]="busy() !== null"
-                          (click)="importInput.click()"
-                        >
-                          {{ 'plugins.chooseFile' | translate }}
-                        </button>
-                        <input
-                          #importInput
-                          hidden
-                          type="file"
-                          [attr.data-testid]="'import-file-' + key"
-                          [accept]="accept(importer)"
-                          (change)="runImporter(installed, importer, importInput)"
-                        />
-                      }
-                      @case ('theme') {
-                        @let ref = themeRef(installed, contribution);
-                        @if (themes.isPluginSelected(ref)) {
-                          <p class="muted" [attr.data-testid]="'theme-in-use-' + key">
-                            {{ 'plugins.themeInUse' | translate }}
-                          </p>
-                        } @else {
-                          <button
-                            matButton="tonal"
-                            type="button"
-                            [attr.data-testid]="'use-theme-' + key"
-                            (click)="themes.selectPlugin(ref)"
-                          >
-                            {{ 'plugins.useTheme' | translate }}
-                          </button>
-                        }
-                      }
-                      @case ('language') {
-                        <!-- Data like a theme: choosing it is all there is to do with it. -->
-                        @let ref = themeRef(installed, contribution);
-                        @if (i18n.isSelected(ref)) {
-                          <p class="muted" [attr.data-testid]="'language-in-use-' + key">
-                            {{ 'plugins.languageInUse' | translate }}
-                          </p>
-                        } @else {
-                          <button
-                            matButton="tonal"
-                            type="button"
-                            [attr.data-testid]="'use-language-' + key"
-                            (click)="i18n.select(ref)"
-                          >
-                            {{ 'plugins.useLanguage' | translate }}
-                          </button>
-                        }
-                      }
-                      @case ('projectImporter') {
-                        @let importer = asProjectImporter(contribution);
-                        @if (importer.provider && !providerOf(importer)) {
-                          <p class="muted">{{ 'plugins.noAdapter' | translate }}</p>
-                        } @else {
-                          <!-- The same dialog the editor's import commands open. -->
-                          <button
-                            matButton="filled"
-                            type="button"
-                            [attr.data-testid]="'open-import-' + key"
-                            [disabled]="busy() !== null || projects.running() !== null"
-                            (click)="openImport(installed, importer)"
-                          >
-                            {{ 'action.import' | translate }}
-                          </button>
-                        }
-                      }
-                      @case ('projectTemplate') {
-                        <app-recipe-card
-                          [packageId]="installed.id"
-                          [contributionId]="contribution.id"
-                        />
-                      }
-                      @case ('projectExporter') {
-                        @let exporter = asProjectExporter(contribution);
-                        @if (!runtimeOf(exporter)) {
-                          <p class="muted">{{ 'plugins.noAdapter' | translate }}</p>
-                        } @else {
-                          <p class="muted">{{ 'plugins.exportHint' | translate }}</p>
-                          <ng-container
-                            [ngTemplateOutlet]="runControls"
-                            [ngTemplateOutletContext]="{ key, label: 'plugins.runExport' }"
-                          />
-                        }
-                      }
-                      @case ('exporter') {
-                        @let exporter = asExporter(contribution);
-                        @if (customEffects().length === 0) {
-                          <p class="muted">{{ 'plugins.noCustomEffects' | translate }}</p>
-                        } @else {
-                          <label class="field">
-                            <span>{{ 'plugins.exportEffect' | translate }}</span>
-                            <select
-                              [attr.data-testid]="'export-effect-' + key"
-                              [ngModel]="chosenEffect(key)"
-                              (ngModelChange)="chooseEffect(key, $event)"
-                            >
-                              @for (effect of customEffects(); track effect.instanceId) {
-                                <option [value]="effect.instanceId">
-                                  {{ effect.definition.name }}
-                                </option>
-                              }
-                            </select>
-                          </label>
-                          <ng-container
-                            [ngTemplateOutlet]="paramsForm"
-                            [ngTemplateOutletContext]="{ key, controls: exporter.params }"
-                          />
-                          <button
-                            matButton="tonal"
-                            type="button"
-                            [attr.data-testid]="'export-' + key"
-                            [disabled]="busy() !== null"
-                            (click)="runExporter(installed, exporter, key)"
-                          >
-                            {{ 'plugins.export' | translate }}
-                          </button>
-                        }
-                      }
-                    }
-                  }
-                </li>
-              }
-            </ul>
-            <!-- The package's tools: host panels drawn by their registered adapters. -->
-            <app-plugin-tools-outlet [packageId]="installed.id" />
+            }
+            @case ('error') {
+              <p class="error" role="alert" data-testid="catalogue-error">
+                {{ 'plugins.availableError' | translate: { message: catalogueError() } }}
+              </p>
+            }
+            @default {
+              <p class="status">{{ 'plugins.availableLoading' | translate }}</p>
+            }
           }
-        </article>
-      }
+          @for (entry of available(); track entry.id) {
+            @let state = availableState(entry);
+            <article
+              class="plugin available"
+              [class.focused]="focused() === entry.id"
+              [attr.id]="'available-' + entry.id"
+              [attr.data-testid]="'available-' + entry.id"
+              [attr.aria-label]="entry.name"
+            >
+              <header>
+                <div class="identity">
+                  <h3>{{ entry.name }}</h3>
+                  <p>{{ entry.description }}</p>
+                  <p class="muted">
+                    {{ entry.id }} ·
+                    {{ 'plugins.version' | translate: { version: entry.version } }} ·
+                    {{ 'plugins.by' | translate: { publisher: entry.publisher } }} ·
+                    {{ 'plugins.license' | translate: { license: entry.license } }}
+                  </p>
+                  <p class="muted">{{ 'plugins.official' | translate }}</p>
+                </div>
+                @switch (state) {
+                  @case ('installed') {
+                    <span class="muted" [attr.data-testid]="'available-installed-' + entry.id">
+                      {{ 'plugins.upToDate' | translate }}
+                    </span>
+                  }
+                  @default {
+                    <button
+                      matButton="tonal"
+                      type="button"
+                      [attr.data-testid]="'install-available-' + entry.id"
+                      [disabled]="busy() !== null || installations.loading()"
+                      (click)="installAvailable(entry)"
+                    >
+                      {{
+                        state === 'update'
+                          ? ('plugins.updateTo' | translate: { version: entry.version })
+                          : ('plugins.installAvailable' | translate: { name: entry.name })
+                      }}
+                    </button>
+                  }
+                }
+              </header>
+              <ul class="contributions">
+                @for (contribution of entry.contributions; track contribution.id) {
+                  <li>
+                    <strong>{{ kindName(contribution.kind) }}</strong> — {{ contribution.name }}
+                  </li>
+                }
+              </ul>
+            </article>
+          }
+        } @else {
+          @if (installations.plugins().length === 0) {
+            <p class="status">
+              {{
+                (installations.loading() ? 'plugins.installedLoading' : 'plugins.empty') | translate
+              }}
+            </p>
+          }
+
+          @for (installed of installations.plugins(); track installed.id) {
+            <article
+              class="plugin"
+              [class.focused]="focused() === installed.id"
+              [attr.id]="'installed-' + installed.id"
+              [attr.data-testid]="'plugin-' + installed.id"
+              [attr.aria-label]="title(installed)"
+            >
+              <header>
+                <div class="identity">
+                  <h3>{{ title(installed) }}</h3>
+                  @if (installed.plugin; as plugin) {
+                    <p class="muted">
+                      {{ plugin.manifest.id }} ·
+                      {{ 'plugins.version' | translate: { version: plugin.manifest.version } }} ·
+                      {{ 'plugins.by' | translate: { publisher: plugin.manifest.publisher } }} ·
+                      {{ 'plugins.license' | translate: { license: plugin.manifest.license } }}
+                    </p>
+                  }
+                  @if (installed.problem) {
+                    <p class="error" role="alert">{{ installed.problem }}</p>
+                  }
+                </div>
+                <mat-slide-toggle
+                  [attr.data-testid]="'plugin-enable-' + installed.id"
+                  [attr.aria-label]="'plugins.enable' | translate: { name: title(installed) }"
+                  [disabled]="installed.problem !== null || busy() !== null"
+                  [ngModel]="installed.active"
+                  (ngModelChange)="setEnabled(installed, $event)"
+                />
+                <button
+                  matIconButton
+                  type="button"
+                  [attr.data-testid]="'plugin-remove-' + installed.id"
+                  [attr.aria-label]="'plugins.remove' | translate: { name: title(installed) }"
+                  [disabled]="busy() !== null"
+                  (click)="remove(installed)"
+                >
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </header>
+
+              @if (installed.plugin; as plugin) {
+                <ul class="contributions">
+                  @for (contribution of plugin.manifest.contributions; track contribution.id) {
+                    @let key = installed.id + '/' + contribution.id;
+                    <li class="contribution" [attr.data-testid]="'contribution-' + key">
+                      <div>
+                        @if (contribution.kind === 'theme') {
+                          @let palette = asTheme(contribution).ui;
+                          <span
+                            class="swatch"
+                            aria-hidden="true"
+                            [style.background]="palette.background"
+                          >
+                            <i [style.background]="palette['surface-container-high']"></i>
+                            <i [style.background]="palette.primary"></i>
+                            <i [style.background]="palette['on-surface']"></i>
+                          </span>
+                        }
+                        <strong>{{ kindLabel(contribution) }}</strong> — {{ contribution.name }}
+                        <span class="muted">{{ detail(contribution) }}</span>
+                      </div>
+                      @if (!installed.active) {
+                        <p class="muted">{{ 'plugins.enableToUse' | translate }}</p>
+                      } @else {
+                        @switch (contribution.kind) {
+                          @case ('effect') {
+                            <button
+                              matButton="tonal"
+                              type="button"
+                              [attr.data-testid]="'add-' + key"
+                              [disabled]="busy() !== null"
+                              (click)="addEffect(installed, asEffect(contribution))"
+                            >
+                              {{ 'plugins.addToShader' | translate }}
+                            </button>
+                          }
+                          @case ('importer') {
+                            @let importer = asImporter(contribution);
+                            <ng-container
+                              [ngTemplateOutlet]="paramsForm"
+                              [ngTemplateOutletContext]="{ key, controls: importer.params }"
+                            />
+                            <button
+                              matButton="tonal"
+                              type="button"
+                              [attr.data-testid]="'import-' + key"
+                              [disabled]="busy() !== null"
+                              (click)="importInput.click()"
+                            >
+                              {{ 'plugins.chooseFile' | translate }}
+                            </button>
+                            <input
+                              #importInput
+                              hidden
+                              type="file"
+                              [attr.data-testid]="'import-file-' + key"
+                              [accept]="accept(importer)"
+                              (change)="runImporter(installed, importer, importInput)"
+                            />
+                          }
+                          @case ('theme') {
+                            @let ref = themeRef(installed, contribution);
+                            @if (themes.isPluginSelected(ref)) {
+                              <p class="muted" [attr.data-testid]="'theme-in-use-' + key">
+                                {{ 'plugins.themeInUse' | translate }}
+                              </p>
+                            } @else {
+                              <button
+                                matButton="tonal"
+                                type="button"
+                                [attr.data-testid]="'use-theme-' + key"
+                                (click)="themes.selectPlugin(ref)"
+                              >
+                                {{ 'plugins.useTheme' | translate }}
+                              </button>
+                            }
+                          }
+                          @case ('language') {
+                            <!-- Data like a theme: choosing it is all there is to do with it. -->
+                            @let ref = themeRef(installed, contribution);
+                            @if (i18n.isSelected(ref)) {
+                              <p class="muted" [attr.data-testid]="'language-in-use-' + key">
+                                {{ 'plugins.languageInUse' | translate }}
+                              </p>
+                            } @else {
+                              <button
+                                matButton="tonal"
+                                type="button"
+                                [attr.data-testid]="'use-language-' + key"
+                                (click)="i18n.select(ref)"
+                              >
+                                {{ 'plugins.useLanguage' | translate }}
+                              </button>
+                            }
+                          }
+                          @case ('projectImporter') {
+                            @let importer = asProjectImporter(contribution);
+                            @if (importer.provider && !providerOf(importer)) {
+                              <p class="muted">{{ 'plugins.noAdapter' | translate }}</p>
+                            } @else {
+                              <!-- The same dialog the editor's import commands open. -->
+                              <button
+                                matButton="filled"
+                                type="button"
+                                [attr.data-testid]="'open-import-' + key"
+                                [disabled]="busy() !== null || projects.running() !== null"
+                                (click)="openImport(installed, importer)"
+                              >
+                                {{ 'action.import' | translate }}
+                              </button>
+                            }
+                          }
+                          @case ('projectTemplate') {
+                            <app-recipe-card
+                              [packageId]="installed.id"
+                              [contributionId]="contribution.id"
+                            />
+                          }
+                          @case ('projectExporter') {
+                            @let exporter = asProjectExporter(contribution);
+                            @if (!runtimeOf(exporter)) {
+                              <p class="muted">{{ 'plugins.noAdapter' | translate }}</p>
+                            } @else {
+                              <p class="muted">{{ 'plugins.exportHint' | translate }}</p>
+                              <ng-container
+                                [ngTemplateOutlet]="runControls"
+                                [ngTemplateOutletContext]="{ key, label: 'plugins.runExport' }"
+                              />
+                            }
+                          }
+                          @case ('exporter') {
+                            @let exporter = asExporter(contribution);
+                            @if (customEffects().length === 0) {
+                              <p class="muted">{{ 'plugins.noCustomEffects' | translate }}</p>
+                            } @else {
+                              <label class="field">
+                                <span>{{ 'plugins.exportEffect' | translate }}</span>
+                                <select
+                                  [attr.data-testid]="'export-effect-' + key"
+                                  [ngModel]="chosenEffect(key)"
+                                  (ngModelChange)="chooseEffect(key, $event)"
+                                >
+                                  @for (effect of customEffects(); track effect.instanceId) {
+                                    <option [value]="effect.instanceId">
+                                      {{ effect.definition.name }}
+                                    </option>
+                                  }
+                                </select>
+                              </label>
+                              <ng-container
+                                [ngTemplateOutlet]="paramsForm"
+                                [ngTemplateOutletContext]="{ key, controls: exporter.params }"
+                              />
+                              <button
+                                matButton="tonal"
+                                type="button"
+                                [attr.data-testid]="'export-' + key"
+                                [disabled]="busy() !== null"
+                                (click)="runExporter(installed, exporter, key)"
+                              >
+                                {{ 'plugins.export' | translate }}
+                              </button>
+                            }
+                          }
+                        }
+                      }
+                    </li>
+                  }
+                </ul>
+                <!-- The package's tools: host panels drawn by their registered adapters. -->
+                <app-plugin-tools-outlet [packageId]="installed.id" />
+              }
+            </article>
+          }
+        }
+      </mat-tab-nav-panel>
     </main>
 
     <!-- Run, progress and cancel for one project contribution. -->
@@ -614,9 +649,8 @@ type AvailableState = 'install' | 'update' | 'installed';
       margin: 4px 0;
     }
 
-    .section {
-      margin: 24px 0 12px;
-      font: var(--mat-sys-title-large);
+    nav[mat-tab-nav-bar] {
+      margin-bottom: 16px;
     }
 
     .contributions {
@@ -722,14 +756,51 @@ export class PluginsPage {
 
   private readonly route = inject(ActivatedRoute);
   /**
-   * The package a link asked to show (`/plugins?use=<id>`), highlighted and
-   * scrolled to. Followed, not read once: a link to another package while this
-   * page is open reuses the page.
+   * Left behind: an install or import that finishes after the user has gone
+   * elsewhere must not navigate — `relativeTo` would still point at `/plugins`
+   * and pull them back, over the entry they went to.
    */
-  protected readonly focus = toSignal(
-    this.route.queryParamMap.pipe(map((params) => params.get('use'))),
-    { initialValue: this.route.snapshot.queryParamMap.get('use') },
+  private gone = false;
+  /** Followed, not read once: a link to another package or tab while this page is open reuses the page. */
+  private readonly query = toSignal(this.route.queryParamMap, {
+    initialValue: this.route.snapshot.queryParamMap,
+  });
+  /** The package a link asked to show (`/plugins?use=<id>`), highlighted and scrolled to. */
+  private readonly focus = computed(() => this.query().get('use'));
+  /**
+   * Whether both lists are complete — the profile's installs, defaults seeded
+   * included, and the catalogue. Until then a package missing from them may
+   * yet appear, so nothing is decided from its absence. (A reload after a
+   * change keeps the list it replaces, so it does not unsettle anything.)
+   */
+  private readonly settled = computed(
+    () =>
+      this.installations.defaultsSettled() &&
+      (this.catalogue.state().status === 'ready' || this.catalogue.state().status === 'error'),
   );
+  /** Where the linked package is listed: Installed first, as the place to use it. */
+  private readonly useTab = computed<Tab | null>(() => {
+    const id = this.focus();
+    if (!id) return null;
+    if (this.installations.plugins().some((installed) => installed.id === id)) return 'installed';
+    return this.available().some((entry) => entry.id === id) ? 'browse' : null;
+  });
+  /** The tab shown: the linked package's, once known, otherwise the one asked for. */
+  protected readonly tab = computed<Tab>(
+    () =>
+      (this.settled() && this.useTab()) ||
+      (this.query().get('tab') === 'installed' ? 'installed' : 'browse'),
+  );
+  protected readonly focused = computed(() => (this.settled() ? this.focus() : null));
+  /** The linked package's card on the tab shown, scrolled to once it is on the page. */
+  private readonly target = computed(() => {
+    const id = this.focused();
+    return id && `${this.tab() === 'installed' ? 'installed' : 'available'}-${id}`;
+  });
+  protected readonly tabs = [
+    { id: 'browse', label: 'plugins.browse' },
+    { id: 'installed', label: 'plugins.installed' },
+  ] as const;
   protected readonly available = computed(() => {
     const state = this.catalogue.state();
     return state.status === 'ready' ? state.packages : [];
@@ -761,16 +832,26 @@ export class PluginsPage {
       this.installations.profile();
       untracked(() => this.review.set(null));
     });
+    inject(DestroyRef).onDestroy(() => (this.gone = true));
     void this.catalogue.load();
+    // The address says which tab is shown: an unknown or spelled-out default `tab`, or one the
+    // linked package is not listed in, is tidied in place — never while a navigation (the
+    // user's, or this one) is under way, so it neither loops nor overrides leaving the page.
+    effect(() => {
+      const wanted = this.tab() === 'browse' ? null : this.tab();
+      if (this.query().get('tab') === wanted || this.router.currentNavigation()) return;
+      if (!isPlatformBrowser(this.platform)) return;
+      untracked(() => this.replaceQuery({ tab: wanted }));
+    });
     // Scroll to the package a link asked for, once per link, as soon as its card is on the page.
     afterNextRender(() => this.scrollToFocus());
     effect(() => {
       this.installations.plugins();
       this.available();
-      const focus = this.focus();
-      if (!focus) this.scrolledTo = null;
+      const target = this.target();
+      if (!target) this.scrolledTo = null;
       // Only in the browser: a server render has no page to scroll (nor `CSS`).
-      if (focus && this.scrolledTo !== focus && isPlatformBrowser(this.platform)) {
+      if (target && this.scrolledTo !== target && isPlatformBrowser(this.platform)) {
         untracked(() => setTimeout(() => this.scrollToFocus()));
       }
     });
@@ -810,6 +891,8 @@ export class PluginsPage {
       await this.installations.install(review);
       this.review.set(null);
       this.say('plugins.installedNotice', { name: review.plugin.manifest.name });
+      // A file is not a Browse entry: whether new or a replacement, it is switched on from Installed.
+      this.replaceQuery({ tab: 'installed', use: review.plugin.manifest.id });
     });
   }
 
@@ -858,7 +941,30 @@ export class PluginsPage {
       } else {
         await this.installations.install(review);
         this.say('plugins.installedNotice', { name: entry.name });
+        this.replaceQuery({ tab: 'installed', use: entry.id });
       }
+    });
+  }
+
+  /**
+   * The link to a tab keeps the rest of the address, and the linked package
+   * only when it is listed there: otherwise it would pull the page straight back.
+   */
+  protected tabParams(tab: Tab): Params {
+    return { tab: tab === 'browse' ? null : tab, use: this.useTab() === tab ? this.focus() : null };
+  }
+
+  /**
+   * Changes the address in place, the rest of it kept: tidying it, or showing
+   * a new install (still off) on Installed, is no new place in the history.
+   */
+  private replaceQuery(queryParams: Params): void {
+    if (this.gone) return;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams,
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
     });
   }
 
@@ -887,7 +993,7 @@ export class PluginsPage {
       importer.id,
     );
     if (result?.toEditor) {
-      void this.router.navigateByUrl('/');
+      if (!this.gone) void this.router.navigateByUrl('/');
     } else if (result?.imported) {
       this.reportOutcome({
         status: 'imported',
@@ -936,18 +1042,18 @@ export class PluginsPage {
     }
   }
 
-  /** The package last scrolled to: each new link scrolls once. */
+  /** The card last scrolled to: each new link, or its package moving tab, scrolls once. */
   private scrolledTo: string | null = null;
   private readonly platform = inject(PLATFORM_ID);
 
   private scrollToFocus(): void {
-    const id = this.focus();
-    if (!id || this.scrolledTo === id) return;
-    const element =
-      this.host.nativeElement.querySelector<HTMLElement>(`[id="installed-${CSS.escape(id)}"]`) ??
-      this.host.nativeElement.querySelector<HTMLElement>(`[id="available-${CSS.escape(id)}"]`);
+    const target = this.target();
+    if (!target || this.scrolledTo === target) return;
+    const element = this.host.nativeElement.querySelector<HTMLElement>(
+      `[id="${CSS.escape(target)}"]`,
+    );
     if (!element) return;
-    this.scrolledTo = id;
+    this.scrolledTo = target;
     element.scrollIntoView?.({ block: 'center' });
   }
 
