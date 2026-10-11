@@ -10,14 +10,20 @@ import type { SessionSnapshot } from './snapshot-model';
 export const SNAPSHOT_CAP = 24;
 export const SNAPSHOT_THUMBNAIL = { width: 240, height: 135 } as const;
 export const SNAPSHOT_LABEL_MAX = 80;
+/**
+ * Across every shader: frames are full drawing-buffer PNGs (5–20 MB at 4K), so
+ * the per-shader cap alone would let a session that visits many shaders grow
+ * without bound.
+ */
+export const SNAPSHOT_BYTES_BUDGET = 256 * 1024 * 1024;
 
 /**
  * The session's snapshot strip, per shader, newest first.
  *
  * Memory only — nothing here survives a reload. What it does hold is bounded:
- * a cap per shader, every thumbnail URL revoked the moment its snapshot is
- * dropped (removed, evicted, its shader deleted, the library closed), and all
- * of them when the app is torn down.
+ * a cap per shader, a byte budget across all of them, and every thumbnail URL
+ * revoked the moment its snapshot is dropped (removed, evicted, its shader
+ * deleted, the library closed), and all of them when the app is torn down.
  */
 @Injectable({ providedIn: 'root' })
 export class SessionSnapshots {
@@ -26,6 +32,8 @@ export class SessionSnapshots {
 
   private readonly snapshots = signal<ReadonlyMap<string, readonly SessionSnapshot[]>>(new Map());
   private destroyed = false;
+  /** Encoded thumbnail sizes by object URL; a URL standing in for the frame itself adds nothing. */
+  private readonly thumbnailBytes = new Map<string, number>();
 
   /** Every shader's snapshots, newest first. */
   readonly byShader = this.snapshots.asReadonly();
@@ -45,7 +53,8 @@ export class SessionSnapshots {
 
     inject(DestroyRef).onDestroy(() => {
       this.destroyed = true;
-      for (const list of this.snapshots().values()) list.forEach(revoke);
+      for (const list of this.snapshots().values())
+        list.forEach((snapshot) => this.release(snapshot));
       this.snapshots.set(new Map());
     });
   }
@@ -79,6 +88,8 @@ export class SessionSnapshots {
     if (this.destroyed || this.state.selectedId() !== record.id) return null;
 
     const name = normaliseLabel(label);
+    const thumbnailUrl = URL.createObjectURL(thumbnail ?? frame);
+    if (thumbnail) this.thumbnailBytes.set(thumbnailUrl, thumbnail.size);
     const snapshot: SessionSnapshot = Object.freeze({
       id: newId('snapshot'),
       shaderId: record.id,
@@ -89,14 +100,17 @@ export class SessionSnapshots {
       channels: deepFreeze(held.channels),
       frame,
       // A frame that could not be scaled still gets a picture: the full PNG.
-      thumbnailUrl: URL.createObjectURL(thumbnail ?? frame),
+      thumbnailUrl,
       ...(name ? { label: name } : {}),
     });
 
-    const kept = [snapshot, ...this.forShader(record.id)];
+    const map = new Map(this.snapshots());
+    const kept = [snapshot, ...(map.get(record.id) ?? [])];
     const evicted = evict(kept);
-    this.write(record.id, kept);
-    evicted.forEach(revoke);
+    map.set(record.id, kept);
+    evicted.push(...this.fitBudget(map, snapshot));
+    this.snapshots.set(map);
+    evicted.forEach((dropped) => this.release(dropped));
     return snapshot;
   }
 
@@ -108,7 +122,7 @@ export class SessionSnapshots {
         shaderId,
         list.filter((snapshot) => snapshot !== target),
       );
-      revoke(target);
+      this.release(target);
       return;
     }
   }
@@ -136,7 +150,54 @@ export class SessionSnapshots {
       next.delete(shaderId);
       return next;
     });
-    list.forEach(revoke);
+    list.forEach((snapshot) => this.release(snapshot));
+  }
+
+  /**
+   * Bring `map` under the byte budget in place, returning what was removed:
+   * oldest unlabelled snapshots of other shaders first, then of `taken`'s
+   * shader, then the oldest labelled ones. `taken` itself is never evicted.
+   */
+  private fitBudget(
+    map: Map<string, readonly SessionSnapshot[]>,
+    taken: SessionSnapshot,
+  ): SessionSnapshot[] {
+    // Lists are newest first; reversed, a stable sort keeps the older of two same-millisecond snapshots first.
+    const all = [...map.values()].flatMap((list) => [...list].reverse());
+    let total = all.reduce((sum, snapshot) => sum + this.bytes(snapshot), 0);
+    if (total <= SNAPSHOT_BYTES_BUDGET) return [];
+
+    const older = all
+      .filter((snapshot) => snapshot !== taken)
+      .sort((a, b) => a.createdAt - b.createdAt);
+    const unlabelled = older.filter((snapshot) => snapshot.label === undefined);
+    const order = [
+      ...unlabelled.filter((snapshot) => snapshot.shaderId !== taken.shaderId),
+      ...unlabelled.filter((snapshot) => snapshot.shaderId === taken.shaderId),
+      ...older.filter((snapshot) => snapshot.label !== undefined),
+    ];
+
+    const evicted = new Set<SessionSnapshot>();
+    for (const victim of order) {
+      if (total <= SNAPSHOT_BYTES_BUDGET) break;
+      total -= this.bytes(victim);
+      evicted.add(victim);
+    }
+    for (const [shaderId, list] of map) {
+      const rest = list.filter((snapshot) => !evicted.has(snapshot));
+      if (rest.length > 0) map.set(shaderId, rest);
+      else map.delete(shaderId);
+    }
+    return [...evicted];
+  }
+
+  private bytes(snapshot: SessionSnapshot): number {
+    return snapshot.frame.size + (this.thumbnailBytes.get(snapshot.thumbnailUrl) ?? 0);
+  }
+
+  private release(snapshot: SessionSnapshot): void {
+    URL.revokeObjectURL(snapshot.thumbnailUrl);
+    this.thumbnailBytes.delete(snapshot.thumbnailUrl);
   }
 
   private write(shaderId: string, list: readonly SessionSnapshot[]): void {
@@ -168,10 +229,6 @@ function evict(list: SessionSnapshot[]): SessionSnapshot[] {
 function normaliseLabel(text: string | undefined): string | undefined {
   const trimmed = text?.trim().slice(0, SNAPSHOT_LABEL_MAX);
   return trimmed ? trimmed : undefined;
-}
-
-function revoke(snapshot: SessionSnapshot): void {
-  URL.revokeObjectURL(snapshot.thumbnailUrl);
 }
 
 function deepFreeze<T>(value: T): T {

@@ -14,7 +14,12 @@ import { migrateLegacyProject } from '@shadergrove/shared/project';
 import { RendererHandle } from '../../rendering/renderer-handle';
 import { CompilationService } from '../compilation.service';
 import { DocumentState } from '../state/document-state';
-import { SNAPSHOT_CAP, SNAPSHOT_LABEL_MAX, SessionSnapshots } from './session-snapshots';
+import {
+  SNAPSHOT_BYTES_BUDGET,
+  SNAPSHOT_CAP,
+  SNAPSHOT_LABEL_MAX,
+  SessionSnapshots,
+} from './session-snapshots';
 
 const CONTROLS: ShaderControl[] = [{ key: 'speed', type: 'number', default: 1, min: 0, max: 10 }];
 
@@ -303,6 +308,95 @@ describe('SessionSnapshots', () => {
       TestBed.resetTestingModule();
 
       expect(revoked.sort()).toEqual([a?.thumbnailUrl, b?.thumbnailUrl].sort());
+    });
+  });
+
+  describe('byte budget', () => {
+    const MB = 1024 * 1024;
+    // Only the size matters to the budget; the stubbed bitmap decoder ignores the bytes.
+    const bigFrame = (size: number) => ({ size, type: 'image/png' }) as Blob;
+
+    function open(id: string): void {
+      const record = makeRecord(id);
+      state.adopt(record, structuredClone(record.project));
+    }
+
+    beforeEach(() => {
+      state.shaders.set([summary('waves'), summary('other')]);
+      frame = bigFrame(100 * MB);
+    });
+
+    it('evicts other shaders first, then the open one, then labelled ones, revoking each', async () => {
+      const wavesOld = await snapshots.capture();
+      const wavesKept = await snapshots.capture('kept');
+      open('other');
+      const otherOld = await snapshots.capture();
+      expect(snapshots.forShader('waves')).toEqual([wavesKept]);
+      expect(revoked).toEqual([wavesOld?.thumbnailUrl]);
+
+      const otherNext = await snapshots.capture();
+      expect(snapshots.forShader('other')).toEqual([otherNext]);
+      expect(revoked.at(-1)).toBe(otherOld?.thumbnailUrl);
+
+      const otherLabelled = await snapshots.capture('night');
+      expect(snapshots.forShader('other')).toEqual([otherLabelled]);
+      expect(revoked.at(-1)).toBe(otherNext?.thumbnailUrl);
+
+      const newest = await snapshots.capture();
+      expect(snapshots.forShader('waves')).toEqual([]);
+      expect(snapshots.forShader('other')).toEqual([newest, otherLabelled]);
+      expect(revoked.at(-1)).toBe(wavesKept?.thumbnailUrl);
+      expect(revoked).toHaveLength(4);
+    });
+
+    it('never evicts the snapshot just taken, even alone over the budget', async () => {
+      await snapshots.capture();
+      frame = bigFrame(SNAPSHOT_BYTES_BUDGET + 1);
+
+      const huge = await snapshots.capture();
+
+      expect(snapshots.forShader('waves')).toEqual([huge]);
+      expect(revoked).toHaveLength(1);
+    });
+
+    it('leaves everything in place while under the budget', async () => {
+      frame = bigFrame(80 * MB);
+      await snapshots.capture();
+      await snapshots.capture();
+      open('other');
+      await snapshots.capture();
+
+      expect(snapshots.forShader('waves')).toHaveLength(2);
+      expect(revoked).toEqual([]);
+    });
+  });
+
+  describe('concurrency', () => {
+    let deliveries: ((blob: Blob) => void)[];
+
+    beforeEach(() => {
+      deliveries = [];
+      readFrame = () => new Promise((resolve) => deliveries.push(resolve));
+    });
+
+    it('keeps both of two overlapping captures, in the order they finished', async () => {
+      const first = snapshots.capture('first');
+      const second = snapshots.capture('second');
+      deliveries[1](new Blob(['b']));
+      const b = await second;
+      deliveries[0](new Blob(['a']));
+      const a = await first;
+
+      expect(snapshots.forShader('waves')).toEqual([a, b]);
+    });
+
+    it('creates nothing when the app is torn down mid-capture', async () => {
+      const pending = snapshots.capture();
+      TestBed.resetTestingModule();
+      deliveries[0](new Blob(['png']));
+
+      expect(await pending).toBeNull();
+      expect(created).toEqual([]);
     });
   });
 });
