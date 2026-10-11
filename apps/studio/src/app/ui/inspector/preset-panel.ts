@@ -4,17 +4,16 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 
 import type { Preset } from '@shadergrove/shared/model';
-import { ShaderStore } from '../../workspace/shader-store';
+import { InspectorSession } from './inspector-session';
 import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
-import { WorkspaceActions } from '../workspace-actions';
 
 /** The Presets tab. Its heading and its save action belong to `InspectorPanel`. */
 @Component({
   selector: 'app-preset-panel',
   imports: [MatChipsModule, MatIconModule, MatMenuModule, TranslatePipe],
   template: `
-    @if (store.presets().length === 0) {
+    @if (session.presets().length === 0) {
       <p class="empty">
         {{ 'inspector.presetsEmpty' | translate }}
       </p>
@@ -22,14 +21,14 @@ import { WorkspaceActions } from '../workspace-actions';
       <mat-chip-listbox
         class="presets"
         [attr.aria-label]="'inspector.presets' | translate"
-        [value]="store.activePresetId()"
+        [value]="session.activePresetId()"
         (change)="apply($event.value)"
       >
-        @for (preset of store.presets(); track preset.id) {
+        @for (preset of session.presets(); track preset.id) {
           <mat-chip-option
             class="preset-chip"
             [value]="preset.id"
-            [selected]="preset.id === store.activePresetId()"
+            [selected]="preset.id === session.activePresetId()"
             [title]="hint(preset)"
             [matContextMenuTriggerFor]="presetMenu"
             [matContextMenuTriggerData]="{ preset }"
@@ -45,11 +44,7 @@ import { WorkspaceActions } from '../workspace-actions';
 
     <mat-menu #presetMenu="matMenu">
       <ng-template matMenuContent let-preset="preset">
-        <button
-          mat-menu-item
-          type="button"
-          (click)="workspace.deletePreset(preset.id, preset.name)"
-        >
+        <button mat-menu-item type="button" (click)="session.deletePreset(preset.id, preset.name)">
           <mat-icon>delete</mat-icon>
           <span>{{ 'action.delete' | translate }}</span>
         </button>
@@ -78,12 +73,11 @@ import { WorkspaceActions } from '../workspace-actions';
   `,
 })
 export class PresetPanel {
-  protected readonly store = inject(ShaderStore);
-  protected readonly workspace = inject(WorkspaceActions);
+  protected readonly session = inject(InspectorSession);
   private readonly i18n = inject(I18n);
 
   protected apply(presetId: string | null): void {
-    if (presetId) this.store.applyPreset(presetId);
+    if (presetId) this.session.applyPreset(presetId);
   }
 
   protected hint(preset: Preset): string {

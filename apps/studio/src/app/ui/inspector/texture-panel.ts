@@ -4,7 +4,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 import type { TextureFilterMode, TextureWrapMode } from '@shadergrove/shared/model';
-import { ShaderStore } from '../../workspace/shader-store';
+import { InspectorSession } from './inspector-session';
 import { TextureAssets } from '../../assets/texture-assets';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 import type { TranslationKey } from '../../i18n/keys';
@@ -29,13 +29,13 @@ const FILTER_OPTIONS: readonly { value: TextureFilterMode; labelKey: Translation
   template: `
     <div class="grid">
       @for (index of indices; track index) {
-        @let channel = store.channels()[index];
+        @let channel = session.channels()[index];
         @let thumb = thumbnail(index);
         <div class="slot" [class.filled]="channel.ext !== null">
           <button
             type="button"
             class="thumb"
-            [disabled]="!store.record() || busy()[index]"
+            [disabled]="!session.shader() || busy()[index]"
             [matTooltip]="(channel.ext !== null ? 'texture.replace' : 'texture.assign') | translate"
             [attr.aria-label]="'iChannel' + index"
             (click)="fileInput.click()"
@@ -205,7 +205,7 @@ const FILTER_OPTIONS: readonly { value: TextureFilterMode; labelKey: Translation
   `,
 })
 export class TexturePanel {
-  protected readonly store = inject(ShaderStore);
+  protected readonly session = inject(InspectorSession);
   private readonly textures = inject(TextureAssets);
 
   protected readonly indices = CHANNEL_INDICES;
@@ -217,9 +217,9 @@ export class TexturePanel {
 
   constructor() {
     effect((onCleanup) => {
-      const record = this.store.record();
-      const channels = this.store.channels();
-      if (!record) {
+      const shader = this.session.shader();
+      const channels = this.session.channels();
+      if (!shader) {
         this.thumbnails.set([null, null, null, null]);
         return;
       }
@@ -232,7 +232,7 @@ export class TexturePanel {
       void Promise.all(
         channels.map((channel, index) =>
           this.textures
-            .resolve(record.id, index, channel, record.updatedAt)
+            .resolve(shader.id, index, channel, shader.updatedAt)
             .then((resolved) => resolved?.url ?? null),
         ),
       ).then((urls) => {
@@ -252,7 +252,7 @@ export class TexturePanel {
 
     this.setBusy(index, true);
     try {
-      await this.store.setTextureImage(index, file);
+      await this.session.setTextureImage(index, file);
     } finally {
       this.setBusy(index, false);
     }
@@ -262,20 +262,20 @@ export class TexturePanel {
     event.stopPropagation();
     this.setBusy(index, true);
     try {
-      await this.store.clearTextureImage(index);
+      await this.session.clearTextureImage(index);
     } finally {
       this.setBusy(index, false);
     }
   }
 
   protected setWrap(index: ChannelIndex, event: Event): void {
-    void this.store.setChannelSettings(index, {
+    void this.session.setChannelSettings(index, {
       wrap: (event.target as HTMLSelectElement).value as TextureWrapMode,
     });
   }
 
   protected setFilter(index: ChannelIndex, event: Event): void {
-    void this.store.setChannelSettings(index, {
+    void this.session.setChannelSettings(index, {
       filter: (event.target as HTMLSelectElement).value as TextureFilterMode,
     });
   }

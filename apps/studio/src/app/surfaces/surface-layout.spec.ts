@@ -18,6 +18,14 @@ import {
   migrateLayoutFromPreferences,
 } from '@shadergrove/shared/surfaces';
 import { DEFAULT_PREVIEW_WINDOW } from '@shadergrove/shared/preview-prefs';
+import type {
+  NativeSurfaceChangedEvent,
+  NativeSurfaceKind,
+  NativeSurfaceOpenRequest,
+  NativeSurfaceResult,
+  NativeSurfaceSnapshot,
+} from '../../desktop/contracts/contracts';
+import { DesktopPlatform } from '../desktop/desktop-platform';
 import { Preferences, type WorkspacePreferences } from '../prefs/preferences';
 import { SurfaceController } from './surface-controller';
 import { SurfaceLayoutService } from './surface-layout';
@@ -339,5 +347,433 @@ describe('SurfaceLayoutService characterization', () => {
 
       expect(registry.editorLayout()).toEqual({ kind: 'leaf', surfaceId: editorId });
     });
+  });
+});
+
+class FakeDesktop {
+  readonly available = true;
+  readonly opens: NativeSurfaceOpenRequest[] = [];
+  readonly closes: string[] = [];
+  /** What the next open answers; `null` answers `ok` (or `focused`) with the requested surface. */
+  next: NativeSurfaceResult | null = null;
+  /** Windows the main process reports open to `surfaceState`. */
+  readonly live = new Map<string, NativeSurfaceKind>();
+  changed: (event: NativeSurfaceChangedEvent) => void = () => undefined;
+  returned: (payload: { surfaceId: string }) => void = () => undefined;
+
+  openSurface(request: NativeSurfaceOpenRequest): Promise<NativeSurfaceResult> {
+    this.opens.push(request);
+    if (this.next) return Promise.resolve(this.next);
+    const status = this.live.has(request.surfaceId) ? 'focused' : 'ok';
+    this.live.set(request.surfaceId, request.kind);
+    return Promise.resolve({ status, surface: this.snapshot(request.surfaceId, request.kind) });
+  }
+  closeSurface(surfaceId: string): Promise<NativeSurfaceResult> {
+    this.closes.push(surfaceId);
+    return Promise.resolve({ status: 'closed', surfaceId });
+  }
+  surfaceState(surfaceId: string): Promise<NativeSurfaceSnapshot | null> {
+    const kind = this.live.get(surfaceId);
+    return Promise.resolve(kind ? this.snapshot(surfaceId, kind) : null);
+  }
+  onSurfaceChanged(listener: (event: NativeSurfaceChangedEvent) => void): () => void {
+    this.changed = listener;
+    return () => undefined;
+  }
+  onSurfaceReturned(listener: (payload: { surfaceId: string }) => void): () => void {
+    this.returned = listener;
+    return () => undefined;
+  }
+
+  /** The main process reports the window gone, as after an OS close. */
+  windowClosed(surfaceId: string): void {
+    this.live.delete(surfaceId);
+    this.changed({ surfaceId, open: false });
+  }
+
+  private snapshot(surfaceId: string, kind: NativeSurfaceKind): NativeSurfaceSnapshot {
+    return {
+      surfaceId,
+      kind,
+      path: `/${kind}`,
+      bounds: { x: 40, y: 60, width: 900, height: 420 },
+      maximized: false,
+      fullscreen: false,
+    };
+  }
+}
+
+/** Lets the open/close promises and the effects that follow them settle. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 6; i++) {
+    await Promise.resolve();
+    TestBed.tick();
+  }
+}
+
+describe('SurfaceLayoutService native bottom panel', () => {
+  const id = WELL_KNOWN_SURFACE_IDS.bottomPanel;
+  let layout: SurfaceLayoutService;
+  let preferences: FakePreferences;
+  let desktop: FakeDesktop;
+
+  const boot = () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: Preferences, useValue: preferences },
+        { provide: DesktopPlatform, useValue: desktop },
+      ],
+    });
+    layout = TestBed.inject(SurfaceLayoutService);
+    TestBed.tick();
+  };
+
+  beforeEach(() => {
+    preferences = new FakePreferences();
+    preferences.patch({ bottomPanelOpen: true });
+    desktop = new FakeDesktop();
+    boot();
+  });
+
+  const docked = () => {
+    const placement = layout.bottomPanel().placement;
+    return isContainedPlacement(placement) && placement.mode === 'docked' && placement.side;
+  };
+  const savedPlacementHost = () =>
+    preferences.value().surfacesLayout?.surfaces.find((surface) => surface.id === id)?.placement
+      .host;
+  const shown = () => preferences.value().bottomPanelOpen;
+
+  it('opens its own page and commits native placement only after the window opened', async () => {
+    const detached = layout.detach(id);
+    expect(layout.bottomPanelNative()).toBe(false);
+
+    expect(await detached).toBe(true);
+    expect(desktop.opens).toEqual([{ surfaceId: id, kind: 'bottom-panel', path: '/bottom-panel' }]);
+    expect(layout.bottomPanelNative()).toBe(true);
+    expect(savedPlacementHost()).toBe('native');
+    expect(shown()).toBe(true);
+  });
+
+  it('leaves the docked panel untouched when the open is refused', async () => {
+    desktop.next = { status: 'rejected', reason: 'load-failed:ERR_FAILED' };
+    const saved = preferences.value().surfacesLayout;
+
+    expect(await layout.detach(id)).toBe(false);
+    expect(layout.bottomPanelNative()).toBe(false);
+    expect(docked()).toBe('bottom');
+    expect(preferences.value().surfacesLayout).toBe(saved);
+  });
+
+  it('shares one open between overlapping clicks and focuses the window afterwards', async () => {
+    await Promise.all([layout.detach(id), layout.detach(id)]);
+    expect(desktop.opens).toHaveLength(1);
+
+    expect(await layout.detach(id)).toBe(true);
+    expect(desktop.opens).toHaveLength(2);
+    expect(layout.bottomPanelNative()).toBe(true);
+  });
+
+  it('docks back shown on Dock, ignoring the closing window that follows', async () => {
+    await layout.detach(id);
+
+    desktop.returned({ surfaceId: id });
+    desktop.windowClosed(id);
+    await settle();
+
+    expect(layout.bottomPanelNative()).toBe(false);
+    expect(docked()).toBe('bottom');
+    expect(shown()).toBe(true);
+    expect(savedPlacementHost()).toBe('contained');
+    expect(desktop.opens).toHaveLength(1);
+  });
+
+  it('stays detached but hidden when the user closes its window, and reopens it on show', async () => {
+    await layout.detach(id);
+
+    desktop.windowClosed(id);
+    await settle();
+
+    expect(layout.bottomPanelNative()).toBe(true);
+    expect(savedPlacementHost()).toBe('native');
+    expect(shown()).toBe(false);
+    expect(desktop.opens).toHaveLength(1);
+
+    preferences.patch({ bottomPanelOpen: true });
+    await settle();
+
+    expect(desktop.opens).toHaveLength(2);
+    expect(desktop.live.has(id)).toBe(true);
+    expect(layout.bottomPanelNative()).toBe(true);
+  });
+
+  it('closes the window when the panel is hidden, without mistaking that for a user close', async () => {
+    await layout.detach(id);
+    await settle();
+    expect(desktop.closes).toEqual([]);
+
+    preferences.patch({ bottomPanelOpen: false });
+    await settle();
+    expect(desktop.closes).toEqual([id]);
+
+    // The main process reports the close; showing the panel again brings the window back.
+    desktop.windowClosed(id);
+    preferences.patch({ bottomPanelOpen: true });
+    await settle();
+
+    expect(shown()).toBe(true);
+    expect(desktop.opens).toHaveLength(2);
+  });
+
+  it('ignores other satellites', async () => {
+    await layout.detach(id);
+
+    desktop.windowClosed(WELL_KNOWN_SURFACE_IDS.livePreviewOutput);
+    desktop.returned({ surfaceId: WELL_KNOWN_SURFACE_IDS.livePreviewOutput });
+    await settle();
+
+    expect(layout.bottomPanelNative()).toBe(true);
+    expect(shown()).toBe(true);
+  });
+
+  it('reopens a shown detached panel in its window on relaunch', async () => {
+    await layout.detach(id);
+    desktop.live.clear(); // the app quit: no window survives it
+
+    boot();
+    await settle();
+
+    expect(layout.bottomPanelNative()).toBe(true);
+    expect(desktop.opens).toEqual([
+      { surfaceId: id, kind: 'bottom-panel', path: '/bottom-panel' },
+      { surfaceId: id, kind: 'bottom-panel', path: '/bottom-panel' },
+    ]);
+  });
+
+  it('keeps a hidden detached panel hidden on relaunch, and opens its window when shown', async () => {
+    await layout.detach(id);
+    desktop.windowClosed(id);
+    await settle();
+
+    boot();
+    await settle();
+    expect(desktop.opens).toHaveLength(1);
+    expect(layout.bottomPanelNative()).toBe(true);
+
+    preferences.patch({ bottomPanelOpen: true });
+    await settle();
+    expect(desktop.opens).toHaveLength(2);
+  });
+
+  it('adopts the window a reload of the main window left open, without a second one', async () => {
+    await layout.detach(id);
+
+    boot(); // reload: the satellite is still open
+    await settle();
+
+    expect(desktop.opens).toHaveLength(1);
+    expect(desktop.closes).toEqual([]);
+    expect(layout.bottomPanelNative()).toBe(true);
+  });
+
+  it('docks the panel when its window cannot be reopened', async () => {
+    await layout.detach(id);
+    desktop.windowClosed(id);
+    await settle();
+
+    desktop.next = { status: 'rejected', reason: 'load-failed:ERR_FAILED' };
+    preferences.patch({ bottomPanelOpen: true });
+    await settle();
+
+    expect(layout.bottomPanelNative()).toBe(false);
+    expect(docked()).toBe('bottom');
+    expect(shown()).toBe(true);
+  });
+});
+
+describe('SurfaceLayoutService bottom panel without a native host', () => {
+  it('never detaches on the web, and shows a panel saved as detached contained', async () => {
+    const preferences = new FakePreferences();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: Preferences, useValue: preferences },
+        { provide: DesktopPlatform, useValue: new FakeDesktop() },
+      ],
+    });
+    await TestBed.inject(SurfaceLayoutService).detach(WELL_KNOWN_SURFACE_IDS.bottomPanel);
+    const saved = preferences.value().surfacesLayout?.surfaces;
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [{ provide: Preferences, useValue: preferences }],
+    });
+    const layout = TestBed.inject(SurfaceLayoutService);
+
+    const host = saved?.find((s) => s.id === WELL_KNOWN_SURFACE_IDS.bottomPanel)?.placement.host;
+    expect(host).toBe('native');
+    expect(layout.bottomPanelNative()).toBe(false);
+    expect(await layout.detach(WELL_KNOWN_SURFACE_IDS.bottomPanel)).toBe(false);
+  });
+
+  it('leaves window management to the main window when this is the live output window', async () => {
+    history.replaceState(null, '', '/output');
+    try {
+      const desktop = new FakeDesktop();
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: Preferences, useValue: new FakePreferences() },
+          { provide: DesktopPlatform, useValue: desktop },
+        ],
+      });
+      const layout = TestBed.inject(SurfaceLayoutService);
+
+      expect(await layout.detach(WELL_KNOWN_SURFACE_IDS.bottomPanel)).toBe(false);
+      expect(desktop.opens).toEqual([]);
+    } finally {
+      history.replaceState(null, '', '/');
+    }
+  });
+});
+
+describe('SurfaceLayoutService native inspector', () => {
+  const id = WELL_KNOWN_SURFACE_IDS.inspector;
+  let layout: SurfaceLayoutService;
+  let desktop: FakeDesktop;
+
+  beforeEach(() => {
+    desktop = new FakeDesktop();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: Preferences, useValue: new FakePreferences() },
+        { provide: DesktopPlatform, useValue: desktop },
+      ],
+    });
+    layout = TestBed.inject(SurfaceLayoutService);
+    TestBed.tick();
+  });
+
+  it('opens its own page, then hides with its window and comes back in it', async () => {
+    expect(await layout.detach(id)).toBe(true);
+    expect(desktop.opens).toEqual([{ surfaceId: id, kind: 'inspector', path: '/inspector' }]);
+    expect(layout.inspectorNative()).toBe(true);
+    expect(layout.inspectorOpen()).toBe(true);
+
+    desktop.windowClosed(id);
+    await settle();
+    expect(layout.inspectorNative()).toBe(true);
+    expect(layout.inspectorOpen()).toBe(false);
+
+    layout.openInspector();
+    await settle();
+    expect(desktop.opens).toHaveLength(2);
+    expect(layout.inspectorOpen()).toBe(true);
+  });
+
+  it('closes its window when hidden from the workspace, and docks where it was on Dock', async () => {
+    const before = layout.inspector().placement;
+    await layout.detach(id);
+    await settle();
+
+    layout.toggleInspectorOpen();
+    await settle();
+    expect(desktop.closes).toEqual([id]);
+    expect(layout.inspectorOpen()).toBe(false);
+
+    layout.toggleInspectorOpen();
+    await settle();
+    desktop.returned({ surfaceId: id });
+    desktop.windowClosed(id);
+    await settle();
+
+    expect(layout.inspectorNative()).toBe(false);
+    expect(layout.inspector().placement).toEqual(before);
+    expect(layout.inspectorOpen()).toBe(true);
+  });
+});
+
+describe('SurfaceLayoutService native editor', () => {
+  const id = editorSurfaceId(DEFAULT_EDITOR_GROUP_ID);
+  const second = asEditorGroupId('editor-group:1');
+  const secondId = editorSurfaceId(second);
+  let layout: SurfaceLayoutService;
+  let registry: SurfaceRegistry;
+  let preferences: FakePreferences;
+  let desktop: FakeDesktop;
+
+  const boot = () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: Preferences, useValue: preferences },
+        { provide: DesktopPlatform, useValue: desktop },
+      ],
+    });
+    registry = TestBed.inject(SurfaceRegistry);
+    layout = TestBed.inject(SurfaceLayoutService);
+    TestBed.tick();
+  };
+
+  beforeEach(() => {
+    preferences = new FakePreferences();
+    desktop = new FakeDesktop();
+    boot();
+  });
+
+  it('moves the whole editor to its own page and keeps its split for when it docks', async () => {
+    registry.upsert(
+      createDefaultSurface('editor', {
+        id: secondId,
+        chrome: { kind: 'editor', editorGroupId: second },
+      }),
+    );
+    const split = splitEditorLeaf(
+      registry.editorLayout(),
+      id,
+      secondId,
+      'horizontal',
+      asSplitNodeId('split:right'),
+    );
+    if (!split.ok) throw new Error(split.reason);
+    registry.setEditorLayout(split.layout);
+    TestBed.tick();
+
+    expect(await layout.detach(id)).toBe(true);
+    expect(desktop.opens).toEqual([{ surfaceId: id, kind: 'editor', path: '/editor' }]);
+    expect(layout.editorNative()).toBe(true);
+    expect(layout.editorOpen()).toBe(true);
+
+    desktop.live.clear();
+    boot(); // relaunch: the split is still there, the editor still detached
+    await settle();
+    expect(registry.editorLayout()).toEqual(split.layout);
+    expect(layout.editorNative()).toBe(true);
+    expect(desktop.opens).toHaveLength(2);
+
+    desktop.returned({ surfaceId: id });
+    desktop.windowClosed(id);
+    await settle();
+    expect(layout.editorNative()).toBe(false);
+    expect(registry.editorLayout()).toEqual(split.layout);
+  });
+
+  it('hides with its window, and comes back in it when shown', async () => {
+    await layout.detach(id);
+
+    desktop.windowClosed(id);
+    await settle();
+    expect(layout.editorNative()).toBe(true);
+    expect(layout.editorOpen()).toBe(false);
+
+    layout.openEditor();
+    await settle();
+    expect(layout.editorOpen()).toBe(true);
+    expect(desktop.opens).toHaveLength(2);
+
+    // Showing it again while its window is open only brings that window forward.
+    layout.openEditor();
+    await settle();
+    expect(desktop.opens).toHaveLength(3);
+    expect(desktop.live.size).toBe(1);
   });
 });

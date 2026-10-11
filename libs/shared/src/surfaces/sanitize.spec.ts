@@ -149,6 +149,37 @@ describe('sanitizeSurfaceRecord / layout', () => {
     expect(kinds.has('live-preview-output')).toBe(false);
   });
 
+  it('keeps the split of a default editor that lives in a native window', () => {
+    const second = 'surface:editor:editor-group:1';
+    const tree = {
+      kind: 'split',
+      id: 'split:right',
+      axis: 'horizontal',
+      ratio: 0.5,
+      first: { kind: 'leaf', surfaceId: 'surface:editor:editor-group:default' },
+      second: { kind: 'leaf', surfaceId: second },
+    };
+    const layout = sanitizeLayoutPreferences({
+      version: 2,
+      surfaces: [
+        {
+          ...createDefaultSurface('editor'),
+          placement: { host: 'native', bounds: { x: 0, y: 0, width: 900, height: 600 } },
+        },
+        {
+          ...createDefaultSurface('editor', {
+            chrome: { kind: 'editor', editorGroupId: 'editor-group:1' as never },
+          }),
+          id: second,
+        },
+      ],
+      zOrder: [],
+      editorLayout: tree,
+    });
+
+    expect(layout.editorLayout).toEqual(tree);
+  });
+
   it('rejects corrupt maximized restoreMode nested as maximized', () => {
     const placement = sanitizePlacement(
       {

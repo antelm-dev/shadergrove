@@ -84,10 +84,13 @@ export class SurfaceRegistry {
    * editor — the frame the split lives in — always does, open or not.
    */
   repairEditorLayout(): void {
-    const editors = this.surfaces().filter(
-      (surface) => surface.kind === 'editor' && isContainedPlacement(surface.placement),
-    );
     const defaultId = editorSurfaceId(DEFAULT_EDITOR_GROUP_ID);
+    // The default editor frames the split even from a native window, so its split survives.
+    const editors = this.surfaces().filter(
+      (surface) =>
+        surface.kind === 'editor' &&
+        (isContainedPlacement(surface.placement) || surface.id === defaultId),
+    );
     const hasDefault = editors.some((surface) => surface.id === defaultId);
     const fallback = hasDefault ? defaultId : (editors[0]?.id ?? defaultId);
     const repaired = sanitizeEditorLayout(this.layoutTree(), {

@@ -126,6 +126,8 @@ describe('AppTitlebar Help and View menus', () => {
             toggleFullscreen: () => undefined,
             toggleDevTools,
             openSupportLink,
+            onSurfaceChanged: () => () => undefined,
+            onSurfaceReturned: () => () => undefined,
           },
         },
         {
@@ -291,10 +293,10 @@ describe('AppTitlebar Help and View menus', () => {
     const fixture = mount();
     const root = fixture.nativeElement as HTMLElement;
     const titlebar = root.querySelector('.titlebar') as HTMLElement;
-    const leading = root.querySelector('.leading') as HTMLElement;
+    const menus = root.querySelector('.menus') as HTMLElement;
     const trailing = root.querySelector('.trailing') as HTMLElement;
     expect(titlebar.classList.contains('titlebar')).toBe(true);
-    expect(leading.classList.contains('no-drag')).toBe(true);
+    expect(menus.classList.contains('no-drag')).toBe(true);
     expect(trailing.classList.contains('no-drag')).toBe(true);
   });
 });

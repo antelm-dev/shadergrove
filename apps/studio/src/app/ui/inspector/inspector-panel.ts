@@ -13,16 +13,13 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { activePostProcessingCount } from '@shadergrove/shared/model';
 import { INSPECTOR_TABS, type InspectorTab } from '@shadergrove/shared/panel-prefs';
-import { ShaderStore } from '../../workspace/shader-store';
 import { GuiPanel } from './gui-panel';
-import { InspectorWindowControls } from './inspector-window-controls';
 import type { TranslationKey } from '../../i18n/keys';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 import { PostProcessingPanel } from './post-processing-panel';
 import { PresetPanel } from './preset-panel';
 import { TexturePanel } from './texture-panel';
-import { SurfaceLayoutService } from '../../surfaces';
-import { WorkspaceActions } from '../workspace-actions';
+import { InspectorSession } from './inspector-session';
 
 const TAB_META: Record<InspectorTab, { icon: string; labelKey: TranslationKey }> = {
   controls: { icon: 'tune', labelKey: 'inspector.controls' },
@@ -58,7 +55,6 @@ const TAB_META: Record<InspectorTab, { icon: string; labelKey: TranslationKey }>
   selector: 'app-inspector-panel',
   imports: [
     GuiPanel,
-    InspectorWindowControls,
     MatButtonModule,
     MatIconModule,
     MatTooltipModule,
@@ -98,8 +94,8 @@ const TAB_META: Record<InspectorTab, { icon: string; labelKey: TranslationKey }>
             type="button"
             [matTooltip]="'inspector.resetTooltip' | translate"
             [attr.aria-label]="'inspector.resetAria' | translate"
-            [disabled]="store.controls().length === 0"
-            (click)="store.resetParams()"
+            [disabled]="session.controls().length === 0"
+            (click)="session.resetParams()"
           >
             <mat-icon>restart_alt</mat-icon>
           </button>
@@ -112,15 +108,16 @@ const TAB_META: Record<InspectorTab, { icon: string; labelKey: TranslationKey }>
             type="button"
             [matTooltip]="'inspector.savePresetTooltip' | translate"
             [attr.aria-label]="'inspector.savePresetAria' | translate"
-            [disabled]="!store.record()"
-            (click)="workspace.savePreset()"
+            [disabled]="!session.shader()"
+            (click)="session.savePreset()"
           >
             <mat-icon>bookmark_add</mat-icon>
           </button>
         }
       }
 
-      <app-inspector-window-controls />
+      <!-- The window's own controls: the workspace's window menu, or a native window's Dock. -->
+      <ng-content select="[inspectorWindowControls]" />
     </header>
 
     <div class="body" [class.collapsed]="collapsed()">
@@ -350,10 +347,7 @@ const TAB_META: Record<InspectorTab, { icon: string; labelKey: TranslationKey }>
   `,
 })
 export class InspectorPanel {
-  protected readonly store = inject(ShaderStore);
-  protected readonly workspace = inject(WorkspaceActions);
-
-  private readonly layout = inject(SurfaceLayoutService);
+  protected readonly session = inject(InspectorSession);
 
   /** Hides the tab content while the surface is minimized; header stays put. */
   readonly collapsed = input(false);
@@ -362,19 +356,19 @@ export class InspectorPanel {
   readonly dragStart = output<PointerEvent>();
 
   protected readonly tabs = INSPECTOR_TABS.map((id) => ({ id, ...TAB_META[id] }));
-  protected readonly tab = computed<InspectorTab>(() => this.layout.inspectorTab());
+  protected readonly tab = computed<InspectorTab>(() => this.session.tab());
   protected readonly label = computed(() => TAB_META[this.tab()].labelKey);
 
   private readonly tabButtons = viewChildren<ElementRef<HTMLButtonElement>>('tabButton');
 
   /** How many of the four channels have an image bound. */
   protected readonly boundChannels = computed(
-    () => this.store.channels().filter((channel) => channel.ext !== null).length,
+    () => this.session.channels().filter((channel) => channel.ext !== null).length,
   );
 
   /** How many post-processing effects are actually applied to the frame. */
   protected readonly activeEffects = computed(() => {
-    const render = this.store.draft()?.render;
+    const render = this.session.render();
     return render ? activePostProcessingCount(render) : 0;
   });
 
@@ -382,15 +376,15 @@ export class InspectorPanel {
   protected readonly badges = computed<Record<InspectorTab, string | null>>(() => {
     const bound = this.boundChannels();
     return {
-      controls: count(this.store.controls().length),
+      controls: count(this.session.controls().length),
       textures: bound ? `${bound}/4` : null,
       postProcessing: count(this.activeEffects()),
-      presets: count(this.store.presets().length),
+      presets: count(this.session.presets().length),
     };
   });
 
   protected select(tab: InspectorTab): void {
-    this.layout.setInspectorTab(tab);
+    this.session.selectTab(tab);
   }
 
   /** Arrow keys, Home and End move between tabs; the panel follows the focus. */
@@ -405,7 +399,7 @@ export class InspectorPanel {
   }
 
   protected collapse(): void {
-    this.layout.close(this.layout.inspectorId);
+    this.session.hide();
   }
 
   protected onHeaderPointerDown(event: PointerEvent): void {

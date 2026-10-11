@@ -9,8 +9,10 @@ import { screen, type BrowserWindow } from 'electron';
 
 import type { Rect } from '@shadergrove/shared/geometry';
 import {
+  NATIVE_SURFACE_PATHS,
   WELL_KNOWN_SURFACE_IDS,
   asSurfaceId,
+  isSurfaceKind,
   type SurfaceId,
   type SurfaceKind,
 } from '@shadergrove/shared/surfaces';
@@ -97,8 +99,16 @@ function defaultDisplays(): DisplayWorkArea[] {
   }));
 }
 
+/** A panel window's size the first time it opens, in the shape the panel is used in. */
+const FIRST_SIZES: Partial<Record<SurfaceKind, { width: number; height: number }>> = {
+  'bottom-panel': { width: 1000, height: 360 },
+  inspector: { width: 380, height: 760 },
+  editor: { width: 960, height: 760 },
+};
+
 function fallbackBoundsFor(kind: SurfaceKind): Rect {
   const min = minSizeForKind(kind);
+  const size = FIRST_SIZES[kind] ?? { width: 1280, height: 720 };
   const cursor = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursor);
   return centerInWorkArea(
@@ -108,8 +118,8 @@ function fallbackBoundsFor(kind: SurfaceKind): Rect {
       width: display.workArea.width,
       height: display.workArea.height,
     },
-    Math.min(1280, display.workArea.width),
-    Math.min(720, display.workArea.height),
+    Math.min(size.width, display.workArea.width),
+    Math.min(size.height, display.workArea.height),
     min,
   );
 }
@@ -209,6 +219,11 @@ export class SurfaceWindowManager {
       });
     }
 
+    // Each kind loads its own page and nothing else, so a satellite never boots another's shell.
+    if (!isSurfaceKind(request.kind) || NATIVE_SURFACE_PATHS[request.kind] !== path.split('?')[0]) {
+      return Promise.resolve({ status: 'rejected', reason: 'path-not-allowed' });
+    }
+
     const surfaceId = asSurfaceId(request.surfaceId);
     const decision = this.options.registry.canOpen(request.kind, surfaceId);
     if (!decision.ok && decision.existing) {
@@ -237,6 +252,10 @@ export class SurfaceWindowManager {
       minWidth: min.width,
       minHeight: min.height,
       show: false,
+      // Panel windows draw the main window's title bar, frameless like it: still resizable and
+      // snappable (Windows keeps the thick frame), moved by the bar's drag region. The live
+      // preview output keeps the OS frame it has always had.
+      frame: request.kind === 'live-preview-output',
       autoHideMenuBar: true,
       webPreferences: { preload: this.options.preload },
     });
@@ -443,12 +462,24 @@ export class SurfaceWindowManager {
     const { window, surfaceId } = entry;
 
     const persist = () => this.schedulePersist(entry);
+    // The window's own title bar shows maximize or restore: it is told, as the main window is.
+    const pushState = () => {
+      if (window.isDestroyed()) return;
+      window.webContents.send('state-changed', {
+        maximized: window.isMaximized(),
+        fullscreen: window.isFullScreen(),
+      });
+    };
     window.on('resize', persist);
     window.on('move', persist);
-    window.on('maximize', persist);
-    window.on('unmaximize', persist);
-    window.on('enter-full-screen', persist);
-    window.on('leave-full-screen', persist);
+    const stateChanged = () => {
+      persist();
+      pushState();
+    };
+    window.on('maximize', stateChanged);
+    window.on('unmaximize', stateChanged);
+    window.on('enter-full-screen', stateChanged);
+    window.on('leave-full-screen', stateChanged);
 
     window.webContents.on('render-process-gone', () => {
       this.handleChildFailure(entry, 'crash');

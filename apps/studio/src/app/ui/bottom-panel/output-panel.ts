@@ -5,6 +5,8 @@ import {
   PLATFORM_ID,
   effect,
   inject,
+  input,
+  output,
   signal,
   untracked,
   viewChild,
@@ -16,12 +18,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { I18n } from '../../i18n/i18n';
 import type { TranslationKey } from '../../i18n/keys';
 import { TranslatePipe } from '../../i18n/translate.pipe';
-import {
-  OutputLog,
-  type OutputLogEntry,
-  type OutputLogLevel,
-  type OutputLogSource,
-} from './output-log';
+import type { OutputLogEntry, OutputLogLevel, OutputLogSource } from './output-log';
 
 const SOURCE_KEYS: Record<OutputLogSource, TranslationKey> = {
   compiler: 'output.source.compiler',
@@ -42,6 +39,9 @@ const AUTOSCROLL_THRESHOLD = 24;
 /**
  * Structured application output — shader compiler and renderer messages
  * today, `OutputLog`'s other sources as they arrive.
+ *
+ * Presentational: the docked panel hands it `OutputLog`, the native
+ * bottom-panel window the main window's mirrored entries.
  *
  * Auto-scrolls to a new entry only while the user is already at (or near) the
  * bottom. Scrolling up to read an earlier message opts out of it until they
@@ -270,13 +270,14 @@ const AUTOSCROLL_THRESHOLD = 24;
   `,
 })
 export class OutputPanel {
-  private readonly log = inject(OutputLog);
   private readonly i18n = inject(I18n);
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
 
   private readonly scrollHost = viewChild<ElementRef<HTMLDivElement>>('scrollHost');
 
-  protected readonly entries = this.log.entries;
+  readonly entries = input.required<readonly OutputLogEntry[]>();
+  /** Clear was pressed: whoever owns the log clears it (in the native window, the main one's). */
+  readonly cleared = output<void>();
 
   /** Whether the viewport was at (or near) the bottom before the latest entry arrived. */
   private readonly stickToBottom = signal(true);
@@ -293,7 +294,7 @@ export class OutputPanel {
   }
 
   protected clear(): void {
-    this.log.clear();
+    this.cleared.emit();
     this.stickToBottom.set(true);
   }
 

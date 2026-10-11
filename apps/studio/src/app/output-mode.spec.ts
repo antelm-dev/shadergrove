@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { isOutputWindow } from './output-mode';
+import { isOutputWindow, isSatelliteWindow, satelliteKind } from './output-mode';
 
 /**
  * The secondary Electron output window is detected by pathname, not by a
@@ -35,5 +35,39 @@ describe('isOutputWindow', () => {
 
     vi.stubGlobal('window', { location: { pathname: '/output-extra' } });
     expect(isOutputWindow()).toBe(false);
+  });
+});
+
+describe('satelliteKind', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('names each panel window in the desktop app only', () => {
+    const cases = [
+      ['/bottom-panel', 'bottom-panel'],
+      ['/bottom-panel/', 'bottom-panel'],
+      ['/inspector', 'inspector'],
+      ['/editor/', 'editor'],
+    ] as const;
+    for (const [pathname, kind] of cases) {
+      vi.stubGlobal('window', { electron: {}, location: { pathname } });
+      expect(satelliteKind()).toBe(kind);
+      expect(isSatelliteWindow()).toBe(true);
+    }
+
+    // On the web the path is an unknown route that boots the workspace, as before.
+    vi.stubGlobal('window', { location: { pathname: '/bottom-panel' } });
+    expect(satelliteKind()).toBeNull();
+  });
+
+  it('is null for SSR and every other desktop route', () => {
+    vi.stubGlobal('window', undefined);
+    expect(isSatelliteWindow()).toBe(false);
+
+    for (const pathname of ['/', '/output', '/bottom-panel-extra', '/shaders/editor']) {
+      vi.stubGlobal('window', { electron: {}, location: { pathname } });
+      expect(satelliteKind()).toBeNull();
+    }
   });
 });

@@ -22,10 +22,16 @@ import {
 } from '@shadergrove/shared/panel-prefs';
 import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
+import { DesktopPlatform } from '../../desktop/desktop-platform';
 import { Preferences } from '../../prefs/preferences';
+import { SurfaceLayoutService } from '../../surfaces/surface-layout';
 import { PointerGesture } from '../layout/pointer-gesture';
 import { ShaderStore } from '../../workspace/shader-store';
+import { EditorNavigation } from '../../editor/editor-navigation';
+import type { CompileDiagnostic } from '@shadergrove/shared/diagnostic';
+import { OutputLog } from './output-log';
 import { OutputPanel } from './output-panel';
+import { PANEL_CHROME_STYLES } from './panel-chrome-styles';
 import { ProblemsPanel } from './problems-panel';
 import { ProfilerPanel } from '../inspector/profiler-panel';
 import { RenderInspectionPanel } from '../inspector/render-inspection-panel';
@@ -157,6 +163,19 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler', 'insp
 
       <span class="spacer"></span>
 
+      @if (desktop.available) {
+        <button
+          matIconButton
+          type="button"
+          class="detach"
+          [matTooltip]="'action.detach' | translate"
+          [attr.aria-label]="'action.detach' | translate"
+          (click)="detach()"
+        >
+          <mat-icon>open_in_new</mat-icon>
+        </button>
+      }
+
       <button
         matIconButton
         type="button"
@@ -177,7 +196,10 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler', 'insp
         aria-labelledby="bottom-panel-tab-problems"
         [hidden]="tab() !== 'problems'"
       >
-        <app-problems-panel />
+        <app-problems-panel
+          [diagnostics]="store.allDiagnostics()"
+          (activate)="openDiagnostic($event)"
+        />
       </div>
       <div
         id="bottom-panel-panel-output"
@@ -186,7 +208,7 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler', 'insp
         aria-labelledby="bottom-panel-tab-output"
         [hidden]="tab() !== 'output'"
       >
-        <app-output-panel />
+        <app-output-panel [entries]="log.entries()" (cleared)="log.clear()" />
       </div>
       <div
         id="bottom-panel-panel-profiler"
@@ -211,184 +233,70 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler', 'insp
       </div>
     </div>
   `,
-  styles: `
-    :host {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      grid-area: bottom-panel;
-      min-height: 0;
-      overflow: hidden;
-      border-top: 1px solid var(--mat-sys-outline-variant);
-      background: var(--mat-sys-surface-container-lowest);
-      transition: height 160ms ease;
-    }
-
-    :host(.dragging) {
-      transition: none;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
+  styles: [
+    PANEL_CHROME_STYLES,
+    `
       :host {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        grid-area: bottom-panel;
+        min-height: 0;
+        overflow: hidden;
+        border-top: 1px solid var(--mat-sys-outline-variant);
+        background: var(--mat-sys-surface-container-lowest);
+        transition: height 160ms ease;
+      }
+
+      :host(.dragging) {
         transition: none;
       }
-    }
 
-    .resize-handle {
-      position: absolute;
-      top: -4px;
-      left: 0;
-      right: 0;
-      z-index: 2;
-      height: 7px;
-      cursor: ns-resize;
-      background: transparent;
-      touch-action: none;
-    }
-
-    .resize-handle::after {
-      position: absolute;
-      top: 3px;
-      right: 50%;
-      left: 50%;
-      height: 1px;
-      content: '';
-      background: var(--mat-sys-outline-variant);
-      opacity: 0;
-      transition: opacity 120ms ease;
-    }
-
-    .resize-handle:hover::after,
-    :host(.dragging) .resize-handle::after,
-    .resize-handle:focus-visible::after {
-      right: 12px;
-      left: 12px;
-      opacity: 1;
-    }
-
-    .resize-handle:focus-visible {
-      outline: 2px solid var(--mat-sys-primary);
-      outline-offset: -2px;
-      background: color-mix(in srgb, var(--mat-sys-primary) 24%, transparent);
-    }
-
-    .header {
-      display: flex;
-      align-items: center;
-      flex: 0 0 auto;
-      gap: 4px;
-      min-height: 34px;
-      padding: 3px 5px 3px 7px;
-      border-bottom: 1px solid var(--mat-sys-outline-variant);
-      background: var(--mat-sys-surface-container-low);
-    }
-
-    .tablist {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      min-width: 0;
-    }
-
-    .tab {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      height: 28px;
-      padding-inline: 10px;
-      border: 0;
-      border-radius: var(--mat-sys-corner-small, 6px);
-      background: transparent;
-      color: var(--mat-sys-on-surface-variant);
-      font: var(--mat-sys-label-medium);
-      white-space: nowrap;
-      cursor: pointer;
-
-      mat-icon {
-        width: 16px;
-        height: 16px;
-        font-size: 16px;
+      @media (prefers-reduced-motion: reduce) {
+        :host {
+          transition: none;
+        }
       }
-    }
 
-    .tab:hover {
-      background: color-mix(in srgb, var(--mat-sys-on-surface) 8%, transparent);
-    }
-
-    .tab.active {
-      background: var(--mat-sys-secondary-container);
-      color: var(--mat-sys-on-secondary-container);
-    }
-
-    .tab:focus-visible {
-      outline: 2px solid var(--mat-sys-primary);
-      outline-offset: -2px;
-    }
-
-    .counts {
-      display: inline-flex;
-      gap: 4px;
-    }
-
-    .count {
-      display: inline-grid;
-      place-items: center;
-      min-width: 17px;
-      height: 17px;
-      padding: 0 4px;
-      border-radius: 9px;
-      font: var(--mat-sys-label-small);
-    }
-
-    .count.error {
-      background: var(--mat-sys-error);
-      color: var(--mat-sys-on-error);
-    }
-
-    .count.warning {
-      background: var(--mat-sys-tertiary);
-      color: var(--mat-sys-on-tertiary);
-    }
-
-    .spacer {
-      flex: 1;
-    }
-
-    .close {
-      width: 28px;
-      height: 28px;
-      padding: 4px;
-
-      mat-icon {
-        width: 18px;
-        height: 18px;
-        font-size: 18px;
+      .resize-handle {
+        position: absolute;
+        top: -4px;
+        left: 0;
+        right: 0;
+        z-index: 2;
+        height: 7px;
+        cursor: ns-resize;
+        background: transparent;
+        touch-action: none;
       }
-    }
 
-    .body {
-      position: relative;
-      flex: 1;
-      min-height: 0;
-      overflow: hidden;
-    }
+      .resize-handle::after {
+        position: absolute;
+        top: 3px;
+        right: 50%;
+        left: 50%;
+        height: 1px;
+        content: '';
+        background: var(--mat-sys-outline-variant);
+        opacity: 0;
+        transition: opacity 120ms ease;
+      }
 
-    /*
-     * Not \`.tabpanel { display: flex }\`: an author rule's \`display\` always
-     * wins over the UA stylesheet's \`[hidden] { display: none }\` regardless of
-     * specificity, so an unconditional \`display: flex\` here would render both
-     * tabpanels at once, stacked, whichever one is \`hidden\`. Scoping the rule to
-     * \`:not([hidden])\` leaves the hidden one with no author rule to override the
-     * default.
-     */
-    .tabpanel:not([hidden]) {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-    }
-  `,
+      .resize-handle:hover::after,
+      :host(.dragging) .resize-handle::after,
+      .resize-handle:focus-visible::after {
+        right: 12px;
+        left: 12px;
+        opacity: 1;
+      }
+
+      .resize-handle:focus-visible {
+        outline: 2px solid var(--mat-sys-primary);
+        outline-offset: -2px;
+        background: color-mix(in srgb, var(--mat-sys-primary) 24%, transparent);
+      }
+    `,
+  ],
   host: {
     '[class.dragging]': 'dragging()',
     '[style.height.px]': 'displayHeight()',
@@ -397,6 +305,10 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler', 'insp
 export class BottomPanel {
   protected readonly store = inject(ShaderStore);
   protected readonly preferences = inject(Preferences);
+  protected readonly desktop = inject(DesktopPlatform);
+  private readonly layout = inject(SurfaceLayoutService);
+  private readonly navigation = inject(EditorNavigation);
+  protected readonly log = inject(OutputLog);
   protected readonly minHeight = BOTTOM_PANEL_HEIGHT_LIMITS.min;
 
   private readonly i18n = inject(I18n);
@@ -495,6 +407,21 @@ export class BottomPanel {
             ? this.profilerTab()
             : this.inspectionTab();
     ref?.nativeElement.focus();
+  }
+
+  /**
+   * Open the editor if it is not, restore it if it was minimized, select the
+   * diagnostic's document if it names a current one, and reveal its line —
+   * `EditorPanel` picks the request up once the target document is mounted.
+   */
+  protected openDiagnostic(diagnostic: CompileDiagnostic): void {
+    this.layout.openEditor();
+    this.navigation.reveal(diagnostic.docId ?? '', diagnostic.line);
+  }
+
+  /** Desktop only: hands the panel to its own native window. */
+  protected detach(): void {
+    void this.layout.detach(this.layout.bottomPanelId);
   }
 
   protected close(): void {

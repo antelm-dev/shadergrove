@@ -16,6 +16,7 @@ import { PluginCommands } from '../../plugins/plugin-commands';
 import { MenuCommands, type MenuCommand } from '../menu-commands';
 import { SurfaceLayoutService } from '../../surfaces';
 import { WorkspaceActions } from '../workspace-actions';
+import { WindowTitlebar } from './window-titlebar';
 
 @Component({
   selector: 'app-titlebar',
@@ -26,66 +27,25 @@ import { WorkspaceActions } from '../workspace-actions';
     MatTooltipModule,
     ThemeMenu,
     TranslatePipe,
+    WindowTitlebar,
   ],
   template: `
-    <header class="titlebar" (dblclick)="onTitlebarDblClick($event)">
-      <div class="leading no-drag">
-        <nav class="menus" [attr.aria-label]="'menu.application' | translate">
-          <button type="button" class="menu-trigger" [matMenuTriggerFor]="fileMenu">
-            {{ 'menu.file' | translate }}
-          </button>
-          <button type="button" class="menu-trigger" [matMenuTriggerFor]="viewMenu">
-            {{ 'menu.view' | translate }}
-          </button>
-          <button type="button" class="menu-trigger" [matMenuTriggerFor]="windowMenu">
-            {{ 'menu.window' | translate }}
-          </button>
-          <button type="button" class="menu-trigger" [matMenuTriggerFor]="helpMenu">
-            {{ 'menu.help' | translate }}
-          </button>
-        </nav>
-      </div>
-
-      <div class="title" aria-hidden="true">
-        @if (store.record(); as shader) {
-          <span class="title-text">{{ shader.name }} — Shadergrove</span>
-        } @else {
-          <span class="title-text">Shadergrove</span>
-        }
-      </div>
-
-      <div class="trailing no-drag">
-        <button
-          class="win-btn"
-          type="button"
-          [matTooltip]="'action.minimize' | translate"
-          [attr.aria-label]="'action.minimize' | translate"
-          (click)="desktop.minimize()"
-        >
-          <mat-icon>remove</mat-icon>
+    <app-window-titlebar [title]="title()" (closeRequest)="desktop.close()">
+      <nav class="menus no-drag" [attr.aria-label]="'menu.application' | translate">
+        <button type="button" class="menu-trigger" [matMenuTriggerFor]="fileMenu">
+          {{ 'menu.file' | translate }}
         </button>
-        <button
-          class="win-btn"
-          type="button"
-          [matTooltip]="(desktop.maximized() ? 'action.restore' : 'action.maximize') | translate"
-          [attr.aria-label]="
-            (desktop.maximized() ? 'action.restore' : 'action.maximize') | translate
-          "
-          (click)="desktop.toggleMaximize()"
-        >
-          <mat-icon>{{ desktop.maximized() ? 'filter_none' : 'crop_square' }}</mat-icon>
+        <button type="button" class="menu-trigger" [matMenuTriggerFor]="viewMenu">
+          {{ 'menu.view' | translate }}
         </button>
-        <button
-          class="win-btn close"
-          type="button"
-          [matTooltip]="'action.close' | translate"
-          [attr.aria-label]="'action.close' | translate"
-          (click)="desktop.close()"
-        >
-          <mat-icon>close</mat-icon>
+        <button type="button" class="menu-trigger" [matMenuTriggerFor]="windowMenu">
+          {{ 'menu.window' | translate }}
         </button>
-      </div>
-    </header>
+        <button type="button" class="menu-trigger" [matMenuTriggerFor]="helpMenu">
+          {{ 'menu.help' | translate }}
+        </button>
+      </nav>
+    </app-window-titlebar>
 
     <mat-menu #fileMenu="matMenu">
       @for (item of newCommands; track item.id) {
@@ -212,35 +172,6 @@ import { WorkspaceActions } from '../workspace-actions';
       z-index: 2;
     }
 
-    .titlebar {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      align-items: center;
-      height: 28px;
-      padding-inline: 8px 0;
-      background: var(--mat-sys-surface-container-lowest);
-      border-bottom: 1px solid var(--mat-sys-outline-variant);
-      -webkit-app-region: drag;
-      user-select: none;
-    }
-
-    .leading,
-    .trailing {
-      display: flex;
-      align-items: center;
-      min-width: 0;
-    }
-
-    .leading {
-      gap: 2px;
-      justify-self: start;
-    }
-
-    .trailing {
-      justify-self: end;
-      height: 100%;
-    }
-
     .no-drag {
       -webkit-app-region: no-drag;
     }
@@ -273,53 +204,6 @@ import { WorkspaceActions } from '../workspace-actions';
         outline: none;
       }
     }
-
-    .title {
-      justify-self: center;
-      max-width: 42vw;
-      overflow: hidden;
-      pointer-events: none;
-    }
-
-    .title-text {
-      display: block;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      color: var(--mat-sys-on-surface-variant);
-      font: var(--mat-sys-label-medium);
-      opacity: 0.85;
-    }
-
-    .win-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 40px;
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      border: 0;
-      background: transparent;
-      color: var(--mat-sys-on-surface-variant);
-      cursor: default;
-
-      mat-icon {
-        font-size: 14px;
-        width: 14px;
-        height: 14px;
-      }
-
-      &:hover {
-        background: color-mix(in srgb, var(--mat-sys-on-surface) 8%, transparent);
-        color: var(--mat-sys-on-surface);
-      }
-
-      &.close:hover {
-        background: #e81123;
-        color: #fff;
-      }
-    }
   `,
 })
 export class AppTitlebar {
@@ -334,6 +218,11 @@ export class AppTitlebar {
   private readonly layout = inject(SurfaceLayoutService);
 
   protected readonly themes = inject(AppThemes);
+
+  protected readonly title = computed(() => {
+    const shader = this.store.record();
+    return shader ? `${shader.name} — Shadergrove` : 'Shadergrove';
+  });
 
   // --- Menus --------------------------------------------------------------
   // One group of one menu each — the groups the dividers separate. Save, Quit,
@@ -407,9 +296,4 @@ export class AppTitlebar {
       action: () => this.desktop.toggleMaximize(),
     },
   ];
-
-  protected onTitlebarDblClick(event: MouseEvent): void {
-    if ((event.target as HTMLElement | null)?.closest('.no-drag')) return;
-    this.desktop.toggleMaximize();
-  }
 }

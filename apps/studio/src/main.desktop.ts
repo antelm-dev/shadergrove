@@ -3,10 +3,17 @@
 import { isDevMode } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 
-import { App } from './app/app';
 import { desktopConfig } from './app/app.config.desktop';
+import { rootComponent } from './app/root-component';
 
-bootstrapApplication(App, desktopConfig).catch((error: unknown) => console.error(error));
+rootComponent()
+  .then(({ component, providers }) =>
+    bootstrapApplication(component, {
+      ...desktopConfig,
+      providers: [...desktopConfig.providers, ...providers],
+    }),
+  )
+  .catch((error: unknown) => console.error(error));
 
 // ponytail: dev-only escape probe for the plugin sandbox prototype; remove once hostile tests run in CI.
 if (isDevMode()) {

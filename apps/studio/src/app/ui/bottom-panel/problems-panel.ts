@@ -1,12 +1,9 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, inject, input, output } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 
 import type { CompileDiagnostic } from '@shadergrove/shared/diagnostic';
-import { EditorNavigation } from '../../editor/editor-navigation';
-import { SurfaceLayoutService } from '../../surfaces/surface-layout';
 import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
-import { ShaderStore } from '../../workspace/shader-store';
 
 /**
  * The project-wide diagnostics list — every pass, every file, not just the
@@ -15,10 +12,10 @@ import { ShaderStore } from '../../workspace/shader-store';
  * editor is even open, and does not compete with the editor for vertical
  * space when it is.
  *
- * Never touches `CodeEditor` directly: a click asks `EditorWindow` to make
- * sure the editor is visible, then hands the reveal to `EditorNavigation`,
- * which `EditorPanel` — the one place that actually holds a `CodeEditor` —
- * picks up once the target document is mounted.
+ * Presentational, so the docked panel and the native bottom-panel window
+ * share it: a click only emits `activate`. The docked panel turns that into
+ * an `EditorNavigation` reveal; the native window sends it to the main
+ * window, which owns the editor.
  */
 @Component({
   selector: 'app-problems-panel',
@@ -37,7 +34,7 @@ import { ShaderStore } from '../../workspace/shader-store';
               type="button"
               class="row"
               [class.warning]="diagnostic.severity === 'warning'"
-              (click)="open(diagnostic)"
+              (click)="activate.emit(diagnostic)"
             >
               <mat-icon class="icon" [attr.aria-label]="severityLabel(diagnostic)">
                 {{ diagnostic.severity === 'warning' ? 'warning' : 'error' }}
@@ -134,12 +131,11 @@ import { ShaderStore } from '../../workspace/shader-store';
   `,
 })
 export class ProblemsPanel {
-  private readonly store = inject(ShaderStore);
-  private readonly layout = inject(SurfaceLayoutService);
-  private readonly navigation = inject(EditorNavigation);
   private readonly i18n = inject(I18n);
 
-  protected readonly diagnostics = computed(() => this.store.allDiagnostics());
+  readonly diagnostics = input.required<readonly CompileDiagnostic[]>();
+  /** A diagnostic was clicked: whoever hosts the panel reveals it in the editor. */
+  readonly activate = output<CompileDiagnostic>();
 
   protected key(diagnostic: CompileDiagnostic): string {
     return `${diagnostic.docId ?? ''}|${diagnostic.line}|${diagnostic.severity}|${diagnostic.message}`;
@@ -149,16 +145,5 @@ export class ProblemsPanel {
     return this.i18n.t(
       diagnostic.severity === 'warning' ? 'output.level.warning' : 'output.level.error',
     );
-  }
-
-  /**
-   * Open the editor if it is not, restore it if it was minimized, select the
-   * diagnostic's document if it names a current one, and reveal its line —
-   * gracefully doing as much of that as it can for a diagnostic with no
-   * `docId`, a deleted document, or line 0.
-   */
-  protected open(diagnostic: CompileDiagnostic): void {
-    this.layout.openEditor();
-    this.navigation.reveal(diagnostic.docId ?? '', diagnostic.line);
   }
 }

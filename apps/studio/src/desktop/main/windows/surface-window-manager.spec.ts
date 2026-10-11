@@ -23,6 +23,7 @@ type LoadControl =
 
 class MockWebContents extends EventEmitter {
   readonly id: number;
+  readonly sent: Array<[channel: string, payload: unknown]> = [];
 
   constructor(id: number) {
     super();
@@ -31,6 +32,10 @@ class MockWebContents extends EventEmitter {
 
   setWindowOpenHandler(_handler: unknown): void {
     // Navigation policy attaches this in production; no-op for tests.
+  }
+
+  send(channel: string, payload: unknown): void {
+    this.sent.push([channel, payload]);
   }
 }
 
@@ -44,7 +49,10 @@ class MockBrowserWindow extends EventEmitter {
     height: number;
   };
 
-  constructor(id: number, options: SecureWindowOptions) {
+  constructor(
+    id: number,
+    readonly options: SecureWindowOptions,
+  ) {
     super();
     this.webContents = new MockWebContents(id);
     this.bounds = {
@@ -67,8 +75,10 @@ class MockBrowserWindow extends EventEmitter {
     return { ...this.bounds };
   }
 
+  maximized = false;
+
   isMaximized(): boolean {
-    return false;
+    return this.maximized;
   }
 
   isFullScreen(): boolean {
@@ -317,5 +327,96 @@ describe('SurfaceWindowManager transactional open', () => {
       surfaceId: WELL_KNOWN_SURFACE_IDS.livePreviewOutput,
       open: false,
     });
+  });
+});
+
+describe('SurfaceWindowManager bottom-panel satellite', () => {
+  const bottomPanel = {
+    surfaceId: WELL_KNOWN_SURFACE_IDS.bottomPanel,
+    kind: 'bottom-panel' as const,
+    path: '/bottom-panel',
+    bounds: { x: 10, y: 20, width: 900, height: 320 },
+  };
+
+  it('opens one window on its safe path and focuses it on a repeated open', async () => {
+    const h = createHarness({ mode: 'resolve' });
+
+    const opened = await h.manager.open(bottomPanel);
+    expect(opened.status).toBe('ok');
+    if (opened.status === 'ok') expect(opened.surface.path).toBe('/bottom-panel');
+
+    const again = await h.manager.open(bottomPanel);
+    expect(again.status).toBe('focused');
+    expect(h.windows).toHaveLength(1);
+    expect(h.loadCalls).toBe(1);
+  });
+
+  const output = {
+    surfaceId: WELL_KNOWN_SURFACE_IDS.livePreviewOutput,
+    kind: 'live-preview-output' as const,
+    path: '/output',
+    bounds: bottomPanel.bounds,
+  };
+
+  it('opens a panel frameless, for its own title bar, and the live preview framed', async () => {
+    const h = createHarness({ mode: 'resolve' });
+
+    await h.manager.open(bottomPanel);
+    await h.manager.open(output);
+
+    expect(h.windows.map((window) => window.options.frame)).toEqual([false, true]);
+  });
+
+  it('tells a panel window when it is maximized or restored, and no other window', async () => {
+    const h = createHarness({ mode: 'resolve' });
+    await h.manager.open(bottomPanel);
+    await h.manager.open(output);
+    const [panel, outputWindow] = h.windows;
+
+    panel!.maximized = true;
+    panel!.emit('maximize');
+    panel!.maximized = false;
+    panel!.emit('unmaximize');
+
+    expect(panel!.webContents.sent).toEqual([
+      ['state-changed', { maximized: true, fullscreen: false }],
+      ['state-changed', { maximized: false, fullscreen: false }],
+    ]);
+    expect(outputWindow!.webContents.sent).toEqual([]);
+  });
+
+  it('loads only the page that belongs to the kind', async () => {
+    const h = createHarness({ mode: 'resolve' });
+
+    const swapped = await h.manager.open({ ...bottomPanel, path: '/output' });
+    const unknown = await h.manager.open({ ...bottomPanel, kind: 'nope' as 'bottom-panel' });
+    const editor = await h.manager.open({
+      surfaceId: 'surface:editor:editor-group:default',
+      kind: 'editor',
+      path: '/editor',
+      bounds: bottomPanel.bounds,
+    });
+    const inspector = await h.manager.open({
+      surfaceId: WELL_KNOWN_SURFACE_IDS.inspector,
+      kind: 'inspector',
+      path: '/inspector',
+      bounds: bottomPanel.bounds,
+    });
+
+    expect(swapped).toEqual({ status: 'rejected', reason: 'path-not-allowed' });
+    expect(unknown).toEqual({ status: 'rejected', reason: 'path-not-allowed' });
+    expect(editor.status).toBe('ok');
+    expect(inspector.status).toBe('ok');
+    expect(h.windows).toHaveLength(2);
+  });
+
+  it('rejects an unsafe path without creating a window', async () => {
+    const h = createHarness({ mode: 'resolve' });
+
+    const result = await h.manager.open({ ...bottomPanel, path: 'https://evil.example/' });
+
+    expect(result.status).toBe('rejected');
+    expect(h.windows).toHaveLength(0);
+    expect(h.registry.isOpen(WELL_KNOWN_SURFACE_IDS.bottomPanel)).toBe(false);
   });
 });

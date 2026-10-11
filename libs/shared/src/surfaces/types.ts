@@ -183,3 +183,15 @@ export function isSurfaceKind(value: unknown): value is SurfaceKind {
 export function isDockSide(value: unknown): value is DockSide {
   return typeof value === 'string' && (DOCK_SIDES as readonly string[]).includes(value);
 }
+
+/**
+ * The app page a kind's native window loads — a bare pathname, as
+ * `assertSafeSurfacePath` requires. A kind without one never gets a window,
+ * and the main process refuses any other page for a kind.
+ */
+export const NATIVE_SURFACE_PATHS: Readonly<Partial<Record<SurfaceKind, string>>> = {
+  'live-preview-output': '/output',
+  'bottom-panel': '/bottom-panel',
+  inspector: '/inspector',
+  editor: '/editor',
+};

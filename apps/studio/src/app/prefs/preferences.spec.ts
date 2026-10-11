@@ -1,6 +1,6 @@
 import { DOCUMENT, PLATFORM_ID } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_FILE_EXPLORER_OPEN,
@@ -266,4 +266,27 @@ describe('Preferences theme fields', () => {
     expect(prefs.resolved()).toBe('light');
     expect(TestBed.inject(DOCUMENT).documentElement.style.colorScheme).toBeUndefined();
   });
+});
+
+describe('Preferences in a native panel window', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    history.replaceState(null, '', '/');
+  });
+
+  for (const path of ['/bottom-panel', '/inspector', '/editor']) {
+    it(`never overwrites what the main window saved (${path})`, () => {
+      TestBed.resetTestingModule();
+      vi.stubGlobal('electron', {});
+      history.replaceState(null, '', path);
+
+      const saved = JSON.stringify({ browserWidth: 300 });
+      const prefs = makePreferences(saved);
+      prefs.patch({ bottomPanelTab: 'output', browserWidth: 420 });
+      TestBed.tick();
+      const storage = TestBed.inject(DOCUMENT).defaultView!.localStorage;
+      expect(storage.getItem(STORAGE_KEY)).toBe(saved);
+      expect(prefs.value().browserWidth).toBe(420);
+    });
+  }
 });
