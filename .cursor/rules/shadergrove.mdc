@@ -15,3 +15,4 @@ change the rule note instead.
 @docs/rules/i18n.md
 @docs/rules/boundary-validation.md
 @docs/rules/persisted-state.md
+@docs/rules/release.md

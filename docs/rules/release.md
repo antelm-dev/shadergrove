@@ -1,12 +1,12 @@
 ---
 type: rule
 applies_to: [all]
-enforced_by: [release-please, check:plugins, angular budgets, review]
+enforced_by: [prerelease workflow, check:plugins, angular budgets, review]
 ---
 
 # Branches, versions and releases
 
-- Name branches with a Conventional Branch prefix (`feat/`, `fix/`, `chore/`, `docs/`, `test/`, `ci/`, `refactor/`, `perf/`).
+- Name implementation branches with a Conventional Branch prefix (`feat/`, `fix/`, `chore/`, `docs/`, `test/`, `ci/`, `refactor/`, `perf/`). Tool-managed branches keep their own names: the planning skills' `codex/` control branches (see [the planning guide](../planning/README.md)) and Release Please's `release-please--…` branch.
 - `master` is stable. Feature pull requests into `master` are squash-merged with a Conventional Commit title that describes the delivered behavior; Release Please builds the changelog and the next version from those titles. See [Releasing](../../RELEASING.md).
 - `develop` is the beta and staging branch. Synchronizations between `master` and `develop`, in either direction, are merge commits, never squashes or rebases.
 - After a stable release, `.github/beta-release.json` on `develop` must name a version strictly newer than the published stable, or new betas fail. See [the publication pipeline](../website-releases.md).
@@ -15,4 +15,4 @@ enforced_by: [release-please, check:plugins, angular budgets, review]
 
 Why it exists: Release Please, the beta pipeline and installed plugin updates all derive versions from history. A squashed sync, a reused pack version or a beta base at or below the stable silently ships the wrong build or hides an update.
 
-How it is enforced: Release Please and the prerelease workflow refuse bad versions; `check:plugins` fails when a package is stale against its sources; the Angular build fails over the error budget. Reusing a pack version and raising a budget are caught in review.
+How it is enforced: the prerelease workflow refuses a beta base at or below the published stable, and the release workflow refuses a tag that disagrees with `package.json` and `APP_VERSION`; `check:plugins` fails when a package is stale against its sources; the Angular build fails over the error budget. Reusing a pack version and raising a budget are caught in review.

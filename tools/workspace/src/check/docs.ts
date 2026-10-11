@@ -288,7 +288,7 @@ export function stripCode(text: string): string {
     .split('\n')
     .map((line) => {
       let kept = '';
-      let rest = line;
+      let rest = line.replace(/(`+)[^`]*?\1/g, '');
       while (rest !== '') {
         if (comment) {
           const end = rest.indexOf('-->');
@@ -306,19 +306,26 @@ export function stripCode(text: string): string {
           rest = rest.slice(start + 4);
         }
       }
-      return kept.replace(/(`+)[^`]*?\1/g, '');
+      return kept;
     })
     .join('\n');
 }
 
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+
 /**
  * GitHub's heading anchor (github-slugger): lowercased, punctuation dropped,
- * spaces to hyphens. Link and HTML markup is unwrapped first.
+ * spaces to hyphens. Link and HTML markup is unwrapped and entities decoded first.
  */
 export function slugify(heading: string): string {
   return heading
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/<[^>]+>/g, '')
+    .replace(/&(?:#(\d+)|#x([\da-f]+)|(amp|lt|gt|quot|apos));/gi, (_, dec, hex, name) => {
+      if (dec) return String.fromCodePoint(Number(dec));
+      if (hex) return String.fromCodePoint(parseInt(hex, 16));
+      return ENTITIES[String(name).toLowerCase()] ?? '';
+    })
     .toLowerCase()
     .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '')
     .replace(/ /g, '-');

@@ -201,9 +201,18 @@ describe('checkDocs', () => {
       ...clean,
       'docs/README.md':
         'Before <!-- [x](gone.md) --> after\n<!--\n[y](gone.md)\n-->\n[z](missing.md)\n',
-      'docs/runbooks/backup.md': `﻿${runbook()}`,
+      'docs/runbooks/backup.md': `\uFEFF${runbook()}`,
     });
     expect(report.errors).toEqual(['docs/README.md:5: broken link: missing.md']);
+  });
+
+  it('keeps checking after a code span that shows comment syntax, and decodes entities in headings', () => {
+    const report = vault({
+      ...clean,
+      'docs/README.md':
+        '## Tips &amp; tricks\n\nWrite `<!--` to comment.\n\n[a](#tips--tricks) [b](gone.md)\n',
+    });
+    expect(report.errors).toEqual(['docs/README.md:5: broken link: gone.md']);
   });
 
   it('warns when a link targets a file git does not track', () => {
