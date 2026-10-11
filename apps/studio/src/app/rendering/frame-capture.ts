@@ -1,5 +1,5 @@
 import type { CaptureFrame, CapturePlan } from '@shadergrove/shared/capture-plan';
-import type { ShaderEngine } from './shader-engine';
+import type { ShaderEngine } from '@shadergrove/rendering';
 
 /**
  * Playing a capture plan through the engine and handing the frames to whoever

@@ -1,5 +1,5 @@
 import type { ShaderParams } from '@shadergrove/shared/model';
-import type { ShaderEngine } from './shader-engine';
+import type { ShaderEngine } from '@shadergrove/rendering';
 
 /**
  * Renders exactly one frame offscreen and hands back a PNG, without leaving

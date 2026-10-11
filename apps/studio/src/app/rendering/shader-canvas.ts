@@ -18,10 +18,14 @@ import type { CompileDiagnostic } from '@shadergrove/shared/diagnostic';
 import { ShaderStore } from '../workspace/shader-store';
 import { TextureAssets } from '../assets/texture-assets';
 import { OutputLog } from '../ui/bottom-panel/output-log';
-import type { GlContext } from './gl-context';
+import {
+  type GlContext,
+  type ChannelSource,
+  type EnginePass,
+  ShaderEngine,
+} from '@shadergrove/rendering';
 import { GlContextRegistry } from './gl-context-registry';
 import { RendererHandle } from './renderer-handle';
-import { type ChannelSource, type EnginePass, ShaderEngine } from './shader-engine';
 
 const EMPTY_CHANNELS: readonly (ChannelSource | null)[] = [null, null, null, null];
 const TRANSITION_DURATION_MS = 220;

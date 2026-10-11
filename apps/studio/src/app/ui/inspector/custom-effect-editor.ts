@@ -15,7 +15,7 @@ import { LIMITS, sanitizeParams, validateControls } from '@shadergrove/shared/va
 import { CodeEditor, type EditorDoc } from '../../editor/code-editor';
 import { EditorSettings } from '../../editor/editor-settings';
 import { TranslatePipe } from '../../i18n/translate.pipe';
-import { effectDocId } from '../../rendering/engine/custom-effect-pass';
+import { effectDocId } from '@shadergrove/rendering';
 import { ShaderStore } from '../../workspace/shader-store';
 
 export interface CustomEffectEditorData {
