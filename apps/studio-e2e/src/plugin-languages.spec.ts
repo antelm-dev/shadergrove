@@ -107,7 +107,7 @@ test('languages are packs: defaults, a partial third-party pack, fallback and fo
     'En uso como idioma de la app',
   );
   await expect(page.locator('html')).toHaveAttribute('lang', 'es');
-  await page.getByRole('link', { name: /back to the editor/i }).click();
+  await page.getByTestId('open-editor').click();
   await expect(page.getByPlaceholder('Filtrar')).toBeVisible();
   // Interpolated and translated beside a key the pack leaves to English.
   await expect(page.getByText('17 controles · 3 presets').first()).toBeVisible();
@@ -153,7 +153,7 @@ test('languages are packs: defaults, a partial third-party pack, fallback and fo
   await page.reload();
   await page.getByTestId('plugins-tab-browse').click();
   await expect(page.getByTestId(`install-available-${FRENCH_PACK}`)).toBeVisible();
-  await page.getByRole('link', { name: /back to the editor/i }).click();
+  await page.getByTestId('open-editor').click();
   await openLanguageMenu(page);
   await expect(page.getByTestId(option(REFS.french))).toHaveCount(0);
   await expect(page.getByTestId(option(REFS.spanish))).toHaveAttribute('aria-checked', 'true');

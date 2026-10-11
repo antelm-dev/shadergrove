@@ -35,7 +35,7 @@ test('an existing French 1.0.1 profile can update to the inspector translations'
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
   await page.reload();
   await expect(toggle).toBeChecked();
-  await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
+  await page.getByTestId('open-editor').click();
   await page.keyboard.press('Control+j');
   await page.locator('#bottom-panel-tab-inspection').click();
   // This establishes that the stored old pack survived seeding and the new
@@ -55,7 +55,7 @@ test('an existing French 1.0.1 profile can update to the inspector translations'
   await page.getByTestId('plugins-tab-installed').click();
   await expect(toggle).not.toBeChecked();
   await toggle.click();
-  await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
+  await page.getByTestId('open-editor').click();
   await page.locator('#bottom-panel-tab-inspection').click();
   await expect(page.locator('app-render-inspection-panel .capture')).toHaveText(
     'Capturer une frame',

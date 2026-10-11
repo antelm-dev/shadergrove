@@ -43,7 +43,7 @@ test('an existing French 1.0.2 profile can update to the observation translation
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
   await page.reload();
   await expect(toggle).toBeChecked();
-  await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
+  await page.getByTestId('open-editor').click();
   await page.keyboard.press('Control+j');
   await page.locator('#bottom-panel-tab-inspection').click();
   // The stored old pack survived seeding: the inspection strings are French, the
@@ -67,7 +67,7 @@ test('an existing French 1.0.2 profile can update to the observation translation
   await page.getByTestId('plugins-tab-installed').click();
   await expect(toggle).not.toBeChecked();
   await toggle.click();
-  await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
+  await page.getByTestId('open-editor').click();
   await page.locator('#bottom-panel-tab-inspection').click();
   await page.locator('app-render-inspection-panel .capture').click();
   await expect(page.locator('app-render-observation .find')).toHaveText('Trouver les variables');

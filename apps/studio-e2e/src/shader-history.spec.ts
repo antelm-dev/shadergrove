@@ -239,7 +239,7 @@ test('a French profile holding the pre-History 1.0.5 pack is offered the History
     readFileSync(
       resolve(
         import.meta.dirname,
-        '../../studio/src/plugins/dev.shadergrove.language-fr-1.0.11.sgplugin.json',
+        '../../studio/src/plugins/dev.shadergrove.language-fr-1.0.13.sgplugin.json',
       ),
       'utf8',
     ),
@@ -270,13 +270,15 @@ test('a French profile holding the pre-History 1.0.5 pack is offered the History
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
 
   // History falls back to English in this profile today.
-  await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
+  await page.getByTestId('open-editor').click();
   await page.locator('app-editor-shell .editor-toolbar').click({ button: 'right' });
   await expect(page.getByRole('menuitem', { name: 'History…' })).toBeVisible();
   await page.keyboard.press('Escape');
 
   // The catalogue offers a newer immutable version carrying the French strings.
   await page.getByTestId('open-plugins').click();
+  // Plugins reopens on Installed, the tab last shown; the catalogue is under Browse.
+  await page.getByTestId('plugins-tab-browse').click();
   await expect(page.getByTestId(`install-available-${FRENCH}`)).toBeVisible({ timeout: 10_000 });
   await page.getByTestId(`install-available-${FRENCH}`).click();
   await expect(page.getByTestId(`available-installed-${FRENCH}`)).toBeVisible();
@@ -284,9 +286,9 @@ test('a French profile holding the pre-History 1.0.5 pack is offered the History
   const updated = page.getByTestId(`plugin-enable-${FRENCH}`).getByRole('switch');
   if (!(await updated.isChecked())) await updated.click();
   await expect(updated).toBeChecked();
-  await expect(page.getByTestId(`plugin-${FRENCH}`)).toContainText('1.0.11');
+  await expect(page.getByTestId(`plugin-${FRENCH}`)).toContainText('1.0.13');
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
-  await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
+  await page.getByTestId('open-editor').click();
   await openHistory(page, 'Historique…');
   await expect(dialog(page)).toContainText('code source, les réglages et les préréglages');
 });
