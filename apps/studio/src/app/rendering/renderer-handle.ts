@@ -228,10 +228,15 @@ export class RendererHandle {
    * simply keeps the preview it already had.
    */
   async captureThumbnail(): Promise<ThumbnailUpload | null> {
-    const engine = this.engine();
-    if (!engine) return null;
-
-    const frame = await engine.screenshot();
+    const frame = await this.captureFrameBlob();
     return frame ? encodeThumbnail(frame) : null;
+  }
+
+  /**
+   * The active engine's current frame as a PNG at drawing-buffer size, kept in
+   * memory rather than saved. `null` when there is nothing rendering.
+   */
+  async captureFrameBlob(): Promise<Blob | null> {
+    return (await this.engine()?.screenshot()) ?? null;
   }
 }
