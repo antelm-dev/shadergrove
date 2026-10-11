@@ -62,10 +62,6 @@ const SORT_LABELS: Record<PublicationSort, TranslationKey> = {
   imports: [MatButtonModule, MatIconModule, MatProgressBarModule, RouterLink, TranslatePipe],
   template: `
     <header class="page-bar">
-      <a matButton routerLink="/">
-        <mat-icon>arrow_back</mat-icon>
-        {{ 'explore.backToEditor' | translate }}
-      </a>
       <h1>{{ 'explore.title' | translate }}</h1>
       <form class="search" role="search" (submit)="search($event, input)">
         <mat-icon aria-hidden="true">search</mat-icon>

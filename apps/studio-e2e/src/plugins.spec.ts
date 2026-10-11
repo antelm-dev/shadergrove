@@ -83,8 +83,8 @@ async function openPlugins(page: Page): Promise<void> {
 }
 
 async function backToEditor(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /back to the editor/i }).click();
-  await expect(page.locator('mat-toolbar.toolbar')).toBeVisible();
+  await page.getByTestId('open-editor').click();
+  await expect(page.getByTestId('open-editor')).toHaveAttribute('aria-current', 'page');
 }
 
 /** Shows one of the Plugins tabs. */

@@ -101,6 +101,8 @@ export const ENGLISH_MESSAGES: Readonly<Record<TranslationKey, string>> = {
   "toolbar.toggleBrowser": "Toggle the shader browser",
   "toolbar.documentActions": "{description} — right-click for actions",
   "toolbar.saveLabel": "Save shader. {hint}",
+  "toolbar.sections": "Sections",
+  "toolbar.editor": "Editor",
   "auth.accountTooltip": "Open account and login",
   "auth.accountMenu": "Account menu",
   "auth.accountTitle": "Your account",

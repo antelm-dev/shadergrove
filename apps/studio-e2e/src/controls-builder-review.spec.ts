@@ -131,7 +131,7 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
     readFileSync(
       resolve(
         import.meta.dirname,
-        '../../studio/src/plugins/dev.shadergrove.language-fr-1.0.11.sgplugin.json',
+        '../../studio/src/plugins/dev.shadergrove.language-fr-1.0.13.sgplugin.json',
       ),
       'utf8',
     ),
@@ -170,11 +170,13 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
 
   // The builder's entry falls back to English in this profile today.
-  await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
+  await page.getByTestId('open-editor').click();
   await expect(page.getByRole('button', { name: /^Edit controls$/ })).toBeVisible();
 
   // The catalogue must offer a newer immutable version carrying the French strings.
   await page.getByTestId('open-plugins').click();
+  // Plugins reopens on Installed, the tab last shown; the catalogue is under Browse.
+  await page.getByTestId('plugins-tab-browse').click();
   await expect(page.getByTestId(`available-${FRENCH}`)).toBeVisible();
   await expect(page.getByTestId(`install-available-${FRENCH}`)).toBeVisible({ timeout: 10_000 });
 
@@ -186,6 +188,6 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
   if (!(await updated.isChecked())) await updated.click();
   await expect(updated).toBeChecked();
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
-  await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
+  await page.getByTestId('open-editor').click();
   await expect(page.getByRole('button', { name: 'Modifier les contrôles' })).toBeVisible();
 });

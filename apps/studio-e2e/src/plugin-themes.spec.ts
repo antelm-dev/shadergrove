@@ -79,12 +79,13 @@ async function openStudio(page: Page): Promise<void> {
 
 async function openPlugins(page: Page): Promise<void> {
   await page.getByTestId('open-plugins').click();
-  await expect(page).toHaveURL('/plugins');
+  // The tab last shown is reopened, so the address may name it.
+  await expect(page).toHaveURL(/\/plugins(?:\?|$)/);
 }
 
 async function backToEditor(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /back to the editor/i }).click();
-  await expect(page.locator('mat-toolbar.toolbar')).toBeVisible();
+  await page.getByTestId('open-editor').click();
+  await expect(page.getByTestId('open-editor')).toHaveAttribute('aria-current', 'page');
 }
 
 /** Picks the file in Plugins, reviews it and installs it — which leaves it off. */
