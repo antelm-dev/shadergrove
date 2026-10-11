@@ -13,6 +13,7 @@ import { PANEL_LIMITS } from '@shadergrove/shared/panel-prefs';
 import { isContainedPlacement } from '@shadergrove/shared/surfaces';
 import type { ResizeEdge } from '@shadergrove/shared/geometry';
 import { InspectorPanel } from './inspector-panel';
+import { InspectorWindowControls } from './inspector-window-controls';
 import { ReducedMotion } from '../../prefs/reduced-motion';
 import {
   SurfaceGeometryGesture,
@@ -33,7 +34,7 @@ import {
  */
 @Component({
   selector: 'app-inspector-shell',
-  imports: [InspectorPanel, SurfaceResizeHandles],
+  imports: [InspectorPanel, InspectorWindowControls, SurfaceResizeHandles],
   template: `
     @if (projected().resizableDocked && projected().dockSide; as side) {
       <surface-resize-handles
@@ -53,7 +54,9 @@ import {
       [collapsed]="mode() === 'minimized'"
       [dragEnabled]="mode() === 'floating'"
       (dragStart)="onDrag($event)"
-    />
+    >
+      <app-inspector-window-controls inspectorWindowControls />
+    </app-inspector-panel>
 
     @if (projected().resizableFloating) {
       <surface-resize-handles

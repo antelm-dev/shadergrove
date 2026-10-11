@@ -16,7 +16,7 @@ import { CodeEditor, type EditorDoc } from '../../editor/code-editor';
 import { EditorSettings } from '../../editor/editor-settings';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 import { effectDocId } from '../../rendering/engine/custom-effect-pass';
-import { ShaderStore } from '../../workspace/shader-store';
+import { InspectorSession } from './inspector-session';
 
 export interface CustomEffectEditorData {
   instanceId: string;
@@ -169,13 +169,13 @@ export interface CustomEffectEditorData {
 export class CustomEffectEditor {
   private readonly data = inject<CustomEffectEditorData>(MAT_DIALOG_DATA);
   private readonly dialogRef = inject<MatDialogRef<CustomEffectEditor>>(MatDialogRef);
-  private readonly store = inject(ShaderStore);
+  private readonly session = inject(InspectorSession);
   protected readonly settings = inject(EditorSettings);
 
   protected readonly nameLength = LIMITS.nameLength;
 
   protected readonly effect = computed<CustomEffect | null>(() => {
-    const render = this.store.draft()?.render;
+    const render = this.session.render();
     const effect = render && findPostProcessingEffect(render, this.data.instanceId);
     return effect?.type === 'custom' ? effect : null;
   });
@@ -193,8 +193,8 @@ export class CustomEffectEditor {
   });
 
   protected readonly diagnostics = computed(() =>
-    this.store
-      .allDiagnostics()
+    this.session
+      .diagnostics()
       .filter((diagnostic) => diagnostic.docId === effectDocId(this.data.instanceId)),
   );
 
@@ -309,8 +309,8 @@ export class CustomEffectEditor {
   }
 
   private mutate(update: (effect: CustomEffect) => CustomEffect): void {
-    const render: RenderSettings | undefined = this.store.draft()?.render;
+    const render: RenderSettings | null = this.session.render();
     if (!render) return;
-    this.store.setRender(updatePostProcessingEffect(render, this.data.instanceId, update));
+    this.session.setRender(updatePostProcessingEffect(render, this.data.instanceId, update));
   }
 }

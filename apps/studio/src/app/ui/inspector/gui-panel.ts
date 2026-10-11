@@ -14,14 +14,9 @@ import { MatIconModule } from '@angular/material/icon';
 import type GUI from 'lil-gui';
 import type { Controller } from 'lil-gui';
 
-import { Preferences } from '../../prefs/preferences';
-import { ShaderStore } from '../../workspace/shader-store';
-import { RendererHandle } from '../../rendering/renderer-handle';
 import type { ShaderControl } from '@shadergrove/shared/model';
-import { CONFIG_DOC } from '@shadergrove/shared/diagnostic';
-import { EditorNavigation } from '../../editor/editor-navigation';
 import { TranslatePipe } from '../../i18n/translate.pipe';
-import { SurfaceLayoutService } from '../../surfaces';
+import { InspectorSession } from './inspector-session';
 import { DEFAULT_FOLDER } from '../editor/controls-builder-state';
 import { scrubValue } from './label-scrub';
 
@@ -40,7 +35,7 @@ import { scrubValue } from './label-scrub';
   selector: 'app-gui-panel',
   imports: [MatButtonModule, MatIconModule, TranslatePipe],
   template: `
-    @if (store.record()) {
+    @if (session.shader()) {
       <!-- Always offered, even with nothing to tune yet: this is how a shader
            gets its first control. -->
       <button matButton="tonal" type="button" class="edit-controls" (click)="editControls()">
@@ -49,7 +44,7 @@ import { scrubValue } from './label-scrub';
       </button>
     }
     <div #host class="gui-host" (pointerdown)="onNamePointerDown($event)"></div>
-    @if (store.controls().length === 0 && store.record()) {
+    @if (session.controls().length === 0 && session.shader()) {
       <p class="empty">{{ 'inspector.noControls' | translate }}</p>
     }
   `,
@@ -89,12 +84,8 @@ import { scrubValue } from './label-scrub';
   `,
 })
 export class GuiPanel {
-  protected readonly store = inject(ShaderStore);
-  private readonly preferences = inject(Preferences);
-  private readonly renderer = inject(RendererHandle);
+  protected readonly session = inject(InspectorSession);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly layout = inject(SurfaceLayoutService);
-  private readonly navigation = inject(EditorNavigation);
 
   private readonly host = viewChild.required<ElementRef<HTMLDivElement>>('host');
 
@@ -102,7 +93,7 @@ export class GuiPanel {
   private gui: GUI | null = null;
 
   /**
-   * The object lil-gui actually mutates. Kept in step with `store.params()` in
+   * The object lil-gui actually mutates. Kept in step with `session.params()` in
    * both directions: lil-gui writes here and we push into the store; the store
    * changes (a preset, a reset) and we write back here.
    */
@@ -114,8 +105,8 @@ export class GuiPanel {
     resolutionScale: 1,
     paused: false,
     autoRipples: false,
-    savePng: () => void this.savePng(),
-    resetParams: () => this.store.resetParams(),
+    savePng: () => void this.session.captureImage(),
+    resetParams: () => this.session.resetParams(),
   };
 
   constructor() {
@@ -128,7 +119,7 @@ export class GuiPanel {
     // nodes) that diffing the controls would be more code than it is worth.
     effect(() => {
       const GuiClass = this.lib();
-      const controls = this.store.controls();
+      const controls = this.session.controls();
       if (!GuiClass) return;
 
       untracked(() => this.rebuild(GuiClass, controls));
@@ -137,7 +128,7 @@ export class GuiPanel {
     // Push store -> GUI. Only touches controllers whose value actually differs,
     // so dragging a slider is never fought by its own echo.
     effect(() => {
-      const params = this.store.params();
+      const params = this.session.params();
       const gui = this.gui;
       if (!gui) return;
 
@@ -152,28 +143,23 @@ export class GuiPanel {
     });
 
     effect(() => {
-      this.system.fps = this.renderer.fps();
+      this.system.fps = this.session.fps();
     });
 
     effect(() => {
-      const preferences = this.preferences.value();
-      this.system.resolutionScale = preferences.resolutionScale;
-      this.system.paused = preferences.paused;
-      this.system.autoRipples = preferences.autoRipples;
+      const system = this.session.system();
+      this.system.resolutionScale = system.resolutionScale;
+      this.system.paused = system.paused;
+      this.system.autoRipples = system.autoRipples;
       this.gui?.controllersRecursive().forEach((controller) => controller.updateDisplay());
     });
 
     this.destroyRef.onDestroy(() => this.gui?.destroy());
   }
 
-  /**
-   * Open the editor on the Config, in the builder. Restoring a closed or
-   * minimized editor is the layout's job; picking the document and its view is
-   * the editor panel's, which hears it through the navigation request.
-   */
+  /** Open the editor on the Config, in the builder. */
   protected editControls(): void {
-    this.layout.openEditor();
-    this.navigation.reveal(CONFIG_DOC, 0);
+    this.session.editControls();
   }
 
   private rebuild(GuiClass: typeof GUI, controls: readonly ShaderControl[]): void {
@@ -186,7 +172,7 @@ export class GuiPanel {
     });
     this.gui = gui;
 
-    this.proxy = { ...this.store.params() };
+    this.proxy = { ...this.session.params() };
 
     const folders = new Map<string, GUI>();
     const folderFor = (name: string): GUI => {
@@ -203,7 +189,7 @@ export class GuiPanel {
       const controller = this.addController(parent, control);
 
       controller.name(control.label ?? control.key).onChange((value: unknown) => {
-        this.store.setParam(control.key, value as string | number | boolean);
+        this.session.setParam(control.key, value as string | number | boolean);
       });
     }
 
@@ -234,17 +220,17 @@ export class GuiPanel {
     folder
       .add(this.system, 'resolutionScale', 0.25, 2, 0.05)
       .name('Resolution Scale')
-      .onChange((value: number) => this.preferences.patch({ resolutionScale: value }));
+      .onChange((value: number) => this.session.setSystem({ resolutionScale: value }));
 
     folder
       .add(this.system, 'paused')
       .name('Pause (Space)')
-      .onChange((value: boolean) => this.preferences.patch({ paused: value }));
+      .onChange((value: boolean) => this.session.setSystem({ paused: value }));
 
     folder
       .add(this.system, 'autoRipples')
       .name('Auto Ripples')
-      .onChange((value: boolean) => this.preferences.patch({ autoRipples: value }));
+      .onChange((value: boolean) => this.session.setSystem({ autoRipples: value }));
 
     folder.add(this.system, 'fps').name('FPS').listen().disable();
     // "Capture image", not "Save PNG": it does not save the shader, and every
@@ -273,7 +259,7 @@ export class GuiPanel {
     // is free to reuse, so the match is on the object and not just the key.
     if (!name || !controller || controller.object !== this.proxy) return;
 
-    const control = this.store.controls().find((item) => item.key === controller.property);
+    const control = this.session.controls().find((item) => item.key === controller.property);
     if (control?.type !== 'number') return;
 
     event.preventDefault();
@@ -292,13 +278,5 @@ export class GuiPanel {
     name.addEventListener('pointermove', move);
     name.addEventListener('pointerup', end);
     name.addEventListener('pointercancel', end);
-  }
-
-  private async savePng(): Promise<void> {
-    const name = this.store.record()?.id ?? 'shader';
-    const saved = await this.renderer.screenshot(name);
-    if (!saved) {
-      this.store.notice.set({ text: 'Nothing to capture yet', error: true });
-    }
   }
 }

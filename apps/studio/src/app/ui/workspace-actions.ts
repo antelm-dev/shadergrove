@@ -22,6 +22,7 @@ import type { ConfirmDialogData } from './dialogs/confirm-dialog';
 import type { DeleteLinkedDialogData } from './dialogs/delete-linked-dialog';
 import type { HistoryDialogData } from './dialogs/history-dialog';
 import type { NewShaderDialogResult } from './dialogs/new-shader-dialog';
+import { PresetDialogs } from './dialogs/preset-dialogs';
 import type { PromptDialogData, PromptDialogResult } from './dialogs/prompt-dialog';
 import type { UnsavedChoice } from './dialogs/unsaved-changes-dialog';
 import type { ExplorerContextCommand, ExplorerReorderIntent } from './file-explorer/contract';
@@ -50,6 +51,7 @@ export class WorkspaceActions {
   private readonly updater = inject(DesktopUpdater);
   private readonly i18n = inject(I18n);
   private readonly openDocs = inject(OpenDocuments);
+  private readonly presetDialogs = inject(PresetDialogs);
   private readonly auth = inject(AuthService);
   private readonly sync = inject(DesktopSync);
   private readonly account = inject(DesktopAccount);
@@ -507,27 +509,12 @@ export class WorkspaceActions {
   // --- Presets ------------------------------------------------------------
 
   async savePreset(): Promise<void> {
-    const result = await this.promptFor({
-      title: this.i18n.t('dialog.savePreset'),
-      label: this.i18n.t('dialog.presetName'),
-      confirmText: this.i18n.t('action.save'),
-      hint: this.i18n.t('dialog.savePresetHint'),
-      option: {
-        label: this.i18n.t('dialog.presetCaptureRender'),
-        hint: this.i18n.t('dialog.presetCaptureRenderHint'),
-      },
-    });
-    if (result) await this.store.savePreset(result.value, result.checked);
+    const result = await this.presetDialogs.askToSave();
+    if (result) await this.store.savePreset(result.name, result.withRender);
   }
 
   async deletePreset(presetId: string, name: string): Promise<void> {
-    const confirmed = await this.confirm({
-      title: this.i18n.t('dialog.deletePreset'),
-      message: this.i18n.t('dialog.deletePresetMessage', { name }),
-      confirmText: this.i18n.t('action.delete'),
-      destructive: true,
-    });
-    if (confirmed) await this.store.deletePreset(presetId);
+    if (await this.presetDialogs.confirmDelete(name)) await this.store.deletePreset(presetId);
   }
 
   // --- Import / export ----------------------------------------------------

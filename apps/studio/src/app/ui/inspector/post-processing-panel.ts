@@ -39,7 +39,7 @@ import { I18n } from '../../i18n/i18n';
 import type { TranslationKey } from '../../i18n/keys';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 import { effectDocId } from '../../rendering/engine/custom-effect-pass';
-import { ShaderStore } from '../../workspace/shader-store';
+import { InspectorSession } from './inspector-session';
 import { CustomEffectEditor, type CustomEffectEditorData } from './custom-effect-editor';
 
 const EFFECT_LABEL_KEY: Record<PostProcessingEffectType, TranslationKey> = {
@@ -532,7 +532,7 @@ const EFFECT_LABEL_KEY: Record<PostProcessingEffectType, TranslationKey> = {
   `,
 })
 export class PostProcessingPanel {
-  protected readonly store = inject(ShaderStore);
+  protected readonly session = inject(InspectorSession);
   protected readonly i18n = inject(I18n);
   protected readonly twoDecimals: Intl.NumberFormatOptions = {
     minimumFractionDigits: 2,
@@ -542,9 +542,7 @@ export class PostProcessingPanel {
 
   protected readonly types = POST_PROCESSING_EFFECT_TYPES;
 
-  private readonly render = computed<RenderSettings | null>(
-    () => this.store.draft()?.render ?? null,
-  );
+  private readonly render = computed<RenderSettings | null>(() => this.session.render());
   protected readonly effects = computed<PostProcessingEffect[]>(
     () => this.render()?.postProcessing.effects ?? [],
   );
@@ -598,7 +596,7 @@ export class PostProcessingPanel {
   /** The renderer's diagnostics for one custom effect: compile errors, a skipped API, a suspension. */
   protected diagnosticsFor(effect: PostProcessingEffect): CompileDiagnostic[] {
     const docId = effectDocId(effect.instanceId);
-    return this.store.allDiagnostics().filter((diagnostic) => diagnostic.docId === docId);
+    return this.session.diagnostics().filter((diagnostic) => diagnostic.docId === docId);
   }
 
   protected step(control: NumberControl): number {
@@ -722,6 +720,6 @@ export class PostProcessingPanel {
   private mutate(fn: (render: RenderSettings) => RenderSettings): void {
     const current = this.render();
     if (!current) return;
-    this.store.setRender(fn(current));
+    this.session.setRender(fn(current));
   }
 }
