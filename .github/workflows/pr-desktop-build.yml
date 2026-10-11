@@ -1,0 +1,87 @@
+name: PR desktop build
+
+# On-demand Windows build of a pull request, for manual testing before merge.
+# Run it from Actions → PR desktop build → Run workflow, with the PR number.
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number to package for Windows
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-desktop-build-${{ inputs.pr }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Package PR for Windows
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      # Only an open, same-repository PR is built: the artifact is an executable
+      # people run locally, so fork code never reaches it.
+      - name: Resolve the PR head
+        id: pr
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ inputs.pr }}
+        run: |
+          [[ "$PR" =~ ^[1-9][0-9]*$ ]] || { echo "::error::'$PR' is not a PR number"; exit 1; }
+          info="$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json state,isCrossRepository,headRefOid,headRefName \
+            --jq '[.state, (.isCrossRepository|tostring), .headRefOid, .headRefName] | @tsv')"
+          IFS=$'\t' read -r state cross sha branch <<< "$info"
+          [[ "$state" == OPEN ]] || { echo "::error::PR #$PR is $state"; exit 1; }
+          [[ "$cross" == false ]] || { echo "::error::PR #$PR comes from a fork; only same-repository PRs are packaged"; exit 1; }
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::unexpected head SHA '$sha'"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "short=${sha:0:7}" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ steps.pr.outputs.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # renovate: datasource=node-version depName=node
+          node-version: '26.5.0'
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Package unpacked application
+        run: pnpm pack:win
+      - name: Upload PR application
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: shadergrove-pr-${{ inputs.pr }}-${{ steps.pr.outputs.short }}
+          path: release/**
+          if-no-files-found: error
+          retention-days: 14
+      - name: Explain how to test it
+        shell: bash
+        env:
+          PR: ${{ inputs.pr }}
+          SHORT: ${{ steps.pr.outputs.short }}
+          BRANCH: ${{ steps.pr.outputs.branch }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Windows build of PR #$PR
+
+          Branch \`$BRANCH\` at \`$SHORT\`. Download **shadergrove-pr-$PR-$SHORT** from this run's artifacts (kept 14 days), unzip it and start \`win-unpacked\\shadergrove.exe\`.
+
+          The app keeps its library and preferences under \`%APPDATA%\\Shader Studio\`. To test without touching your real library, start it from PowerShell with a throwaway profile:
+
+          \`\`\`powershell
+          \$env:APPDATA = "\$env:TEMP\\shadergrove-pr-$PR"; & ".\\win-unpacked\\shadergrove.exe"
+          \`\`\`
+
+          This build is unsigned and never published to the update feed.
+          EOF
