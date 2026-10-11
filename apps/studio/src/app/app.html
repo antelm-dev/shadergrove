@@ -533,7 +533,7 @@
           >
             <mat-icon>tune</mat-icon>
           </button>
-          } @if (editorOpen()) {
+          } @if (editorOpen() && !layout.editorNative()) {
           <app-editor-shell class="editor" />
           }
         </div>

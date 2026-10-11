@@ -691,3 +691,89 @@ describe('SurfaceLayoutService native inspector', () => {
     expect(layout.inspectorOpen()).toBe(true);
   });
 });
+
+describe('SurfaceLayoutService native editor', () => {
+  const id = editorSurfaceId(DEFAULT_EDITOR_GROUP_ID);
+  const second = asEditorGroupId('editor-group:1');
+  const secondId = editorSurfaceId(second);
+  let layout: SurfaceLayoutService;
+  let registry: SurfaceRegistry;
+  let preferences: FakePreferences;
+  let desktop: FakeDesktop;
+
+  const boot = () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: Preferences, useValue: preferences },
+        { provide: DesktopPlatform, useValue: desktop },
+      ],
+    });
+    registry = TestBed.inject(SurfaceRegistry);
+    layout = TestBed.inject(SurfaceLayoutService);
+    TestBed.tick();
+  };
+
+  beforeEach(() => {
+    preferences = new FakePreferences();
+    desktop = new FakeDesktop();
+    boot();
+  });
+
+  it('moves the whole editor to its own page and keeps its split for when it docks', async () => {
+    registry.upsert(
+      createDefaultSurface('editor', {
+        id: secondId,
+        chrome: { kind: 'editor', editorGroupId: second },
+      }),
+    );
+    const split = splitEditorLeaf(
+      registry.editorLayout(),
+      id,
+      secondId,
+      'horizontal',
+      asSplitNodeId('split:right'),
+    );
+    if (!split.ok) throw new Error(split.reason);
+    registry.setEditorLayout(split.layout);
+    TestBed.tick();
+
+    expect(await layout.detach(id)).toBe(true);
+    expect(desktop.opens).toEqual([{ surfaceId: id, kind: 'editor', path: '/editor' }]);
+    expect(layout.editorNative()).toBe(true);
+    expect(layout.editorOpen()).toBe(true);
+
+    desktop.live.clear();
+    boot(); // relaunch: the split is still there, the editor still detached
+    await settle();
+    expect(registry.editorLayout()).toEqual(split.layout);
+    expect(layout.editorNative()).toBe(true);
+    expect(desktop.opens).toHaveLength(2);
+
+    desktop.returned({ surfaceId: id });
+    desktop.windowClosed(id);
+    await settle();
+    expect(layout.editorNative()).toBe(false);
+    expect(registry.editorLayout()).toEqual(split.layout);
+  });
+
+  it('hides with its window, and comes back in it when shown', async () => {
+    await layout.detach(id);
+
+    desktop.windowClosed(id);
+    await settle();
+    expect(layout.editorNative()).toBe(true);
+    expect(layout.editorOpen()).toBe(false);
+
+    layout.openEditor();
+    await settle();
+    expect(layout.editorOpen()).toBe(true);
+    expect(desktop.opens).toHaveLength(2);
+
+    // Showing it again while its window is open only brings that window forward.
+    layout.openEditor();
+    await settle();
+    expect(desktop.opens).toHaveLength(3);
+    expect(desktop.live.size).toBe(1);
+  });
+});

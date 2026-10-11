@@ -15,6 +15,7 @@ import {
   type SplitAxis,
   type SurfaceId,
 } from '@shadergrove/shared/surfaces';
+import { DesktopPlatform } from '../../desktop/desktop-platform';
 import { SurfaceLayoutService, SurfaceRegistry, describeSurfaceCommands } from '../../surfaces';
 import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
@@ -58,6 +59,13 @@ const DOCK_ICONS: Record<EditorDockSide, string> = {
         <button mat-menu-item type="button" (click)="layout.float(surfaceId())">
           <mat-icon>open_in_new</mat-icon>
           <span>{{ 'action.detach' | translate }}</span>
+        </button>
+      }
+      @if (desktop.available) {
+        <!-- The whole editor, splits and all, not just this group. -->
+        <button mat-menu-item type="button" class="open-in-window" (click)="openInWindow()">
+          <mat-icon>select_window</mat-icon>
+          <span>{{ 'action.openInWindow' | translate }}</span>
         </button>
       }
       <button
@@ -167,6 +175,7 @@ export class EditorWindowControls {
   protected readonly layout = inject(SurfaceLayoutService);
   protected readonly registry = inject(SurfaceRegistry);
   protected readonly workspace = inject(WorkspaceActions);
+  protected readonly desktop = inject(DesktopPlatform);
   private readonly groups = inject(EditorGroups);
   private readonly i18n = inject(I18n);
   protected readonly dockSides = EDITOR_DOCK_SIDES;
@@ -214,6 +223,11 @@ export class EditorWindowControls {
     // Floating, or restoring from floating: only the default surface has a legacy dock side.
     return this.surfaceId() === this.layout.editorId ? this.layout.editorDockSide() : 'bottom';
   });
+
+  /** Desktop only: the editor moves to a native window of its own, until docked again. */
+  protected openInWindow(): void {
+    void this.layout.detach(this.layout.editorId);
+  }
 
   protected splitGroup(axis: SplitAxis): void {
     this.groups.split(axis, this.splitSource());

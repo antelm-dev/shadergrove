@@ -15,7 +15,7 @@ export interface WindowRoot {
  * over the session channel and never constructs the workspace's session,
  * routing or startup sequence.
  */
-const SATELLITE_SHELLS: Readonly<Partial<Record<SatelliteKind, () => Promise<WindowRoot>>>> = {
+const SATELLITE_SHELLS: Readonly<Record<SatelliteKind, () => Promise<WindowRoot>>> = {
   'bottom-panel': () =>
     import('./ui/bottom-panel/bottom-panel-window').then((m) => ({
       component: m.BottomPanelWindow,
@@ -26,11 +26,15 @@ const SATELLITE_SHELLS: Readonly<Partial<Record<SatelliteKind, () => Promise<Win
       component: m.InspectorWindow,
       providers: m.INSPECTOR_WINDOW_PROVIDERS,
     })),
+  editor: () =>
+    import('./ui/editor/editor-window').then((m) => ({
+      component: m.EditorWindow,
+      providers: [],
+    })),
 };
 
 /** What the desktop renderer bootstraps: the workspace, or a native panel window's shell. */
 export function rootComponent(): Promise<WindowRoot> {
   const kind = satelliteKind();
-  const shell = kind ? SATELLITE_SHELLS[kind] : undefined;
-  return shell ? shell() : Promise.resolve({ component: App, providers: [] });
+  return kind ? SATELLITE_SHELLS[kind]() : Promise.resolve({ component: App, providers: [] });
 }

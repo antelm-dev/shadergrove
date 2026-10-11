@@ -426,7 +426,10 @@ export function sanitizeLayoutPreferences(
   // Version 1 (no split tree) and corrupt trees both repair to leaves over the
   // contained editor surfaces; the output is always the current version.
   const defaultEditorId = asSurfaceId(defaultSurfaceId('editor'));
-  const editors = surfaces.filter((s) => s.kind === 'editor' && s.placement.host === 'contained');
+  // The default editor frames the split even from a native window, so its split survives.
+  const editors = surfaces.filter(
+    (s) => s.kind === 'editor' && (s.placement.host === 'contained' || s.id === defaultEditorId),
+  );
   const editorLayout = sanitizeEditorLayout(input['editorLayout'], {
     known: editors.map((s) => s.id),
     required: editors.filter((s) => s.open).map((s) => s.id),

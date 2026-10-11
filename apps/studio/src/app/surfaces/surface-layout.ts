@@ -58,6 +58,7 @@ export const BOTTOM_PANEL_SURFACE_ID = WELL_KNOWN_SURFACE_IDS.bottomPanel;
 const NATIVE_PANELS: ReadonlyMap<SurfaceId, SatelliteKind> = new Map([
   [BOTTOM_PANEL_SURFACE_ID, 'bottom-panel'],
   [INSPECTOR_SURFACE_ID, 'inspector'],
+  [DEFAULT_EDITOR_SURFACE_ID, 'editor'],
 ]);
 
 @Injectable({ providedIn: 'root' })

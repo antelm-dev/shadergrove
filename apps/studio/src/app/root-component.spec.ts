@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './app';
 import { rootComponent } from './root-component';
 import { BottomPanelWindow } from './ui/bottom-panel/bottom-panel-window';
+import { EditorWindow } from './ui/editor/editor-window';
 import { InspectorSession } from './ui/inspector/inspector-session';
 import { InspectorWindow } from './ui/inspector/inspector-window';
 import { RemoteInspectorSession } from './ui/inspector/remote-inspector-session';
@@ -18,6 +19,9 @@ describe('rootComponent', () => {
 
     history.replaceState(null, '', '/bottom-panel');
     expect((await rootComponent()).component).toBe(BottomPanelWindow);
+
+    history.replaceState(null, '', '/editor');
+    expect((await rootComponent()).component).toBe(EditorWindow);
 
     history.replaceState(null, '', '/inspector');
     const inspector = await rootComponent();
