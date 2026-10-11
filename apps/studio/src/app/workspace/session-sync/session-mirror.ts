@@ -187,7 +187,9 @@ export class SessionMirror {
     if (!ready) {
       const unanswered = [...this.pending.values()];
       this.pending.clear();
-      this.release();
+      // Held echoes are older than what was typed here: dropped, not shown. The new main
+      // window's state replaces them once it settles, after the replays below.
+      this.held = {};
       this.rejoining ??= [];
       for (const pending of unanswered) {
         if (REPLAYABLE_COMMANDS.has(pending.command.kind)) this.rejoining.push(pending);

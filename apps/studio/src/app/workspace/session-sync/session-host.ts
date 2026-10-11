@@ -87,7 +87,11 @@ export class SessionHost {
    * panel windows kept showing.
    */
   private readonly settled = signal(false);
-  /** A reveal for an editor window that was not open to hear it: sent when it says hello. */
+  /**
+   * The last reveal for the detached editor, sent again when its window next
+   * says hello: a window that is reopening, or open but not yet listening, would
+   * otherwise miss it. Showing the same line twice is harmless.
+   */
   private pendingReveal: { docId: string; line: number } | null = null;
 
   start(): void {
@@ -218,12 +222,11 @@ export class SessionHost {
           if (!target) return;
           this.store.selectDoc(target.docId);
           this.flush();
+          this.pendingReveal = { docId: target.docId, line: target.line };
           // A hidden editor's window is only now reopening: it gets the reveal when it says hello.
-          if (!this.layout.isWindowOpen(this.layout.editorId)) {
-            this.pendingReveal = { docId: target.docId, line: target.line };
-            return;
+          if (this.layout.isWindowOpen(this.layout.editorId)) {
+            this.post({ kind: 'reveal-in-editor', ...this.pendingReveal });
           }
-          this.post({ kind: 'reveal-in-editor', docId: target.docId, line: target.line });
         });
       },
       { injector: this.injector },
@@ -366,6 +369,8 @@ export class SessionHost {
         if (command.shaderId !== this.store.record()?.id) return 'other-shader';
         const document = this.store.documents().find((each) => each.id === command.docId);
         if (!document) return false;
+        // Already there (a keystroke the reloaded draft carried, replayed): nothing to apply.
+        if (document.source === command.source) return true;
         if (textFingerprint(document.source) !== command.base) return 'conflict';
         this.store.setDocSource(command.docId, command.source);
         return true;
@@ -377,6 +382,8 @@ export class SessionHost {
         this.store.selectDoc(command.docId);
         return true;
       case 'save':
+        // A save already running is not a failure: this one only asked for the same thing.
+        if (this.store.saving()) return true;
         return this.store.save().then((saved): Outcome => saved || 'failed');
       default:
         return false;

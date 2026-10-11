@@ -161,6 +161,66 @@ describe('the session channel, delivered asynchronously', () => {
     expect(shown(mirror)).toBe('SERVER V2');
   });
 
+  it('keeps what was typed when the main window dies with an older echo on its way (G1)', async () => {
+    const main = new AsyncBroadcastChannel(SESSION_CHANNEL);
+    const received: SessionMessage[] = [];
+    main.onmessage = ({ data }) => received.push(data as SessionMessage);
+    const mirror = startMirror();
+    main.postMessage({
+      kind: 'state',
+      patch: { shader: { id: 'waves', updatedAt: 'v1' }, documents: FAKE_DOCUMENTS },
+    } satisfies SessionMessage);
+    await settle();
+    void type(mirror, `${IMAGE} a`, IMAGE);
+    void type(mirror, `${IMAGE} ab`, `${IMAGE} a`);
+    await settle();
+    const [first] = received.filter(
+      (message): message is Extract<SessionMessage, { kind: 'command' }> =>
+        message.kind === 'command',
+    );
+
+    // The first keystroke is answered, its echo held behind the second; then the main window dies.
+    main.postMessage({
+      kind: 'state',
+      patch: {
+        documents: FAKE_DOCUMENTS.map((document) =>
+          document.id === 'image' ? { ...document, source: `${IMAGE} a` } : document,
+        ),
+      },
+    } satisfies SessionMessage);
+    main.postMessage({
+      kind: 'done',
+      client: first.client,
+      seq: first.seq,
+      ok: true,
+    } satisfies SessionMessage);
+    main.postMessage({ kind: 'host', ready: false } satisfies SessionMessage);
+    await settle();
+
+    expect(shown(mirror)).toBe(`${IMAGE} ab`);
+  });
+
+  it('takes a replayed keystroke the reloaded draft already carries as done, quietly (G2)', async () => {
+    const mirror = startMirror();
+    await settle();
+    // The keystroke goes to a main window that dies before it answers…
+    const typed = type(mirror, `${IMAGE} typed`, IMAGE);
+    await settle();
+
+    // …but its draft mirror had already saved the text the reloaded window restores.
+    session.documents.set(
+      FAKE_DOCUMENTS.map((document) =>
+        document.id === 'image' ? { ...document, source: `${IMAGE} typed` } : document,
+      ),
+    );
+    startHost();
+    await settle();
+
+    expect(await typed).toBe(true);
+    expect(mirror.refusal()).toBeNull();
+    expect(shown(mirror)).toBe(`${IMAGE} typed`);
+  });
+
   it('lands an interleaved burst whole, never showing an older text after a newer one', async () => {
     startHost();
     const mirror = startMirror();

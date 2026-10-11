@@ -260,6 +260,40 @@ describe('SessionHost (main window)', () => {
     });
   });
 
+  it('sends a reveal to an open editor window and again when it says hello, in case it was not listening yet (G3)', () => {
+    session.native.set({ bottomPanel: false, inspector: false, editor: true });
+    session.windowOpen.set(true);
+    start();
+    const satellite = peer();
+    const reveals = () =>
+      satellite.received.filter((message) => message.kind === 'reveal-in-editor');
+
+    TestBed.inject(EditorNavigation).reveal('image', 3);
+    TestBed.tick();
+    expect(reveals()).toHaveLength(1);
+
+    satellite.channel.postMessage({ kind: 'hello', client: 'editor', window: 'editor' });
+    expect(reveals()).toEqual([
+      { kind: 'reveal-in-editor', docId: 'image', line: 3 },
+      { kind: 'reveal-in-editor', docId: 'image', line: 3 },
+    ]);
+
+    // Sent once on that hello, not on every later one.
+    satellite.channel.postMessage({ kind: 'hello', client: 'editor', window: 'editor' });
+    expect(reveals()).toHaveLength(2);
+  });
+
+  it('accepts a save asked for while one is already running, without saving twice (G4)', async () => {
+    start();
+    const satellite = peer();
+    session.saving.set(true);
+
+    const replies = await command(satellite, { kind: 'save' });
+
+    expect(replies.at(-1)).toEqual({ kind: 'done', client: 'panel', seq: 1, ok: true });
+    expect(session.store.save).not.toHaveBeenCalled();
+  });
+
   it('does not re-send the documents when only the render changed', () => {
     session.native.set({ bottomPanel: false, inspector: true, editor: true });
     const satellite = peer();
