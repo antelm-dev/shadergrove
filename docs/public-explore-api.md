@@ -1,4 +1,4 @@
-# Public Explore — API contract (Phase 1)
+# Public Explore — API contract
 
 The server contract behind public shader snapshots and their moderation. The
 TypeScript shapes named here live in
@@ -38,20 +38,62 @@ sends. Turning the flag off is the rollback: every route except
   `AUTH_TRUSTED_ORIGINS`), or it is `403 forbidden`.
 - **Paging.** `?limit=` (default 24, capped at 50) and `?cursor=` (the previous
   page's `nextCursor`; `null` on the last page). Order is newest first with the
-  id as tie-break, so pages never skip or repeat.
+  id as tie-break, so paging a listing nobody is changing never skips or
+  repeats. There is no snapshot isolation: an update landing between two pages
+  can move a publication across the cursor.
 - **Ids.** A publication id is 20 lowercase hex characters, stable across
   update, unpublish and republish.
 
 ## Anonymous
 
-| Route                                          | Returns                                                                                                                               |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/capabilities`                        | `ExploreCapabilities`. Always registered; `admin` is `false` for anonymous callers.                                                   |
-| `GET /api/publications?search=&cursor=&limit=` | `PublicationPage`. `search` matches the title, case-insensitive, at most 64 characters.                                               |
-| `GET /api/publications/:id`                    | `{ publication: PublicationDetail }`                                                                                                  |
-| `GET /api/publications/:id/thumbnail`          | Image bytes                                                                                                                           |
-| `GET /api/publications/:id/textures/:channel`  | Image bytes for channel `0`–`3`                                                                                                       |
-| `GET /api/publications/:id/export`             | A `shader-studio/v3` bundle (attachment) plus a `publication` block with title, author label, license, attribution and `derivedFrom`. |
+| Route                                                | Returns                                                                                                                               |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/capabilities`                              | `ExploreCapabilities`. Always registered; `admin` is `false` for anonymous callers.                                                   |
+| `GET /api/publications?search=&sort=&cursor=&limit=` | `PublicationPage`. See [Search, sort and cursors](#search-sort-and-cursors).                                                          |
+| `GET /api/publications/:id`                          | `{ publication: PublicationDetail }`                                                                                                  |
+| `GET /api/publications/:id/thumbnail`                | Image bytes                                                                                                                           |
+| `GET /api/publications/:id/textures/:channel`        | Image bytes for channel `0`–`3`                                                                                                       |
+| `GET /api/publications/:id/export`                   | A `shader-studio/v3` bundle (attachment) plus a `publication` block with title, author label, license, attribution and `derivedFrom`. |
+
+## Search, sort and cursors
+
+`GET /api/publications` lists what is public right now; hidden, unpublished and
+deleted publications never appear, whatever the query.
+
+- **`search`** (optional, trimmed, at most 64 characters): a case-insensitive
+  substring of the title, the description **or** the author label of the
+  published snapshot. `%`, `_` and `!` are matched literally. Nothing private
+  is searched — not the private shader as it is now, nor any account data.
+  Matching is a plain `LIKE` scan: fine at today's volume, not a full-text index.
+- **`sort`** (optional): `updated` (the default) orders by the last explicit
+  update of the snapshot, `published` by when it was first published. Update,
+  unpublish and republish never move `publishedAt`. Both are newest first with
+  the id as tie-break. Any other value — including an empty or repeated
+  `sort` — is `400 invalid`. The values are `PUBLICATION_SORTS` in the shared
+  contract.
+- **`cursor`**: opaque to clients. The server issues base64url JSON
+  `{ v: 2, sort, search, at, id }`, where `search` is the trimmed, lowercased
+  term and `at` the sort's timestamp of the last item. A cursor is only valid
+  with the same `sort` and (normalized) `search`; anything else — another
+  query, an unknown version, a malformed or out-of-range field, more than 1024
+  characters — is `400 invalid`. Cursors are validated, not signed: forging one
+  can only start the same public listing at another position.
+- **Older cursors.** A version-less `{ at, id }` cursor issued before sorting
+  existed is still accepted, in `updated` order only. It never recorded a
+  search, so it is not checked against one. The moderators' publication,
+  report and audit listings keep issuing and reading plain `{ at, id }`
+  cursors exactly as before; their `search` stays title-only.
+
+Indexes: `(updated_at DESC, id DESC)` since migration 4, and
+`(published_at DESC, id DESC)` from migration 6 (both engines). On SQLite with
+20,000 rows, both sorts walk their index without a sort step, a page takes
+under 1 ms, and a search that matches nothing scans the whole index (~14 ms).
+
+**Rollback.** Migration 6 only adds an index. A build without it refuses to
+start on a store that has it (the ledger is newer than it supports), so a
+behaviour rollback must keep migration 6 and its version: revert the API
+change, never the migration, and never lower the ledger. A reverted API cannot
+serve `sort=published` to a web client that still asks for it.
 
 ## Owner
 
@@ -125,8 +167,9 @@ All under `/api/admin`, all `403 forbidden` for anyone not on the configured lis
   publish, update and republish. Lifting the restriction restores nothing: each
   publication stays hidden until a moderator restores it.
 
-## Deliberately not in Phase 1
+## Deliberately not here yet
 
 Desktop Explore or publishing, publication data in desktop sync, role
 management, appeals, likes/comments, server-side rendering of shaders, fetching
-remote assets.
+remote assets, ranking, tag or capability filters, full-text search, and
+search beyond titles for moderators.

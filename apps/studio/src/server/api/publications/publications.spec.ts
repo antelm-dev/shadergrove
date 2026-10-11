@@ -605,4 +605,47 @@ describe('request limits', () => {
       expect(await status(fetch(`${base}/api/publications?${query}`))).toBe(400);
     }
   });
+
+  it('sorts by update or first publication, with cursors bound to their query', async () => {
+    const list = (query: string) => fetch(`${base}/api/publications?${query}`);
+    for (const sort of ['', 'sort=updated', 'sort=published']) {
+      const response = await list(`limit=1&${sort}`);
+      expect(`${sort} → ${response.status} ${response.headers.get('cache-control')}`).toBe(
+        `${sort} → 200 no-store`,
+      );
+    }
+
+    const page = await json<{ nextCursor: string }>(list('limit=1&sort=published'));
+    expect(await status(list(`limit=1&sort=published&cursor=${page.nextCursor}`))).toBe(200);
+    for (const query of [
+      `sort=updated&cursor=${page.nextCursor}`,
+      `sort=published&search=x&cursor=${page.nextCursor}`,
+      'sort=oldest',
+      'sort=updated&sort=published',
+      `cursor=${'a'.repeat(1025)}`,
+    ]) {
+      const response = await list(query);
+      expect(`${query.slice(0, 40)} → ${response.status}`).toBe(`${query.slice(0, 40)} → 400`);
+      expect((await json<{ error: { code: string } }>(response)).error.code).toBe('invalid');
+    }
+
+    // A cursor an older server handed out still continues the default order.
+    const [first] = (
+      await json<{ publications: { id: string; updatedAt: string }[] }>(list('limit=1'))
+    ).publications;
+    const legacy = Buffer.from(JSON.stringify({ at: first.updatedAt, id: first.id })).toString(
+      'base64url',
+    );
+    const rest = await json<{ publications: { id: string }[] }>(list(`cursor=${legacy}`));
+    expect(rest.publications.map((entry) => entry.id)).not.toContain(first.id);
+    expect(await status(list(`sort=published&cursor=${legacy}`))).toBe(400);
+
+    const doc = await json<{
+      paths: Record<string, { get?: { parameters?: { name: string; schema?: object }[] } }>;
+    }>(fetch(`${base}/api/docs-json`));
+    const parameters = doc.paths['/publications']?.get?.parameters ?? [];
+    expect(parameters.find((parameter) => parameter.name === 'sort')?.schema).toMatchObject({
+      enum: ['updated', 'published'],
+    });
+  });
 });

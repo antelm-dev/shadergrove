@@ -8,8 +8,11 @@ import {
 } from '../../library/conformance';
 import { ShaderLibrary } from '../../library/shader-library';
 import { runPublicationConformance } from '../../publication/conformance';
+import { PublicationLibrary } from '../../publication/publication-library';
+import { runMigrations, targetVersion } from '../migration-runner';
 import type { AssetKey } from '../shader-repository';
 import { LOCAL_SCOPE } from '../user-scope';
+import { POSTGRES_MIGRATIONS } from './migrations';
 import { PostgresRepository } from './postgres-repository';
 
 /**
@@ -108,7 +111,89 @@ if (!url) {
       await sidePool.query('DELETE FROM shaders WHERE owner_user_id = $1', [id]);
       await sidePool.query('DELETE FROM users WHERE id = $1', [id]);
     },
+    stamp: async (id, publishedAt, updatedAt) => {
+      await sidePool.query(
+        'UPDATE publications SET published_at = $1, updated_at = $2 WHERE id = $3',
+        [publishedAt, updatedAt, id],
+      );
+    },
   }));
+
+  describe('first-publication index migration (postgres)', () => {
+    const indexed = async (): Promise<boolean> =>
+      (
+        await sidePool.query(
+          "SELECT 1 FROM pg_indexes WHERE indexname = 'idx_publications_published'",
+        )
+      ).rows.length > 0;
+    const version = async (): Promise<number> =>
+      Number(
+        (await sidePool.query("SELECT value FROM storage_metadata WHERE key = 'schema_version'"))
+          .rows[0].value,
+      );
+    const rows = async () =>
+      (await sidePool.query('SELECT * FROM publications ORDER BY id')).rows as unknown[];
+
+    /** A store with two publications, one of them updated after it was first published. */
+    async function populated(): Promise<void> {
+      await newHarness().cleanup();
+      const repo = localRepository();
+      const lib = new ShaderLibrary(repo, { userId: 'user-alice' });
+      await lib.init();
+      const pubs = new PublicationLibrary(repo, lib);
+      const terms = { authorLabel: 'A', license: 'MIT', rightsConfirmed: true };
+      for (const name of ['First', 'Second']) {
+        const shader = await lib.create({ name });
+        await pubs.publish('user-alice', shader.id, {
+          ...terms,
+          expectedRevision: shader.revision,
+        });
+      }
+      const { revision } = await lib.update('first', { name: 'First, updated' });
+      await pubs.publish('user-alice', 'first', { ...terms, expectedRevision: revision });
+      await lib.close();
+    }
+
+    it('creates the index on a fresh store and adds it to a version-5 store without changing rows', async () => {
+      await populated();
+      expect(await version()).toBe(targetVersion(POSTGRES_MIGRATIONS));
+      expect(await indexed()).toBe(true);
+
+      await sidePool.query(
+        `DROP INDEX idx_publications_published;
+         UPDATE storage_metadata SET value = '5' WHERE key = 'schema_version'`,
+      );
+      const before = await rows();
+      expect(before).toHaveLength(2);
+      const lib = new ShaderLibrary(localRepository(), LOCAL_SCOPE);
+      await lib.init();
+      await lib.close();
+      expect(await version()).toBe(6);
+      expect(await indexed()).toBe(true);
+      expect(await rows()).toEqual(before);
+    });
+
+    it('refuses an older build against the upgraded ledger, while a build keeping it starts', async () => {
+      await populated();
+      const stored = await version();
+      const noop = () => undefined;
+      const older = POSTGRES_MIGRATIONS.filter((migration) => migration.version <= 5);
+      await expect(
+        runMigrations(older, { getVersion: () => stored, setVersion: noop, exec: noop }),
+      ).rejects.toThrow(/newer than this build supports/);
+
+      const repo = localRepository();
+      const lib = new ShaderLibrary(repo, LOCAL_SCOPE);
+      await lib.init();
+      try {
+        const listed = await repo.publications.list({ state: 'visible', limit: 10 });
+        expect(listed.map((row) => row.title).sort()).toEqual(['First, updated', 'Second']);
+      } finally {
+        await lib.close();
+      }
+      expect(await version()).toBe(6);
+    });
+  });
 
   describe('conditional delete vs a concurrent thumbnail write (postgres)', () => {
     it('conflicts instead of deleting over a thumbnail committed meanwhile', async () => {

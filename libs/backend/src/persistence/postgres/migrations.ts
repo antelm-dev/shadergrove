@@ -174,4 +174,14 @@ export const POSTGRES_MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 6,
+    name: 'publications-by-first-publication',
+    async up(exec) {
+      // Mirrors the SQLite index; see its migration.
+      await exec(
+        'CREATE INDEX idx_publications_published ON publications(published_at DESC, id DESC)',
+      );
+    },
+  },
 ];

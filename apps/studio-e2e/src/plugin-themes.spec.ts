@@ -203,6 +203,7 @@ test('Grove Amber is installed, worn by the app and the editor, kept, and remove
   // Removed: the fallback is painted in the scheme last worn, in the app and the
   // editor, and the choice is kept for if the package comes back.
   await openPlugins(page);
+  await page.getByTestId('plugins-tab-installed').click();
   await page.getByTestId(`plugin-remove-${AMBER}`).click();
   await expect(page.getByTestId(`plugin-${AMBER}`)).toHaveCount(0);
   await expect.poll(() => textColour(page)).toBe(BUILTIN_LIGHT_TEXT);
@@ -273,6 +274,7 @@ test('the official Light and Dark: a default pack, System mode, parity and remov
 
   // A fresh profile has it installed and switched on, beside the other defaults.
   await openPlugins(page);
+  await page.getByTestId('plugins-tab-installed').click();
   await expect(page.getByTestId(`plugin-enable-${DEFAULTS}`).getByRole('switch')).toBeChecked();
   await backToEditor(page);
 
@@ -317,6 +319,7 @@ test('the official Light and Dark: a default pack, System mode, parity and remov
 
   // Switched off, the fallback paints exactly what the pack did, and nothing stays inline.
   await openPlugins(page);
+  await page.getByTestId('plugins-tab-installed').click();
   await setEnabled(page, DEFAULTS, false);
   await backToEditor(page);
   expect(await token(page, '--mat-sys-primary')).toBe(BUILTIN_PRIMARY);
@@ -332,9 +335,11 @@ test('the official Light and Dark: a default pack, System mode, parity and remov
 
   // Removed, it stays removed across a reload; reinstalling it is explicit, and leaves it off.
   await openPlugins(page);
+  await page.getByTestId('plugins-tab-installed').click();
   await page.getByTestId(`plugin-remove-${DEFAULTS}`).click();
   await expect(page.getByTestId(`plugin-${DEFAULTS}`)).toHaveCount(0);
   await page.reload();
+  await page.getByTestId('plugins-tab-browse').click();
   await expect(page.getByTestId(`install-available-${DEFAULTS}`)).toBeVisible();
   await expect(page.getByTestId(`plugin-${DEFAULTS}`)).toHaveCount(0);
   await page.getByTestId(`install-available-${DEFAULTS}`).click();

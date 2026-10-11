@@ -30,8 +30,10 @@ import {
   type TextureChannelPayloads,
 } from '@shadergrove/shared/model';
 import {
+  DEFAULT_PUBLICATION_SORT,
   PUBLICATION_LICENSES,
   PUBLICATION_LIMITS,
+  PUBLICATION_SORTS,
   REPORT_REASONS,
   SHARE_ALIKE_LICENSE,
   type AdminPublicationDetail,
@@ -46,6 +48,7 @@ import {
   type PublicationLicense,
   type PublicationOrigin,
   type PublicationPage,
+  type PublicationSort,
   type PublicationSummary,
   type PublisherRestriction,
   type ReportReason,
@@ -88,9 +91,32 @@ export class PublicationLibrary {
 
   // --- public reads ---------------------------------------------------------
 
+  /**
+   * Its own path rather than `page()`: the public listing searches more fields,
+   * sorts two ways and binds its cursors to both, while the moderators' listing
+   * keeps its title search, updated order and plain cursors.
+   */
   async listPublic(query: Input): Promise<PublicationPage> {
-    const { rows, nextCursor } = await this.page(query, 'visible');
-    return { publications: rows.map(toSummary), nextCursor };
+    const sort = oneOf(query['sort'] ?? DEFAULT_PUBLICATION_SORT, PUBLICATION_SORTS, 'sort');
+    // Lowercased because that is all the match depends on, so it is what a cursor binds to.
+    const search = text(query['search'], 'search', {
+      max: PUBLICATION_LIMITS.searchLength,
+    }).toLowerCase();
+    const limit = pageSize(query['limit']);
+    const rows = await this.repo.publications.list({
+      state: 'visible',
+      searchIn: 'public',
+      sort,
+      ...(search ? { search } : {}),
+      ...publicBefore(query['cursor'], sort, search),
+      limit: limit + 1,
+    });
+    const items = rows.slice(0, limit);
+    const last = items.at(-1);
+    return {
+      publications: items.map(toSummary),
+      nextCursor: rows.length > limit && last ? publicCursor(sort, search, last) : null,
+    };
   }
 
   async readPublic(id: string): Promise<PublicationDetail> {
@@ -678,6 +704,71 @@ function before(cursor: unknown): { before?: PageCursor } {
     // falls through to the one error below
   }
   throw new StorageError('invalid', 'cursor is not valid');
+}
+
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/**
+ * A public cursor: `{ v: 2, sort, search, at, id }` as base64url JSON, bound to
+ * the sort and normalized search it was issued for. Not signed: it only names a
+ * position in a listing anyone may read, so a forged one can do no more than
+ * start that listing somewhere else.
+ */
+function publicCursor(sort: PublicationSort, search: string, row: PublicationRow): string {
+  const at = sort === 'published' ? row.publishedAt : row.updatedAt;
+  return Buffer.from(JSON.stringify({ v: 2, sort, search, at, id: row.id })).toString('base64url');
+}
+
+/**
+ * Reads a public cursor back, refusing anything this server would not have
+ * issued for this `sort` and `search`. A version-less `{ at, id }` from before
+ * sorting existed is still taken, in `updated` order only: it never recorded a
+ * search, so it is not checked against one.
+ */
+function publicBefore(
+  cursor: unknown,
+  sort: PublicationSort,
+  search: string,
+): { before?: PageCursor } {
+  if (cursor === undefined || cursor === '') return {};
+  const invalid = new StorageError('invalid', 'cursor is not valid');
+  if (
+    typeof cursor !== 'string' ||
+    cursor.length > PUBLICATION_LIMITS.cursorLength ||
+    !/^[\w-]+$/.test(cursor)
+  ) {
+    throw invalid;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString());
+  } catch {
+    throw invalid;
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw invalid;
+  const fields = parsed as Record<string, unknown>;
+  const { at, id } = fields;
+  if (
+    typeof at !== 'string' ||
+    !TIMESTAMP.test(at) ||
+    Number.isNaN(Date.parse(at)) ||
+    typeof id !== 'string' ||
+    !PUBLICATION_ID.test(id)
+  ) {
+    throw invalid;
+  }
+  const keys = Object.keys(fields).length;
+  if (!('v' in fields)) {
+    if (keys !== 2 || sort !== 'updated') throw invalid;
+  } else if (fields['v'] !== 2 || keys !== 5 || typeof fields['search'] !== 'string') {
+    throw invalid;
+  } else if (fields['sort'] !== sort || fields['search'] !== search) {
+    throw new StorageError(
+      'invalid',
+      'cursor belongs to another search or sort; start again without it',
+    );
+  }
+  return { before: { at, id } };
 }
 
 /** `rows` was fetched with one extra: its presence is what says there is a next page. */

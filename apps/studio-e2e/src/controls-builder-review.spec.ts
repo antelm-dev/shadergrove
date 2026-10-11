@@ -131,7 +131,7 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
     readFileSync(
       resolve(
         import.meta.dirname,
-        '../../studio/src/plugins/dev.shadergrove.language-fr-1.0.9.sgplugin.json',
+        '../../studio/src/plugins/dev.shadergrove.language-fr-1.0.12.sgplugin.json',
       ),
       'utf8',
     ),
@@ -160,6 +160,7 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
   await page.getByTestId('open-plugins').click();
 
   // Replace the seeded pack with the one an existing profile still holds.
+  await page.getByTestId('plugins-tab-installed').click();
   await page.getByTestId(`plugin-remove-${FRENCH}`).click();
   await expect(page.getByTestId(`plugin-${FRENCH}`)).toHaveCount(0);
   await page.getByTestId('plugin-file').setInputFiles({
@@ -174,6 +175,7 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
 
   // The builder's entry and the tools' kinds fall back to English in this profile today.
+  await page.getByTestId('plugins-tab-browse').click();
   const doctor = page.getByTestId('available-dev.shadergrove.shader-doctor');
   await expect(doctor).toContainText('Analyzer');
   await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
@@ -187,10 +189,12 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
   // Updating carries the builder's French strings over; the pack may come back disabled.
   await page.getByTestId(`install-available-${FRENCH}`).click();
   await expect(page.getByTestId(`available-installed-${FRENCH}`)).toBeVisible();
+  await page.getByTestId('plugins-tab-installed').click();
   const updated = page.getByTestId(`plugin-enable-${FRENCH}`).getByRole('switch');
   if (!(await updated.isChecked())) await updated.click();
   await expect(updated).toBeChecked();
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+  await page.getByTestId('plugins-tab-browse').click();
   await expect(doctor).toContainText('Analyseur');
   await expect(page.getByTestId('available-dev.shadergrove.palette-studio')).toContainText(
     'Outil de ressources',

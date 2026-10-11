@@ -52,9 +52,12 @@ async function openStudio(page: Page, browserOpen = false): Promise<void> {
   await expect(page.locator('mat-toolbar.toolbar')).toBeVisible();
 }
 
+/** Opens Plugins on its Installed tab, where the pack is switched on, used and removed. */
 async function openPlugins(page: Page): Promise<void> {
   await page.getByTestId('open-plugins').click();
   await expect(page).toHaveURL(/\/plugins/);
+  await page.getByTestId('plugins-tab-installed').click();
+  await expect(page.getByTestId('plugins-tab-installed')).toHaveAttribute('aria-selected', 'true');
 }
 
 async function backToEditor(page: Page): Promise<void> {

@@ -10,6 +10,8 @@
  * stored as text and booleans as 0/1 on both.
  */
 
+import type { PublicationSort } from '@shadergrove/shared/publication';
+
 import type { AssetKey, ShaderTx } from '../persistence/shader-repository';
 
 export type SqlValue = string | number | null | Uint8Array;
@@ -117,6 +119,11 @@ export interface PublicationListQuery {
   /** `visible`: owner-visible and not moderator-hidden. `hidden`: the rest. */
   state?: 'visible' | 'hidden';
   search?: string;
+  /** `title` (the default) matches the title only; `public` also the description and author label. */
+  searchIn?: 'title' | 'public';
+  /** `updated` (the default) or `published`: newest first by that time, then by id. */
+  sort?: PublicationSort;
+  /** A position in the chosen `sort`: `at` is that sort's time. */
   before?: PageCursor;
   limit: number;
 }
@@ -208,6 +215,9 @@ export function publicationSchemaSql(blob: 'BLOB' | 'bytea'): string {
 
 const VISIBLE = 'p.owner_visible = 1 AND p.moderator_hidden = 0';
 
+/** What a public search reads: the snapshot's own text, never anything private. */
+const PUBLIC_SEARCH_FIELDS = ['p.title', 'p.description', 'p.author_label'];
+
 const PUBLICATION_COLUMNS = `
   p.id, p.source_shader_id, p.owner_user_id, p.title, p.description, p.author_label, p.license,
   p.attribution, p.derived_from_json, p.owner_visible, p.moderator_hidden, p.revision,
@@ -263,24 +273,31 @@ export class PublicationStore {
     return row ? toPublicationRow(row) : null;
   }
 
-  /** Newest first, by `(updated_at, id)` — a total order, so paging never skips or repeats. */
+  /**
+   * Newest first by `(updated_at, id)`, or `(published_at, id)` — a total order
+   * either way, so paging a static listing never skips or repeats.
+   */
   async list(query: PublicationListQuery): Promise<PublicationRow[]> {
+    // A fixed pair of columns, never anything taken from the query.
+    const time = query.sort === 'published' ? 'p.published_at' : 'p.updated_at';
     const where: string[] = [];
     const params: SqlValue[] = [];
     if (query.state === 'visible') where.push(VISIBLE);
     if (query.state === 'hidden') where.push(`NOT (${VISIBLE})`);
     if (query.search) {
-      where.push("LOWER(p.title) LIKE ? ESCAPE '!'");
-      params.push(`%${query.search.toLowerCase().replace(/[!%_]/g, '!$&')}%`);
+      const term = `%${query.search.toLowerCase().replace(/[!%_]/g, '!$&')}%`;
+      const fields = query.searchIn === 'public' ? PUBLIC_SEARCH_FIELDS : ['p.title'];
+      where.push(`(${fields.map((field) => `LOWER(${field}) LIKE ? ESCAPE '!'`).join(' OR ')})`);
+      params.push(...fields.map(() => term));
     }
     if (query.before) {
-      where.push('(p.updated_at < ? OR (p.updated_at = ? AND p.id < ?))');
+      where.push(`(${time} < ? OR (${time} = ? AND p.id < ?))`);
       params.push(query.before.at, query.before.at, query.before.id);
     }
     const rows = await this.db.all(
       `SELECT ${PUBLICATION_COLUMNS} FROM publications p
        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-       ORDER BY p.updated_at DESC, p.id DESC LIMIT ?`,
+       ORDER BY ${time} DESC, p.id DESC LIMIT ?`,
       [...params, query.limit],
     );
     return rows.map(toPublicationRow);
