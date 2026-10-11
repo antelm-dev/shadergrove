@@ -261,6 +261,25 @@ describe('SessionHost (main window)', () => {
     expect(navigation.request()).toBeNull();
   });
 
+  it('leaves profiling to the docked panel until the panel is detached, then profiles its tab', async () => {
+    start();
+    TestBed.tick();
+    expect(session.renderer.setProfilingEnabled).not.toHaveBeenCalled();
+
+    session.preferences.update((prefs) => ({
+      ...prefs,
+      bottomPanelOpen: true,
+      bottomPanelTab: 'profiler',
+    }));
+    session.native.set({ bottomPanel: true, inspector: false, editor: false });
+    TestBed.tick();
+    expect(session.renderer.setProfilingEnabled).toHaveBeenLastCalledWith(true);
+
+    session.native.set({ bottomPanel: false, inspector: false, editor: false });
+    TestBed.tick();
+    expect(session.renderer.setProfilingEnabled).toHaveBeenLastCalledWith(false);
+  });
+
   it('does nothing where BroadcastChannel does not exist', () => {
     vi.stubGlobal('BroadcastChannel', undefined);
     expect(() => start()).not.toThrow();

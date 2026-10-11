@@ -5,6 +5,7 @@ import {
   computed,
   effect,
   inject,
+  signal,
   untracked,
   type Signal,
 } from '@angular/core';
@@ -26,7 +27,7 @@ import {
   WorkspaceInspectorSession,
   type SystemSettings,
 } from '../../ui/inspector/inspector-session';
-import { ProfilerSession } from '../../ui/inspector/profiler-session';
+import { IDLE_PROFILER, ProfilerSession } from '../../ui/inspector/profiler-session';
 import { ShaderStore } from '../shader-store';
 import {
   MAX_MIRRORED,
@@ -62,7 +63,12 @@ export class SessionHost {
   private readonly destroyRef = inject(DestroyRef);
 
   private channel: BroadcastChannel | null = null;
-  private profiler: ProfilerSession | null = null;
+  /**
+   * The bottom panel's Profiler tab, profiled here while its window shows it.
+   * Created the first time the panel is detached: before that, the docked
+   * panel's own session is the only one, and nothing here may switch it off.
+   */
+  private readonly profiler = signal<ProfilerSession | null>(null);
   /** What each field was when last posted: a flush posts only what changed. */
   private readonly posted = new Map<SessionField, unknown>();
   private sources: { readonly [K in SessionField]: Signal<SessionState[K]> } | null = null;
@@ -77,13 +83,19 @@ export class SessionHost {
       this.channel = null;
     });
 
-    // The bottom panel's Profiler tab, profiled here while its window shows it.
     const profiling = computed(() => {
       const { bottomPanelOpen, bottomPanelTab } = this.preferences.value();
       return this.layout.bottomPanelNative() && bottomPanelOpen && bottomPanelTab === 'profiler';
     });
-    this.profiler = new ProfilerSession(profiling, this.injector);
-    this.sources = this.createSources(this.profiler);
+    const profile = effect(
+      () => {
+        if (!this.layout.bottomPanelNative()) return;
+        untracked(() => this.profiler.set(new ProfilerSession(profiling, this.injector)));
+        profile.destroy();
+      },
+      { injector: this.injector },
+    );
+    this.sources = this.createSources();
 
     // Only while a panel is detached: docked, there is nobody to tell.
     effect(
@@ -111,7 +123,7 @@ export class SessionHost {
     this.forwardEditorReveals();
   }
 
-  private createSources(profiler: ProfilerSession): {
+  private createSources(): {
     readonly [K in SessionField]: Signal<SessionState[K]>;
   } {
     const store = this.store;
@@ -120,7 +132,7 @@ export class SessionHost {
       diagnostics: computed(() => store.allDiagnostics().slice(0, MAX_MIRRORED)),
       entries: computed(() => this.log.entries().slice(-MAX_MIRRORED)),
       bottomPanelTab: computed(() => this.preferences.value().bottomPanelTab),
-      profiler: profiler.state,
+      profiler: computed(() => this.profiler()?.state() ?? IDLE_PROFILER),
       inspectorTab: inspector.tab,
       shader: inspector.shader,
       controls: inspector.controls,
@@ -226,11 +238,12 @@ export class SessionHost {
         return true;
       case 'apply-profiler-suggestion': {
         // Only what the profiler itself proposed: a panel window cannot pick any scale.
-        const suggestion = this.profiler?.state().suggestion;
+        const profiler = this.profiler();
+        const suggestion = profiler?.state().suggestion;
         if (suggestion === null || suggestion === undefined || command.scale !== suggestion) {
           return false;
         }
-        this.profiler?.applySuggestion(suggestion);
+        profiler?.applySuggestion(suggestion);
         return true;
       }
       case 'inspector-tab':
