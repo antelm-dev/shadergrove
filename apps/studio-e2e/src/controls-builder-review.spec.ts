@@ -175,6 +175,7 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
 
   // The builder's entry and the tools' kinds fall back to English in this profile today.
+  await page.getByTestId('plugins-tab-browse').click();
   const doctor = page.getByTestId('available-dev.shadergrove.shader-doctor');
   await expect(doctor).toContainText('Analyzer');
   await page.getByRole('link', { name: /retour.*[ée]diteur/i }).click();
@@ -193,6 +194,7 @@ test('a French profile holding the pre-builder 1.0.1 pack is offered the builder
   if (!(await updated.isChecked())) await updated.click();
   await expect(updated).toBeChecked();
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+  await page.getByTestId('plugins-tab-browse').click();
   await expect(doctor).toContainText('Analyseur');
   await expect(page.getByTestId('available-dev.shadergrove.palette-studio')).toContainText(
     'Outil de ressources',

@@ -221,6 +221,7 @@ test('Shader Doctor: a versioned report from the sandboxed Worker, per target, k
 
   // Switched off, the panel is gone; removed, so is the package.
   await page.getByTestId('open-plugins').click();
+  await page.getByTestId('plugins-tab-installed').click();
   await expect(page.getByTestId('doctor-panel')).toBeVisible();
   await toggle.click();
   await expect(page.getByTestId('doctor-panel')).toHaveCount(0);

@@ -296,6 +296,7 @@ test('Palette Studio: alpha-aware extraction, gradient editing, JSON round-trip,
 
   // A second instance from the saved file: the effect maps the first one's output again.
   await openPlugins(page);
+  await page.getByTestId('plugins-tab-installed').click();
   await panel.getByTestId('palette-import').setInputFiles({
     name: exported.name,
     mimeType: 'application/json',
@@ -319,6 +320,7 @@ test('Palette Studio: alpha-aware extraction, gradient editing, JSON round-trip,
 
   // Switched off, the tool is gone; removed, the shader keeps both copies and draws the same.
   await openPlugins(page);
+  await page.getByTestId('plugins-tab-installed').click();
   await setEnabled(page, false);
   await expect(panel).toHaveCount(0);
   await page.getByTestId(`plugin-remove-${ID}`).click();
