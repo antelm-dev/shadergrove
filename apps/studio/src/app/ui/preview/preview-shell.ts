@@ -11,6 +11,7 @@ import { Preferences } from '../../prefs/preferences';
 import { AppThemes } from '../../themes/app-themes';
 import { ThemeMenu } from '../../themes/theme-menu';
 import { ShaderStore } from '../../workspace/shader-store';
+import { CompareReference } from '../../rendering/compare-reference';
 import { ShaderCanvas } from '../../rendering/shader-canvas';
 import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
@@ -25,6 +26,7 @@ import {
   keyboardResizeFloating,
   projectSurfaceFrame,
 } from '../../surfaces';
+import { CompareOverlay } from './compare-overlay';
 import { PreviewMenuCommands } from './preview-menu-commands';
 import { PreviewWindowControls } from './preview-window-controls';
 
@@ -49,6 +51,7 @@ import { PreviewWindowControls } from './preview-window-controls';
     PreviewWindowControls,
     SurfaceResizeHandles,
     SurfaceTitleBarDirective,
+    CompareOverlay,
     ShaderCanvas,
     ThemeMenu,
     TranslatePipe,
@@ -70,6 +73,9 @@ import { PreviewWindowControls } from './preview-window-controls';
 
     <div class="body" [class.collapsed]="minimized()" [matContextMenuTriggerFor]="previewMenu">
       <app-shader-canvas />
+      @defer (when compare.reference()) {
+        <app-compare-overlay />
+      }
     </div>
 
     <mat-menu #previewMenu="matMenu">
@@ -254,6 +260,7 @@ import { PreviewWindowControls } from './preview-window-controls';
     }
 
     .body {
+      position: relative;
       display: flex;
       flex: 1 1 auto;
       min-height: 0;
@@ -301,6 +308,8 @@ export class PreviewShell {
   protected readonly desktop = inject(DesktopPlatform);
   protected readonly i18n = inject(I18n);
   protected readonly commands = inject(PreviewMenuCommands);
+  /** Loads the overlay's chunk only once something has been pinned. */
+  protected readonly compare = inject(CompareReference);
   private readonly reducedMotion = inject(ReducedMotion);
 
   readonly stageOnly = input(false);
