@@ -417,7 +417,7 @@ describe('CodeEditor literal scrub', () => {
   const SOURCE: EditorDoc = {
     id: 'image',
     language: 'glsl',
-    value: 'float a = 0.50; /*\n  0.5 */\nfloat b = -1.0;',
+    value: 'float a = 0.50; /*\n  0.5 */\nfloat b = -1.0;\nuint c = 3u;',
   };
 
   beforeAll(async () => {
@@ -533,25 +533,21 @@ describe('CodeEditor literal scrub', () => {
     expect(line(1)).toBe('float a = 0.702; /*');
   });
 
+  /** Types at the end of line 3, leaving the stack element open as the keyboard does. */
+  const typeOnLine3 = (text: string) => {
+    const end = view.model.getLineMaxColumn(3);
+    view.model.pushEditOperations(
+      [],
+      [{ range: { startLineNumber: 3, startColumn: end, endLineNumber: 3, endColumn: end }, text }],
+      () => null,
+    );
+  };
+
   it('keeps typing on either side out of the undo step of the gesture', () => {
-    // Typing leaves its stack element open; the gesture has to close it, and its own.
-    const type = (text: string) => {
-      const end = view.model.getLineMaxColumn(3);
-      view.model.pushEditOperations(
-        [],
-        [
-          {
-            range: { startLineNumber: 3, startColumn: end, endLineNumber: 3, endColumn: end },
-            text,
-          },
-        ],
-        () => null,
-      );
-    };
-    type(' // x');
+    typeOnLine3(' // x');
     drag(1, 12, [140]);
     pointer('pointerup');
-    type('y');
+    typeOnLine3('y');
 
     view.model.undo();
     expect([line(1), line(3)]).toEqual(['float a = 0.60; /*', 'float b = -1.0; // x']);
@@ -559,19 +555,68 @@ describe('CodeEditor literal scrub', () => {
     expect([line(1), line(3)]).toEqual(['float a = 0.50; /*', 'float b = -1.0; // x']);
   });
 
-  it('restores the original on Escape and leaves nothing scrubbed to undo or redo', () => {
+  it('restores the original on Escape, leaving no empty step before the previous edit', () => {
+    typeOnLine3(' // x');
+    const typed = view.model.getValue();
     drag(1, 12, [140]);
     expect(line(1)).toBe('float a = 0.60; /*');
 
     key('keydown', 'Escape');
-    expect(line(1)).toBe('float a = 0.50; /*');
+    expect(view.model.getValue()).toBe(typed);
     pointer('pointermove', { clientX: 200 });
-    expect(line(1)).toBe('float a = 0.50; /*');
+    expect(view.model.getValue()).toBe(typed);
+
+    // The first Ctrl+Z after Escape takes back the typing, not an empty gesture step.
+    view.model.undo();
+    expect(view.model.getValue()).toBe(SOURCE.value);
+  });
+
+  it('leaves the text and the undo stack alone on an Escape before any move', () => {
+    typeOnLine3(' // x');
+    drag(1, 12, []);
+    key('keydown', 'Escape');
 
     view.model.undo();
     expect(view.model.getValue()).toBe(SOURCE.value);
-    view.model.redo();
-    expect(view.model.getValue()).toBe(SOURCE.value);
+  });
+
+  it('keeps every non-modifier key from the editor while dragging', () => {
+    const reached: string[] = [];
+    // Stands in for the editor; stopping here keeps the key from Monaco's
+    // body-level clipboard listener, which jsdom cannot serve.
+    view.node.addEventListener('keydown', (event) => {
+      reached.push(event.key);
+      event.stopPropagation();
+    });
+    drag(1, 12, [108]);
+
+    const press = (name: string) => {
+      const event = new KeyboardEvent('keydown', {
+        key: name,
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      view.node.dispatchEvent(event);
+      return event;
+    };
+    expect(press('ArrowUp').defaultPrevented).toBe(true);
+    expect(press('z').defaultPrevented).toBe(true);
+    expect(press('Shift').defaultPrevented).toBe(false);
+    pointer('pointermove', { clientX: 112 });
+    pointer('pointerup');
+
+    expect(reached).toEqual(['Shift']);
+    expect(view.model.getValue()).toBe(SOURCE.value.replace('0.50', '0.53'));
+  });
+
+  it('turns back at once from a value pinned at zero', () => {
+    drag(4, 10, [60]);
+    expect(line(4)).toBe('uint c = 0u;');
+    pointer('pointermove', { clientX: 64 });
+    pointer('pointerup');
+
+    expect(line(4)).toBe('uint c = 1u;');
   });
 
   it('ends when Alt is let go', () => {

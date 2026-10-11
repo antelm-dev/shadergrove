@@ -38,6 +38,8 @@ import { GLSL_LANGUAGE_ID, JSON_LANGUAGE_ID, loadMonaco, type MonacoApi } from '
 
 export type EditorLanguage = 'glsl' | 'json';
 
+const MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'Shift']);
+
 /** How Monaco is obtained. Only a test has a reason to provide anything else. */
 export const MONACO_LOADER = new InjectionToken<() => Promise<MonacoApi>>('MONACO_LOADER', {
   providedIn: 'root',
@@ -673,6 +675,7 @@ export class CodeEditor {
     });
 
     let text = literal.text;
+    let edited = false;
     let value = literalValue(literal);
     let decimals = literal.decimals;
     let mode = modifiers(down);
@@ -697,6 +700,7 @@ export class CodeEditor {
         () => null,
       );
       text = next;
+      edited = true;
     };
 
     const move = (event: PointerEvent) => {
@@ -712,25 +716,35 @@ export class CodeEditor {
       // A finer step adds a decimal; letting go of Ctrl keeps it rather than rounding it away.
       decimals = Math.max(decimals, step.decimals);
       value = base.value + Math.trunc((event.clientX - base.x) / SCRUB_PIXELS_PER_STEP) * step.step;
+      if (literal.nonNegative && value < 0) {
+        // Pinned at zero from here, so turning back moves it at once rather than after a dead zone.
+        value = 0;
+        base = { x: event.clientX, value };
+      }
       write(formatScrubbed(literal, value, decimals));
     };
     const release = (event: PointerEvent) => {
       if (event.pointerId === down.pointerId) end(false);
     };
+    // Alt is held, so any key is an Alt chord — Alt+Up would move the line the
+    // gesture is writing to. Only modifiers get through; Escape cancels.
     const keydown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (MODIFIER_KEYS.has(event.key)) return;
       event.preventDefault();
       event.stopPropagation();
-      end(true);
+      if (event.key === 'Escape') end(true);
     };
     const keyup = (event: KeyboardEvent) => {
       if (event.key === 'Alt') end(false);
     };
 
     const end = (cancel: boolean) => {
-      // Inside the gesture's stack element, so undo has nothing scrubbed to replay.
-      if (cancel) write(literal.text);
-      if (!model.isDisposed()) model.pushStackElement();
+      if (!model.isDisposed()) {
+        // Undoing the gesture's own element restores the text and leaves no empty
+        // step behind; writing the original back would leave one for Ctrl+Z to eat.
+        if (cancel && edited) void model.undo();
+        model.pushStackElement();
+      }
       listening.abort();
       if (node.hasPointerCapture?.(down.pointerId)) node.releasePointerCapture(down.pointerId);
       this.endScrub = null;
