@@ -205,9 +205,13 @@ test('Palette Studio: alpha-aware extraction, gradient editing, JSON round-trip,
   await expect
     .poll(() => swatches(panel))
     .toEqual(['#0000ff', '#ff0000', '#00ff00', '#ffffff', '#c86432']);
-  expect(await stopColours(panel)).toHaveLength(5);
-  expect((await stopColours(panel))[0]).toBe('#0000ff');
-  expect((await stopColours(panel))[4]).toBe('#ffffff');
+  // The host renders after the event that changed it (zoneless): poll, never read once.
+  await expect
+    .poll(async () => {
+      const colours = await stopColours(panel);
+      return [colours.length, colours[0], colours[4]];
+    })
+    .toEqual([5, '#0000ff', '#ffffff']);
   await panel.getByTestId('palette-alpha').fill('1');
   await expect.poll(async () => (await swatches(panel)).length).toBe(6);
   await expect.poll(() => swatches(panel)).not.toContain('#4d5863');
@@ -244,7 +248,7 @@ test('Palette Studio: alpha-aware extraction, gradient editing, JSON round-trip,
   });
   await expect(panel.getByTestId('palette-name')).toHaveValue('../Two tone');
   await panel.getByTestId('palette-stop-down-0').click();
-  expect(await stopColours(panel)).toEqual(['#000000', '#ff0000']);
+  await expect.poll(() => stopColours(panel)).toEqual(['#000000', '#ff0000']);
   const exported = await downloaded(page, panel.getByTestId('palette-export'));
   expect(exported.name).toBe('Two-tone.json');
   const palette = JSON.parse(exported.text);
@@ -263,11 +267,14 @@ test('Palette Studio: alpha-aware extraction, gradient editing, JSON round-trip,
 
   // The effect preview: compiled by the renderer, CPU samples drawn, nothing added to the draft.
   await expect(panel.getByTestId('palette-compile')).toContainText('The effect compiles');
+  // The earlier palette compiled too, so the samples are polled until they show the edited one.
+  await expect
+    .poll(async () => {
+      const drawn = await samples(panel);
+      return [drawn.length, drawn[0], drawn[16], drawn[32]];
+    })
+    .toEqual([33, [0, 0, 0], [128, 0, 0], [255, 0, 0]]);
   const cpu = await samples(panel);
-  expect(cpu).toHaveLength(33);
-  expect(cpu[0]).toEqual([0, 0, 0]);
-  expect(cpu[16]).toEqual([128, 0, 0]);
-  expect(cpu[32]).toEqual([255, 0, 0]);
   expect(await effects(page, id)).toEqual([]);
 
   // Applied: the GPU agrees with the CPU sample at t = 0.5.
@@ -294,7 +301,7 @@ test('Palette Studio: alpha-aware extraction, gradient editing, JSON round-trip,
     mimeType: 'application/json',
     buffer: Buffer.from(exported.text),
   });
-  expect(await stopColours(panel)).toEqual(['#000000', '#ff0000']);
+  await expect.poll(() => stopColours(panel)).toEqual(['#000000', '#ff0000']);
   await expect(panel.getByTestId('palette-compile')).toContainText('The effect compiles');
   await panel.getByTestId('palette-apply').click();
   await expect(panel.getByTestId('palette-notice')).toHaveAttribute('role', 'status');

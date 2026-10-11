@@ -440,7 +440,11 @@ test('cancels when the capture is released or the panel is hidden, and starts no
 
   // Hiding the mounted panel releases the capture and the measurement with it; nothing is pending.
   await page.keyboard.press('Control+j');
-  expect(await page.evaluate(`${engineOf}.observing`)).toBe(false);
+  // Wait for the panel to be gone: the app renders after the key (zoneless), so a second
+  // Ctrl+J before that render would cancel the first and the panel would never hide.
+  await expect(page.locator('app-bottom-panel')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(`${engineOf}.capturedFrame === null`)).toBe(true);
+  await expect.poll(() => page.evaluate(`${engineOf}.observing`)).toBe(false);
   await page.keyboard.press('Control+j');
   await page.locator('#bottom-panel-tab-inspection').click();
   await expect(panel.locator('.capture')).toBeVisible();
@@ -452,7 +456,7 @@ test('cancels when the capture is released or the panel is hidden, and starts no
   await panel.locator('.release').click();
   await expect(panel.locator('.capture')).toBeVisible();
   await expect(section).toHaveCount(0);
-  expect(await page.evaluate(`${engineOf}.observing`)).toBe(false);
+  await expect.poll(() => page.evaluate(`${engineOf}.observing`)).toBe(false);
 });
 
 test('refuses, rather than quantizes, on a GPU that cannot read floats back', async ({ page }) => {
