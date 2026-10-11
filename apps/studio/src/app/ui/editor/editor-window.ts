@@ -2,15 +2,14 @@ import { Component, computed, effect, inject, untracked, viewChild } from '@angu
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { Title } from '@angular/platform-browser';
 
 import { DEFAULT_EDITOR_GROUP_ID, editorSurfaceId } from '@shadergrove/shared/surfaces';
 import { CodeEditor, type EditorDoc } from '../../editor/code-editor';
-import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
 import { SessionMirror } from '../../workspace/session-sync/session-mirror';
 import { textFingerprint } from '../../workspace/session-sync/session-protocol';
 import { SatelliteControls } from '../layout/satellite-controls';
+import { SatelliteTitlebar } from '../layout/satellite-titlebar';
 
 /**
  * The whole page of the editor's native window, bootstrapped in place of
@@ -33,9 +32,16 @@ import { SatelliteControls } from '../layout/satellite-controls';
     MatIconModule,
     MatTooltipModule,
     SatelliteControls,
+    SatelliteTitlebar,
     TranslatePipe,
   ],
   template: `
+    <app-satellite-titlebar
+      [surfaceId]="surfaceId"
+      [panel]="'toolbar.editor' | translate"
+      closeLabel="editor.close"
+    />
+
     <header class="header">
       <div class="tablist" role="tablist" [attr.aria-label]="'editor.documents' | translate">
         @for (document of documents(); track document.id) {
@@ -245,10 +251,6 @@ export class EditorWindow {
 
   constructor() {
     this.mirror.start('editor');
-
-    const i18n = inject(I18n);
-    const title = inject(Title);
-    effect(() => title.setTitle(`${i18n.t('toolbar.editor')} — Shadergrove`));
 
     // A line the main window asks to show: a diagnostic clicked anywhere, the Config.
     effect(() => {

@@ -29,6 +29,9 @@ const diagnostic: CompileDiagnostic = {
 describe('BottomPanelWindow (the bottom panel in its own window)', () => {
   const desktop = {
     available: true,
+    maximized: signal(false),
+    minimize: vi.fn(),
+    toggleMaximize: vi.fn(),
     returnSurface: vi.fn(async () => ({ status: 'returned', surfaceId: '' })),
     closeSurface: vi.fn(async () => ({ status: 'closed', surfaceId: '' })),
   };

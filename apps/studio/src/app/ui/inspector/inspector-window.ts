@@ -1,10 +1,10 @@
-import { Component, effect, inject, type Provider } from '@angular/core';
-import { Title } from '@angular/platform-browser';
+import { Component, inject, type Provider } from '@angular/core';
 
 import { WELL_KNOWN_SURFACE_IDS } from '@shadergrove/shared/surfaces';
-import { I18n } from '../../i18n/i18n';
+import { TranslatePipe } from '../../i18n/translate.pipe';
 import { SessionMirror } from '../../workspace/session-sync/session-mirror';
 import { SatelliteControls } from '../layout/satellite-controls';
+import { SatelliteTitlebar } from '../layout/satellite-titlebar';
 import { InspectorPanel } from './inspector-panel';
 import { InspectorSession } from './inspector-session';
 import { RemoteInspectorSession } from './remote-inspector-session';
@@ -26,8 +26,13 @@ export const INSPECTOR_WINDOW_PROVIDERS: Provider[] = [
  */
 @Component({
   selector: 'app-root',
-  imports: [InspectorPanel, SatelliteControls],
+  imports: [InspectorPanel, SatelliteControls, SatelliteTitlebar, TranslatePipe],
   template: `
+    <app-satellite-titlebar
+      [surfaceId]="surfaceId"
+      [panel]="'workspace.inspector' | translate"
+      closeLabel="inspector.closeWindow"
+    />
     <app-inspector-panel>
       <app-satellite-controls
         inspectorWindowControls
@@ -58,8 +63,5 @@ export class InspectorWindow {
 
   constructor() {
     inject(SessionMirror).start('inspector');
-    const i18n = inject(I18n);
-    const title = inject(Title);
-    effect(() => title.setTitle(`${i18n.t('workspace.inspector')} — Shadergrove`));
   }
 }

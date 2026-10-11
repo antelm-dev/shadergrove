@@ -252,8 +252,10 @@ export class SurfaceWindowManager {
       minWidth: min.width,
       minHeight: min.height,
       show: false,
-      // The OS title bar is what moves, snaps and resizes a satellite.
-      frame: true,
+      // Panel windows draw the main window's title bar, frameless like it: still resizable and
+      // snappable (Windows keeps the thick frame), moved by the bar's drag region. The live
+      // preview output keeps the OS frame it has always had.
+      frame: request.kind === 'live-preview-output',
       autoHideMenuBar: true,
       webPreferences: { preload: this.options.preload },
     });
@@ -460,12 +462,24 @@ export class SurfaceWindowManager {
     const { window, surfaceId } = entry;
 
     const persist = () => this.schedulePersist(entry);
+    // The window's own title bar shows maximize or restore: it is told, as the main window is.
+    const pushState = () => {
+      if (window.isDestroyed()) return;
+      window.webContents.send('state-changed', {
+        maximized: window.isMaximized(),
+        fullscreen: window.isFullScreen(),
+      });
+    };
     window.on('resize', persist);
     window.on('move', persist);
-    window.on('maximize', persist);
-    window.on('unmaximize', persist);
-    window.on('enter-full-screen', persist);
-    window.on('leave-full-screen', persist);
+    const stateChanged = () => {
+      persist();
+      pushState();
+    };
+    window.on('maximize', stateChanged);
+    window.on('unmaximize', stateChanged);
+    window.on('enter-full-screen', stateChanged);
+    window.on('leave-full-screen', stateChanged);
 
     window.webContents.on('render-process-gone', () => {
       this.handleChildFailure(entry, 'crash');

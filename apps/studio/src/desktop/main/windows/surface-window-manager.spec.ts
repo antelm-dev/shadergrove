@@ -23,6 +23,7 @@ type LoadControl =
 
 class MockWebContents extends EventEmitter {
   readonly id: number;
+  readonly sent: Array<[channel: string, payload: unknown]> = [];
 
   constructor(id: number) {
     super();
@@ -31,6 +32,10 @@ class MockWebContents extends EventEmitter {
 
   setWindowOpenHandler(_handler: unknown): void {
     // Navigation policy attaches this in production; no-op for tests.
+  }
+
+  send(channel: string, payload: unknown): void {
+    this.sent.push([channel, payload]);
   }
 }
 
@@ -70,8 +75,10 @@ class MockBrowserWindow extends EventEmitter {
     return { ...this.bounds };
   }
 
+  maximized = false;
+
   isMaximized(): boolean {
-    return false;
+    return this.maximized;
   }
 
   isFullScreen(): boolean {
@@ -344,12 +351,38 @@ describe('SurfaceWindowManager bottom-panel satellite', () => {
     expect(h.loadCalls).toBe(1);
   });
 
-  it('opens a framed window, so the OS title bar can move it', async () => {
+  const output = {
+    surfaceId: WELL_KNOWN_SURFACE_IDS.livePreviewOutput,
+    kind: 'live-preview-output' as const,
+    path: '/output',
+    bounds: bottomPanel.bounds,
+  };
+
+  it('opens a panel frameless, for its own title bar, and the live preview framed', async () => {
     const h = createHarness({ mode: 'resolve' });
 
     await h.manager.open(bottomPanel);
+    await h.manager.open(output);
 
-    expect(h.windows[0]?.options.frame).toBe(true);
+    expect(h.windows.map((window) => window.options.frame)).toEqual([false, true]);
+  });
+
+  it('tells a panel window when it is maximized or restored, and no other window', async () => {
+    const h = createHarness({ mode: 'resolve' });
+    await h.manager.open(bottomPanel);
+    await h.manager.open(output);
+    const [panel, outputWindow] = h.windows;
+
+    panel!.maximized = true;
+    panel!.emit('maximize');
+    panel!.maximized = false;
+    panel!.emit('unmaximize');
+
+    expect(panel!.webContents.sent).toEqual([
+      ['state-changed', { maximized: true, fullscreen: false }],
+      ['state-changed', { maximized: false, fullscreen: false }],
+    ]);
+    expect(outputWindow!.webContents.sent).toEqual([]);
   });
 
   it('loads only the page that belongs to the kind', async () => {

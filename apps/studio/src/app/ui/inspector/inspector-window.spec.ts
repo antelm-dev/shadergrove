@@ -22,6 +22,9 @@ import { INSPECTOR_WINDOW_PROVIDERS, InspectorWindow } from './inspector-window'
 describe('InspectorWindow (the inspector in its own window)', () => {
   const desktop = {
     available: true,
+    maximized: signal(false),
+    minimize: vi.fn(),
+    toggleMaximize: vi.fn(),
     returnSurface: vi.fn(async () => ({ status: 'returned', surfaceId: '' })),
     closeSurface: vi.fn(async () => ({ status: 'closed', surfaceId: '' })),
     readTexture: vi.fn(async () => null),

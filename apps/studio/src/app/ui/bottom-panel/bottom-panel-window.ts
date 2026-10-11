@@ -1,7 +1,6 @@
-import { Component, ElementRef, computed, effect, inject } from '@angular/core';
+import { Component, ElementRef, computed, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { Title } from '@angular/platform-browser';
 
 import type { CompileDiagnostic } from '@shadergrove/shared/diagnostic';
 import { BOTTOM_PANEL_TABS, type BottomPanelTab } from '@shadergrove/shared/panel-prefs';
@@ -13,6 +12,7 @@ import { TranslatePipe } from '../../i18n/translate.pipe';
 import { SessionMirror } from '../../workspace/session-sync/session-mirror';
 import { ProfilerView } from '../inspector/profiler-view';
 import { SatelliteControls } from '../layout/satellite-controls';
+import { SatelliteTitlebar } from '../layout/satellite-titlebar';
 import { OutputPanel } from './output-panel';
 import { PANEL_CHROME_STYLES } from './panel-chrome-styles';
 import { ProblemsPanel } from './problems-panel';
@@ -43,9 +43,16 @@ const TAB_META: Record<BottomPanelTab, { icon: string; label: TranslationKey }> 
     ProblemsPanel,
     ProfilerView,
     SatelliteControls,
+    SatelliteTitlebar,
     TranslatePipe,
   ],
   template: `
+    <app-satellite-titlebar
+      [surfaceId]="surfaceId"
+      [panel]="tabLabel() | translate"
+      closeLabel="panel.close"
+    />
+
     <div class="header">
       <div
         class="tablist"
@@ -193,10 +200,10 @@ export class BottomPanelWindow {
     return parts.join(', ');
   });
 
+  protected readonly tabLabel = computed(() => TAB_META[this.tab()].label);
+
   constructor() {
     this.mirror.start('bottom-panel');
-    const title = inject(Title);
-    effect(() => title.setTitle(`${this.i18n.t(TAB_META[this.tab()].label)} — Shadergrove`));
   }
 
   /** The main window's tab: it is selected there, and this window follows. */

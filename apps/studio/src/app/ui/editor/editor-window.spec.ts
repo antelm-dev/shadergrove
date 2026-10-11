@@ -1,5 +1,6 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { Title } from '@angular/platform-browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_EDITOR_GROUP_ID, editorSurfaceId } from '@shadergrove/shared/surfaces';
@@ -27,6 +28,9 @@ const IMAGE = 'void main() {}';
 describe('EditorWindow (the editor in its own window)', () => {
   const desktop = {
     available: true,
+    maximized: signal(false),
+    minimize: vi.fn(),
+    toggleMaximize: vi.fn(),
     returnSurface: vi.fn(async () => ({ status: 'returned', surfaceId: '' })),
     closeSurface: vi.fn(async () => ({ status: 'closed', surfaceId: '' })),
   };
@@ -39,6 +43,9 @@ describe('EditorWindow (the editor in its own window)', () => {
     models.length = 0;
     editors.length = 0;
     desktop.returnSurface.mockClear();
+    desktop.closeSurface.mockClear();
+    desktop.minimize.mockClear();
+    desktop.toggleMaximize.mockClear();
     main = new FakeBroadcastChannel(SESSION_CHANNEL);
     received = [];
     main.onmessage = ({ data }) => received.push(data as SessionMessage);
@@ -254,5 +261,23 @@ describe('EditorWindow (the editor in its own window)', () => {
     root().querySelector<HTMLButtonElement>('app-satellite-controls button.dock')!.click();
 
     expect(desktop.returnSurface).toHaveBeenCalledWith(editorSurfaceId(DEFAULT_EDITOR_GROUP_ID));
+  });
+
+  it("wears the main window's title bar, acting on this window only", () => {
+    const bar = root().querySelector<HTMLElement>('app-satellite-titlebar .titlebar')!;
+    expect(bar.querySelector('.title-text')?.textContent?.trim()).toBe('Editor — Shadergrove');
+    expect(TestBed.inject(Title).getTitle()).toBe('Editor — Shadergrove');
+    expect(bar.querySelector('.trailing')?.classList.contains('no-drag')).toBe(true);
+
+    bar.querySelector<HTMLButtonElement>('.win-btn.minimize')!.click();
+    bar.querySelector<HTMLButtonElement>('.win-btn.maximize')!.click();
+    bar.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    bar.querySelector<HTMLButtonElement>('.win-btn.close')!.click();
+
+    expect(desktop.minimize).toHaveBeenCalledOnce();
+    expect(desktop.toggleMaximize).toHaveBeenCalledTimes(2);
+    // Close hides the editor's window; the editor stays detached.
+    expect(desktop.closeSurface).toHaveBeenCalledWith(editorSurfaceId(DEFAULT_EDITOR_GROUP_ID));
+    expect(desktop.returnSurface).not.toHaveBeenCalled();
   });
 });
