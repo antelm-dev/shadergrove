@@ -69,6 +69,17 @@ sudo iptables -nvL SG-EXTERNAL
 sudo ip6tables -nvL SG-EXTERNAL
 ```
 
+The drop-in fails closed: `ExecStartPost=` has no `-` prefix, so if the script
+fails (for example `eth0` was renamed or the IPv6 modules are missing) systemd
+marks `docker.service` failed and staging and the website stop. Check
+`systemctl status docker` and `journalctl -u docker` first when Docker does not
+come up after a reboot or an interface change.
+
+Verification so far used a container published with `docker run -p`. Swarm
+ingress-published ports take a different DNAT path that has not been tested;
+check the `SG-EXTERNAL` counters against a Swarm-published port before relying
+on the chain for Swarm services.
+
 ## SSH abuse and updates
 
 Fail2ban is enabled with the systemd journal backend. The `sshd` jail in

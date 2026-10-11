@@ -58,6 +58,8 @@ test-results/
 playwright-report/
 /apps/studio-e2e/.auth
 
+# Obsidian: docs/ is the vault; a vault opened at the repository root is local only.
+/.obsidian/
 # Obsidian: docs/ is a vault. Only the shared link, attachment, template and
 # daily-note folder settings are tracked; workspace layout and per-user
 # settings stay local, and daily notes are personal scratch.
