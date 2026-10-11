@@ -57,11 +57,11 @@ describe('checkDocs', () => {
       ...clean,
       'docs/My Note.md': '# Note\n',
       'docs/README.md':
-        '[a](/docs/My%20Note.md#note) [b](<My Note.md>) [c](https://example.com/x.md) [d](#top)\n' +
+        '# Top\n\n[a](/docs/My%20Note.md#note) [b](<My Note.md>) [c](https://example.com/x.md) [d](#top)\n' +
         '[ref]: runbooks/README.md\n',
     });
     expect(report.errors).toEqual([]);
-    expect(report.links).toBe(5);
+    expect(report.links).toBe(6);
   });
 
   it('rejects links that leave the repository', () => {
@@ -162,6 +162,48 @@ describe('checkDocs', () => {
       'docs/runbooks/backup.md': runbook('area: data\nlast_verified: 2026-12-01'),
     });
     expect(report.errors).toContain('docs/runbooks/backup.md: last_verified is in the future');
+  });
+
+  it('rejects links whose letter case or separators only resolve on Windows and macOS', () => {
+    const report = vault({
+      ...clean,
+      'docs/README.md': '[a](Runbooks/README.md)\n[b](rules\\README.md)\n',
+    });
+    expect(report.errors).toContain(
+      'docs/README.md:1: link differs in letter case from the file on disk: Runbooks/README.md',
+    );
+    expect(report.errors).toContain(
+      'docs/README.md:2: use forward slashes in links: rules\\README.md',
+    );
+  });
+
+  it('checks fragments against GitHub heading anchors', () => {
+    const report = vault({
+      ...clean,
+      'docs/data.json': '{}\n',
+      'docs/guide.md':
+        '# Guide\n\n## Set up `pnpm` [here](README.md)!\n\n## Notes\n\n## Notes\n\n<a id="Custom"></a>\n\n' +
+        '```md\n# Not a heading\n```\n\n[self](#guide) [bad](#nope)\n',
+      'docs/README.md':
+        '[a](guide.md#set-up-pnpm-here) [b](guide.md#notes-1) [c](guide.md#custom)\n' +
+        '[d](guide.md#Notes) [e](guide.md#not-a-heading) [f](runbooks/README.md#x)\n' +
+        '[g](rules/README.md) [h](data.json#L1)\n',
+    });
+    expect(report.errors.filter((error) => !error.includes('wikilink'))).toEqual([
+      'docs/README.md:2: no heading in docs/guide.md matches #not-a-heading',
+      'docs/README.md:2: no heading in docs/runbooks/README.md matches #x',
+      'docs/guide.md:15: no heading matches #nope',
+    ]);
+  });
+
+  it('ignores commented-out links and reads notes saved with a byte-order mark', () => {
+    const report = vault({
+      ...clean,
+      'docs/README.md':
+        'Before <!-- [x](gone.md) --> after\n<!--\n[y](gone.md)\n-->\n[z](missing.md)\n',
+      'docs/runbooks/backup.md': `﻿${runbook()}`,
+    });
+    expect(report.errors).toEqual(['docs/README.md:5: broken link: missing.md']);
   });
 
   it('warns when a link targets a file git does not track', () => {

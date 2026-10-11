@@ -3,7 +3,11 @@
  *
  * Scans `docs/` (minus the planning archive and Obsidian's own folders) and the
  * root README, RELEASING and AGENTS notes, and fails on:
- *   - a relative link or image whose target does not exist, or leaves the repo;
+ *   - a relative link or image whose target does not exist, leaves the repo,
+ *     uses backslashes, or differs in letter case from the file on disk (it
+ *     would resolve on Windows/macOS but break on Linux CI and GitHub);
+ *   - a `#fragment` on a link to a Markdown note (or within the same note)
+ *     that matches none of its headings;
  *   - an Obsidian `[[wikilink]]`: the vault uses plain Markdown links so every
  *     page reads the same on GitHub;
  *   - a runbook or rule note whose front matter is missing or malformed, or
@@ -75,6 +79,8 @@ export function checkDocs(options: DocsCheckOptions): DocsReport {
     stale: [],
   };
   const posix = (path: string): string => relative(root, path).split(sep).join('/');
+  const onDisk = exactCase(root);
+  const anchors = anchorIndex();
 
   const notes = [
     ...collectMarkdown(root, resolve(root, 'docs')),
@@ -85,7 +91,7 @@ export function checkDocs(options: DocsCheckOptions): DocsReport {
 
   for (const note of notes) {
     const name = posix(note);
-    const text = readFileSync(note, 'utf8').replace(/\r\n/g, '\n');
+    const text = readNote(note);
     const prose = stripCode(text);
     const resolved = new Set<string>();
     linksByNote.set(note, resolved);
@@ -95,18 +101,39 @@ export function checkDocs(options: DocsCheckOptions): DocsReport {
     }
 
     for (const link of findLinks(prose)) {
+      const where = `${name}:${link.line}`;
+      const fragment = fragmentOf(link.target);
+      if (link.target.startsWith('#')) {
+        linkCount++;
+        if (fragment && !anchors(note).has(fragment)) {
+          problems.error(`${where}: no heading matches ${link.target}`);
+        }
+        continue;
+      }
       const target = resolveTarget(root, note, link.target);
       if (target === null) continue;
       linkCount++;
-      const where = `${name}:${link.line}`;
       if (target === 'outside') {
         problems.error(`${where}: link leaves the repository: ${link.target}`);
         continue;
       }
+      if (link.target.includes('\\')) {
+        problems.error(`${where}: use forward slashes in links: ${link.target}`);
+        continue;
+      }
       const found = existing(target, name);
+      if (onDisk(found ?? target) === 'case') {
+        problems.error(
+          `${where}: link differs in letter case from the file on disk: ${link.target}`,
+        );
+        continue;
+      }
       if (!found) {
         problems.error(`${where}: broken link: ${link.target}`);
         continue;
+      }
+      if (fragment && extname(found) === '.md' && !anchors(found).has(fragment)) {
+        problems.error(`${where}: no heading in ${posix(found)} matches #${fragment}`);
       }
       resolved.add(found);
       if (options.tracked && !isTracked(options.tracked, posix(found))) {
@@ -125,7 +152,8 @@ export function checkDocs(options: DocsCheckOptions): DocsReport {
     kind.validate(fields, name, problems);
     for (const entry of stringList(fields['related'])) {
       const target = resolveTarget(root, note, entry);
-      if (target === null || target === 'outside' || !existing(target, name)) {
+      const found = target === null || target === 'outside' ? null : existing(target, name);
+      if (!found || onDisk(found) !== 'exact') {
         problems.error(`${name}: related entry does not resolve: ${entry}`);
       }
     }
@@ -223,11 +251,15 @@ function collectMarkdown(root: string, dir: string): string[] {
   return found.sort();
 }
 
-/**
- * Blanks fenced code blocks and inline code spans, keeping line numbers, so
- * example links and `[[` inside code are not checked.
- */
-export function stripCode(text: string): string {
+/** Reads a note as LF text without a leading byte-order mark. */
+function readNote(path: string): string {
+  return readFileSync(path, 'utf8')
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n/g, '\n');
+}
+
+/** Blanks fenced code blocks, keeping line numbers. */
+function blankFences(text: string): string {
   let fence: string | null = null;
   return text
     .split('\n')
@@ -241,9 +273,136 @@ export function stripCode(text: string): string {
         fence = marker;
         return '';
       }
-      return line.replace(/(`+)[^`]*?\1/g, '');
+      return line;
     })
     .join('\n');
+}
+
+/**
+ * Blanks fenced code blocks, inline code spans and HTML comments, keeping line
+ * numbers, so example or commented-out links and `[[` are not checked.
+ */
+export function stripCode(text: string): string {
+  let comment = false;
+  return blankFences(text)
+    .split('\n')
+    .map((line) => {
+      let kept = '';
+      let rest = line;
+      while (rest !== '') {
+        if (comment) {
+          const end = rest.indexOf('-->');
+          if (end === -1) break;
+          comment = false;
+          rest = rest.slice(end + 3);
+        } else {
+          const start = rest.indexOf('<!--');
+          if (start === -1) {
+            kept += rest;
+            break;
+          }
+          kept += rest.slice(0, start);
+          comment = true;
+          rest = rest.slice(start + 4);
+        }
+      }
+      return kept.replace(/(`+)[^`]*?\1/g, '');
+    })
+    .join('\n');
+}
+
+/**
+ * GitHub's heading anchor (github-slugger): lowercased, punctuation dropped,
+ * spaces to hyphens. Link and HTML markup is unwrapped first.
+ */
+export function slugify(heading: string): string {
+  return heading
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '')
+    .replace(/ /g, '-');
+}
+
+/** Every `#fragment` a note answers to: its headings, numbered like GitHub's duplicates, and HTML ids. */
+export function anchorsIn(text: string): Set<string> {
+  const anchors = new Set<string>();
+  const seen = new Map<string, number>();
+  for (const line of blankFences(text).split('\n')) {
+    const heading = /^ {0,3}#{1,6}\s+(.*?)(?:\s+#+)?\s*$/.exec(line)?.[1];
+    if (heading !== undefined) {
+      const slug = slugify(heading);
+      const count = seen.get(slug) ?? 0;
+      seen.set(slug, count + 1);
+      anchors.add(count === 0 ? slug : `${slug}-${count}`);
+    }
+    for (const match of line.matchAll(/<[a-z][^>]*\s(?:id|name)=["']([^"']+)["']/gi)) {
+      anchors.add((match[1] ?? '').toLowerCase());
+    }
+  }
+  return anchors;
+}
+
+function anchorIndex(): (path: string) => Set<string> {
+  const cache = new Map<string, Set<string>>();
+  return (path) => {
+    let anchors = cache.get(path);
+    if (!anchors) {
+      anchors = anchorsIn(readNote(path));
+      cache.set(path, anchors);
+    }
+    return anchors;
+  };
+}
+
+/** The decoded, lowercased `#fragment` of a link target, or null without one. */
+function fragmentOf(target: string): string | null {
+  const hash = target.indexOf('#');
+  if (hash === -1 || hash === target.length - 1) return null;
+  const raw = target.slice(hash + 1);
+  try {
+    return decodeURIComponent(raw).toLowerCase();
+  } catch {
+    return raw.toLowerCase();
+  }
+}
+
+/**
+ * Whether a path exists below the repository root with exactly this letter
+ * case ('exact'), only with different case ('case'), or not at all. Windows and
+ * macOS resolve any case; Linux CI and GitHub do not, so 'case' is reported the
+ * same on every platform.
+ */
+function exactCase(root: string): (path: string) => 'exact' | 'case' | 'missing' {
+  const listings = new Map<string, string[]>();
+  const list = (dir: string): string[] => {
+    let names = listings.get(dir);
+    if (!names) {
+      try {
+        names = readdirSync(dir);
+      } catch {
+        names = [];
+      }
+      listings.set(dir, names);
+    }
+    return names;
+  };
+  return (path) => {
+    let current = root;
+    let result: 'exact' | 'case' = 'exact';
+    for (const segment of relative(root, path).split(sep).filter(Boolean)) {
+      const names = list(current);
+      if (names.includes(segment)) {
+        current = join(current, segment);
+        continue;
+      }
+      const variant = names.find((name) => name.toLowerCase() === segment.toLowerCase());
+      if (!variant) return 'missing';
+      result = 'case';
+      current = join(current, variant);
+    }
+    return result;
+  };
 }
 
 export function findLinks(prose: string): Link[] {
