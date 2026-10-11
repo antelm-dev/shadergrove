@@ -14,7 +14,7 @@ import {
   type CaptureOptions,
   type FrameSnapshot,
   type InvalidationReason,
-} from '../../rendering/render-inspection';
+} from '@shadergrove/rendering';
 import { RendererHandle } from '../../rendering/renderer-handle';
 import { RenderInspectionPanel } from './render-inspection-panel';
 

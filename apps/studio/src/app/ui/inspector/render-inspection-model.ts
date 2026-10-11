@@ -1,4 +1,4 @@
-import type { TexelFormat, UniformValue } from '../../rendering/render-inspection';
+import type { TexelFormat, UniformValue } from '@shadergrove/rendering';
 
 /**
  * The inspector's arithmetic, kept free of Angular and the DOM so it can be tested

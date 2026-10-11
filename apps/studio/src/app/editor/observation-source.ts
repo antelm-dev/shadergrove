@@ -8,8 +8,7 @@ import {
 import { expandMacros } from '@shadergrove/shared/glsl-export';
 import { locate } from '@shadergrove/shared/project';
 
-import type { CapturedAccepted } from '../rendering/render-inspection';
-import type { ObservationRequest } from '../rendering/render-observation';
+import type { CapturedAccepted, ObservationRequest } from '@shadergrove/rendering';
 import { GENERATED_PREFIX } from './glsl-analysis-source';
 
 /**

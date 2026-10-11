@@ -3,9 +3,8 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DesktopPlatform } from '../desktop/desktop-platform';
-import { PerformanceProfiler } from './performance-profiler';
+import { PerformanceProfiler, type ShaderEngine } from '@shadergrove/rendering';
 import { RendererHandle } from './renderer-handle';
-import type { ShaderEngine } from './shader-engine';
 
 interface StubEngine {
   readonly profiler: PerformanceProfiler;

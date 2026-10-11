@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import type { GlslAnalysisClient, ObservationCatalogue } from '@shadergrove/glsl-analysis';
 
-import type { CapturedAccepted } from '../rendering/render-inspection';
+import type { CapturedAccepted } from '@shadergrove/rendering';
 import { preparedFragment } from './observation-source';
 
 export type CatalogueResult =

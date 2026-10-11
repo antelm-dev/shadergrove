@@ -1,4 +1,3 @@
-import { signal, type Signal } from '@angular/core';
 import type * as THREE from 'three';
 
 /**
@@ -100,14 +99,20 @@ async function defaultBackend(): Promise<GlBackend> {
 let nextId = 0;
 
 export class GlContext {
-  private readonly statusSignal = signal<GlContextStatus>('live');
+  private currentStatus: GlContextStatus = 'live';
 
   private readonly lostListeners = new Set<() => void>();
   private readonly restoredListeners = new Set<() => void>();
   private readonly disposeListeners = new Set<() => void>();
 
-  /** Live status of *this* context alone. A sibling losing its context is invisible here. */
-  readonly status: Signal<GlContextStatus> = this.statusSignal.asReadonly();
+  /**
+   * Live status of *this* context alone. A sibling losing its context is invisible here.
+   * A plain read, not a signal: changes are announced through `onLost`, `onRestored`
+   * and `onDispose`, so the runtime carries no framework dependency.
+   */
+  status(): GlContextStatus {
+    return this.currentStatus;
+  }
 
   private constructor(
     readonly id: string,
@@ -177,14 +182,14 @@ export class GlContext {
    */
   private readonly onContextLost = (event: Event): void => {
     event.preventDefault();
-    if (this.statusSignal() !== 'live') return;
-    this.statusSignal.set('lost');
+    if (this.currentStatus !== 'live') return;
+    this.currentStatus = 'lost';
     for (const listener of this.lostListeners) listener();
   };
 
   private readonly onContextRestored = (): void => {
-    if (this.statusSignal() !== 'lost') return;
-    this.statusSignal.set('live');
+    if (this.currentStatus !== 'lost') return;
+    this.currentStatus = 'live';
     for (const listener of this.restoredListeners) listener();
   };
 
@@ -205,8 +210,8 @@ export class GlContext {
   }
 
   dispose(): void {
-    if (this.statusSignal() === 'disposed') return;
-    this.statusSignal.set('disposed');
+    if (this.currentStatus === 'disposed') return;
+    this.currentStatus = 'disposed';
 
     this.canvas.removeEventListener('webglcontextlost', this.onContextLost);
     this.canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
