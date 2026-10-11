@@ -141,6 +141,7 @@ test('languages are packs: defaults, a partial third-party pack, fallback and fo
 
   // Switched off, the chosen pack gives way to English at once; the choice waits for it.
   await page.getByTestId('open-plugins').click();
+  await page.getByTestId('plugins-tab-installed').click();
   await toggle.click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await toggle.click();
@@ -150,6 +151,7 @@ test('languages are packs: defaults, a partial third-party pack, fallback and fo
   await page.getByTestId(`plugin-remove-${FRENCH_PACK}`).click();
   await expect(page.getByTestId(`plugin-${FRENCH_PACK}`)).toHaveCount(0);
   await page.reload();
+  await page.getByTestId('plugins-tab-browse').click();
   await expect(page.getByTestId(`install-available-${FRENCH_PACK}`)).toBeVisible();
   await page.getByRole('link', { name: /back to the editor/i }).click();
   await openLanguageMenu(page);

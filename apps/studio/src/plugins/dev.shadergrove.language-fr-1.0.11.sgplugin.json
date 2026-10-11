@@ -1,7 +1,7 @@
 {
   "manifest": {
     "id": "dev.shadergrove.language-fr",
-    "version": "1.0.10",
+    "version": "1.0.11",
     "protocolVersion": 3,
     "appVersionRange": ">=1.5.0 <3.0.0",
     "name": "French",
@@ -843,7 +843,9 @@
           "admin.entry": "{action} par le compte {actor}",
           "plugins.title": "Plugins",
           "plugins.backToEditor": "Retour à l’éditeur",
+          "plugins.browse": "Parcourir",
           "plugins.installed": "Installés",
+          "plugins.installedLoading": "Chargement des plugins installés…",
           "plugins.installFromFile": "Installer depuis un fichier…",
           "plugins.installHint": "Un plugin local est un fichier .sgplugin.json. Rien ne s’exécute avant que vous ne l’activiez, et son code tourne dans un bac à sable isolé, sans réseau ni accès aux fichiers.",
           "plugins.review": "Package à installer",

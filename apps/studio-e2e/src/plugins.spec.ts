@@ -1,5 +1,5 @@
 // The official Shadertoy and Wallpaper Engine plugins, end to end in the
-// browser: discovered under Available, installed (off), switched on, run from
+// browser: discovered under Browse, installed (off), switched on, run from
 // the editor's menus and from Installed — paste and API imports through the
 // host's import dialog, a ZIP export of the open draft — kept
 // across a reload, and removed. Their menu entries exist only while the plugin
@@ -87,11 +87,16 @@ async function backToEditor(page: Page): Promise<void> {
   await expect(page.locator('mat-toolbar.toolbar')).toBeVisible();
 }
 
-/** Installs from Available: the package arrives switched off. */
+/** Shows one of the Plugins tabs. */
+async function showTab(page: Page, tab: 'browse' | 'installed'): Promise<void> {
+  await page.getByTestId(`plugins-tab-${tab}`).click();
+  await expect(page.getByTestId(`plugins-tab-${tab}`)).toHaveAttribute('aria-selected', 'true');
+}
+
+/** Installs from Browse: the package is then shown on Installed, focused and switched off. */
 async function installAvailable(page: Page, id: string): Promise<void> {
   await page.getByTestId(`install-available-${id}`).click();
-  await expect(page.getByTestId(`plugin-${id}`)).toBeVisible();
-  await expect(page.getByTestId(`available-installed-${id}`)).toBeVisible();
+  await expect(page.getByTestId(`plugin-${id}`)).toHaveClass(/focused/);
   await expect(page.getByTestId(`plugin-enable-${id}`).getByRole('switch')).not.toBeChecked();
 }
 
@@ -139,6 +144,7 @@ test('Shadertoy Import: discovered, installed off, paste and API imports, kept, 
   // Switched on: the menu and the New shader dialog both open the importer's own dialog,
   // right where the user is — no trip to Plugins.
   await openPlugins(page);
+  await showTab(page, 'installed');
   await setEnabled(page, SHADERTOY, true);
   await backToEditor(page);
   const editorUrl = new URL(page.url()).pathname;
@@ -202,6 +208,7 @@ test('Shadertoy Import: discovered, installed off, paste and API imports, kept, 
 
   // The Installed page opens the very same dialog, in place, and says what happened itself.
   await openPlugins(page);
+  await showTab(page, 'installed');
   await page.getByTestId(`open-import-${IMPORTER}`).click();
   await expect(dialog).toBeVisible();
   await expect(page).toHaveURL(/\/plugins/);
@@ -228,6 +235,7 @@ test('Shadertoy Import: discovered, installed off, paste and API imports, kept, 
   // Removing the plugin keeps what it imported.
   await page.getByTestId(`plugin-remove-${SHADERTOY}`).click();
   await expect(page.getByTestId(`plugin-${SHADERTOY}`)).toHaveCount(0);
+  await showTab(page, 'browse');
   await expect(page.getByTestId(`install-available-${SHADERTOY}`)).toBeVisible();
   expect(await shaderNames(page)).toEqual(
     expect.arrayContaining(['Pasted Waves', 'Parity fixture', 'Installed Waves']),
@@ -318,15 +326,17 @@ test('Shadertoy Import: leaving with browser Back while a fetch runs cancels it 
   await openStudio(page);
   await openPlugins(page);
   // isVisible() does not wait: decide only once the catalogue shows the package, as
-  // either an Install action or an installed card.
+  // either an Install action or installed.
   await expect(
     page
       .getByTestId(`install-available-${SHADERTOY}`)
-      .or(page.getByTestId(`plugin-${SHADERTOY}`))
+      .or(page.getByTestId(`available-installed-${SHADERTOY}`))
       .first(),
   ).toBeVisible();
   if (await page.getByTestId(`install-available-${SHADERTOY}`).isVisible()) {
     await installAvailable(page, SHADERTOY);
+  } else {
+    await showTab(page, 'installed');
   }
   const toggle = page.getByTestId(`plugin-enable-${SHADERTOY}`).getByRole('switch');
   if (!(await toggle.isChecked())) await setEnabled(page, SHADERTOY, true);
@@ -385,9 +395,107 @@ test('Wallpaper Engine Export: offered only while on, exports the open draft as 
 
   // Switched off, the entry is gone rather than leading anywhere.
   await openPlugins(page);
+  await showTab(page, 'installed');
   await setEnabled(page, WALLPAPER, false);
   await backToEditor(page);
   expect(await importExportItems(page)).not.toContainEqual(
     expect.stringMatching(/Wallpaper Engine/),
   );
+});
+
+test('Plugins tabs: addresses, package links, history and keyboard keep the open draft', async ({
+  page,
+}) => {
+  const FRENCH = 'dev.shadergrove.language-fr';
+  const search = () => new URL(page.url()).search;
+  const browse = page.getByTestId('plugins-tab-browse');
+  const installed = page.getByTestId('plugins-tab-installed');
+  await page.addInitScript(() => {
+    if (window.top !== window) return;
+    localStorage.setItem(
+      'shader-studio.preferences',
+      JSON.stringify({ paused: true, editorOpen: true, browserOpen: false }),
+    );
+  });
+  await page.goto('/');
+  const shell = page.locator('app-editor-shell');
+  const dirty = shell.getByText('Unsaved changes', { exact: true });
+  await expect(shell.locator('.monaco-editor')).toBeVisible();
+  await shell.locator('.monaco-editor').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('\n// unsaved draft');
+  await expect(dirty).toBeVisible();
+  const shader = await page.locator('.doc-name').textContent();
+
+  // Browse by default; only the selected tab's content is on the page.
+  await openPlugins(page);
+  await expect(browse).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId(`available-${WALLPAPER}`)).toBeVisible();
+  await expect(page.getByTestId(`plugin-${FRENCH}`)).toHaveCount(0);
+  expect(search()).toBe('');
+
+  // From the keyboard: arrows move between the tabs, Enter opens one — one history entry.
+  await browse.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(installed).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(installed).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId(`plugin-${FRENCH}`)).toBeVisible();
+  await expect(page.getByTestId(`available-${WALLPAPER}`)).toHaveCount(0);
+  expect(search()).toBe('?tab=installed');
+  await page.goBack();
+  await expect(browse).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId(`available-${WALLPAPER}`)).toBeVisible();
+  await page.goForward();
+  await expect(installed).toHaveAttribute('aria-selected', 'true');
+
+  // The file install and its review are shared: a review started on one tab is there on the other.
+  await page.getByTestId('plugin-file').setInputFiles({
+    name: 'broken.sgplugin.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{ "not": "a package" }'),
+  });
+  await expect(page.getByTestId('plugin-review')).toContainText('not a valid plugin package');
+  await showTab(page, 'browse');
+  await expect(page.getByTestId('plugin-review')).toBeVisible();
+  await page.getByTestId('plugin-review').getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByTestId('plugin-review')).toHaveCount(0);
+
+  // Installing from Browse shows the package on Installed, focused and off; Back leaves Plugins.
+  await installAvailable(page, WALLPAPER);
+  await expect.poll(search).toBe(`?tab=installed&use=${WALLPAPER}`);
+  await expect(page.getByTestId(`plugin-${WALLPAPER}`)).toBeInViewport();
+
+  // Removing it while it is linked: the link follows it back to Browse.
+  await page.getByTestId(`plugin-remove-${WALLPAPER}`).click();
+  await expect(browse).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId(`available-${WALLPAPER}`)).toHaveClass(/focused/);
+  await expect.poll(search).toBe(`?use=${WALLPAPER}`);
+
+  // Picking the other tab drops a link that would pull the page straight back.
+  await showTab(page, 'installed');
+  await expect.poll(search).toBe('?tab=installed');
+
+  // None of it touched the open shader or its unsaved draft.
+  await backToEditor(page);
+  await expect(dirty).toBeVisible();
+  await expect(page.locator('.doc-name')).toHaveText(shader!);
+
+  // Addresses opened directly: a link chooses the tab where the package is listed, and an
+  // unknown tab is tidied in place, the rest of the address kept.
+  await page.goto(`/plugins?use=${FRENCH}`);
+  await expect(page.getByTestId(`plugin-${FRENCH}`)).toHaveClass(/focused/);
+  await expect.poll(search).toBe(`?use=${FRENCH}&tab=installed`);
+  await page.goto(`/plugins?tab=installed&use=${SHADERTOY}`);
+  await expect(page.getByTestId(`available-${SHADERTOY}`)).toHaveClass(/focused/);
+  await expect.poll(search).toBe(`?use=${SHADERTOY}`);
+  await page.goto('/plugins?tab=installed&use=dev.example.missing');
+  await expect(page.getByTestId(`plugin-${FRENCH}`)).toBeVisible();
+  await expect(installed).toHaveAttribute('aria-selected', 'true');
+  expect(search()).toBe('?tab=installed&use=dev.example.missing');
+  await page.goto('/plugins?tab=nonsense&keep=1');
+  await expect(browse).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(search).toBe('?keep=1');
+  await page.reload();
+  await expect(page.getByTestId(`available-${WALLPAPER}`)).toBeVisible();
 });
