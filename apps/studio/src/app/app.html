@@ -536,7 +536,7 @@
           }
         </div>
 
-        @if (preferences.value().bottomPanelOpen) {
+        @if (preferences.value().bottomPanelOpen && !layout.bottomPanelNative()) {
         <app-bottom-panel class="bottom-panel" />
         }
       </div>

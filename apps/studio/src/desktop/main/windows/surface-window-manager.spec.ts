@@ -319,3 +319,35 @@ describe('SurfaceWindowManager transactional open', () => {
     });
   });
 });
+
+describe('SurfaceWindowManager bottom-panel satellite', () => {
+  const bottomPanel = {
+    surfaceId: WELL_KNOWN_SURFACE_IDS.bottomPanel,
+    kind: 'bottom-panel' as const,
+    path: '/bottom-panel',
+    bounds: { x: 10, y: 20, width: 900, height: 320 },
+  };
+
+  it('opens one window on its safe path and focuses it on a repeated open', async () => {
+    const h = createHarness({ mode: 'resolve' });
+
+    const opened = await h.manager.open(bottomPanel);
+    expect(opened.status).toBe('ok');
+    if (opened.status === 'ok') expect(opened.surface.path).toBe('/bottom-panel');
+
+    const again = await h.manager.open(bottomPanel);
+    expect(again.status).toBe('focused');
+    expect(h.windows).toHaveLength(1);
+    expect(h.loadCalls).toBe(1);
+  });
+
+  it('rejects an unsafe path without creating a window', async () => {
+    const h = createHarness({ mode: 'resolve' });
+
+    const result = await h.manager.open({ ...bottomPanel, path: 'https://evil.example/' });
+
+    expect(result.status).toBe('rejected');
+    expect(h.windows).toHaveLength(0);
+    expect(h.registry.isOpen(WELL_KNOWN_SURFACE_IDS.bottomPanel)).toBe(false);
+  });
+});

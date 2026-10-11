@@ -18,9 +18,15 @@ import {
   migrateLayoutFromPreferences,
 } from '@shadergrove/shared/surfaces';
 import { DEFAULT_PREVIEW_WINDOW } from '@shadergrove/shared/preview-prefs';
+import type {
+  NativeSurfaceChangedEvent,
+  NativeSurfaceOpenRequest,
+  NativeSurfaceResult,
+} from '../../desktop/contracts/contracts';
+import { DesktopPlatform } from '../desktop/desktop-platform';
 import { Preferences, type WorkspacePreferences } from '../prefs/preferences';
 import { SurfaceController } from './surface-controller';
-import { SurfaceLayoutService } from './surface-layout';
+import { BOTTOM_PANEL_SURFACE_PATH, SurfaceLayoutService } from './surface-layout';
 import { SurfaceRegistry } from './surface-registry';
 import { projectSurfaceFrame } from './surface-frame';
 
@@ -339,5 +345,166 @@ describe('SurfaceLayoutService characterization', () => {
 
       expect(registry.editorLayout()).toEqual({ kind: 'leaf', surfaceId: editorId });
     });
+  });
+});
+
+class FakeDesktop {
+  readonly available = true;
+  readonly opens: NativeSurfaceOpenRequest[] = [];
+  readonly closes: string[] = [];
+  next: NativeSurfaceResult = {
+    status: 'ok',
+    surface: {
+      surfaceId: WELL_KNOWN_SURFACE_IDS.bottomPanel,
+      kind: 'bottom-panel',
+      path: '/bottom-panel',
+      bounds: { x: 40, y: 60, width: 900, height: 320 },
+      maximized: false,
+      fullscreen: false,
+    },
+  };
+  changed: (event: NativeSurfaceChangedEvent) => void = () => undefined;
+  returned: (payload: { surfaceId: string }) => void = () => undefined;
+
+  openSurface(request: NativeSurfaceOpenRequest): Promise<NativeSurfaceResult> {
+    this.opens.push(request);
+    return Promise.resolve(this.next);
+  }
+  closeSurface(surfaceId: string): Promise<NativeSurfaceResult> {
+    this.closes.push(surfaceId);
+    return Promise.resolve({ status: 'closed', surfaceId });
+  }
+  onSurfaceChanged(listener: (event: NativeSurfaceChangedEvent) => void): () => void {
+    this.changed = listener;
+    return () => undefined;
+  }
+  onSurfaceReturned(listener: (payload: { surfaceId: string }) => void): () => void {
+    this.returned = listener;
+    return () => undefined;
+  }
+}
+
+describe('SurfaceLayoutService native bottom panel', () => {
+  const id = WELL_KNOWN_SURFACE_IDS.bottomPanel;
+  let layout: SurfaceLayoutService;
+  let preferences: FakePreferences;
+  let desktop: FakeDesktop;
+
+  beforeEach(() => {
+    preferences = new FakePreferences();
+    preferences.patch({ bottomPanelOpen: true });
+    desktop = new FakeDesktop();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: Preferences, useValue: preferences },
+        { provide: DesktopPlatform, useValue: desktop },
+      ],
+    });
+    layout = TestBed.inject(SurfaceLayoutService);
+  });
+
+  const docked = () => {
+    const placement = layout.bottomPanel().placement;
+    return isContainedPlacement(placement) && placement.mode === 'docked' && placement.side;
+  };
+  const savedPlacementHost = () =>
+    preferences.value().surfacesLayout?.surfaces.find((surface) => surface.id === id)?.placement
+      .host;
+
+  it('opens the safe /bottom-panel path and commits native placement only after it opened', async () => {
+    const detached = layout.detachBottomPanel();
+    expect(layout.bottomPanelNative()).toBe(false);
+
+    expect(await detached).toBe(true);
+    expect(desktop.opens).toEqual([
+      { surfaceId: id, kind: 'bottom-panel', path: BOTTOM_PANEL_SURFACE_PATH },
+    ]);
+    expect(layout.bottomPanelNative()).toBe(true);
+    expect(savedPlacementHost()).toBe('native');
+    expect(preferences.value().bottomPanelOpen).toBe(true);
+  });
+
+  it('leaves the docked panel untouched when the open is refused', async () => {
+    desktop.next = { status: 'rejected', reason: 'load-failed:ERR_FAILED' };
+    const saved = preferences.value().surfacesLayout;
+
+    expect(await layout.detachBottomPanel()).toBe(false);
+    expect(layout.bottomPanelNative()).toBe(false);
+    expect(docked()).toBe('bottom');
+    expect(preferences.value().surfacesLayout).toBe(saved);
+  });
+
+  it('shares one open between overlapping clicks and focuses the window afterwards', async () => {
+    await Promise.all([layout.detachBottomPanel(), layout.detachBottomPanel()]);
+    expect(desktop.opens).toHaveLength(1);
+
+    desktop.next = { ...desktop.next, status: 'focused' } as NativeSurfaceResult;
+    expect(await layout.detachBottomPanel()).toBe(true);
+    expect(desktop.opens).toHaveLength(2);
+    expect(layout.bottomPanelNative()).toBe(true);
+  });
+
+  it('docks back shown on return, ignoring the closing window that follows', async () => {
+    await layout.detachBottomPanel();
+
+    desktop.returned({ surfaceId: id });
+    desktop.changed({ surfaceId: id, open: false });
+
+    expect(layout.bottomPanelNative()).toBe(false);
+    expect(docked()).toBe('bottom');
+    expect(preferences.value().bottomPanelOpen).toBe(true);
+    expect(savedPlacementHost()).toBe('contained');
+  });
+
+  it('docks back hidden when the window is closed', async () => {
+    await layout.detachBottomPanel();
+
+    desktop.changed({ surfaceId: id, open: false });
+
+    expect(layout.bottomPanelNative()).toBe(false);
+    expect(docked()).toBe('bottom');
+    expect(preferences.value().bottomPanelOpen).toBe(false);
+  });
+
+  it('ignores other satellites', async () => {
+    await layout.detachBottomPanel();
+
+    desktop.changed({ surfaceId: WELL_KNOWN_SURFACE_IDS.livePreviewOutput, open: false });
+    desktop.returned({ surfaceId: WELL_KNOWN_SURFACE_IDS.livePreviewOutput });
+
+    expect(layout.bottomPanelNative()).toBe(true);
+  });
+
+  it('closes the native window when the panel is hidden from the workspace', async () => {
+    await layout.detachBottomPanel();
+    TestBed.tick();
+    expect(desktop.closes).toEqual([]);
+
+    preferences.patch({ bottomPanelOpen: false });
+    TestBed.tick();
+
+    expect(desktop.closes).toEqual([id]);
+  });
+
+  it('docks a panel saved as detached back on launch', async () => {
+    await layout.detachBottomPanel();
+    expect(savedPlacementHost()).toBe('native');
+
+    layout.hydrateFromPreferences();
+
+    expect(layout.bottomPanelNative()).toBe(false);
+    expect(docked()).toBe('bottom');
+  });
+});
+
+describe('SurfaceLayoutService bottom panel on the web', () => {
+  it('never detaches without Electron', async () => {
+    TestBed.configureTestingModule({
+      providers: [{ provide: Preferences, useValue: new FakePreferences() }],
+    });
+    const layout = TestBed.inject(SurfaceLayoutService);
+
+    expect(await layout.detachBottomPanel()).toBe(false);
+    expect(layout.bottomPanelNative()).toBe(false);
   });
 });

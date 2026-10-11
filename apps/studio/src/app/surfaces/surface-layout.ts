@@ -9,6 +9,7 @@
  */
 
 import {
+  DestroyRef,
   Injectable,
   PLATFORM_ID,
   computed,
@@ -27,6 +28,7 @@ import {
   createDefaultSurface,
   editorSurfaceId,
   isContainedPlacement,
+  isNativePlacement,
   migrateLayoutFromPreferences,
   type DockSide,
   type SurfaceId,
@@ -47,6 +49,9 @@ import type { SurfaceCommandContext } from './surface-commands';
 export const PREVIEW_SURFACE_ID = WELL_KNOWN_SURFACE_IDS.preview;
 export const DEFAULT_EDITOR_SURFACE_ID = editorSurfaceId(DEFAULT_EDITOR_GROUP_ID);
 export const INSPECTOR_SURFACE_ID = WELL_KNOWN_SURFACE_IDS.inspector;
+export const BOTTOM_PANEL_SURFACE_ID = WELL_KNOWN_SURFACE_IDS.bottomPanel;
+/** The bottom panel's native window route: a bare app pathname, as `assertSafeSurfacePath` requires. */
+export const BOTTOM_PANEL_SURFACE_PATH = '/bottom-panel';
 
 @Injectable({ providedIn: 'root' })
 export class SurfaceLayoutService {
@@ -55,6 +60,8 @@ export class SurfaceLayoutService {
   private readonly controller = inject(SurfaceController);
   private readonly desktop = inject(DesktopPlatform);
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
+  private readonly destroyRef = inject(DestroyRef);
+  private detaching: Promise<boolean> | null = null;
 
   /** Preview stage rect in client coordinates (origin + size). */
   private readonly previewWorkspaceRect = signal<Rect>({ x: 0, y: 0, width: 0, height: 0 });
@@ -62,12 +69,17 @@ export class SurfaceLayoutService {
   readonly previewId = PREVIEW_SURFACE_ID;
   readonly editorId = DEFAULT_EDITOR_SURFACE_ID;
   readonly inspectorId = INSPECTOR_SURFACE_ID;
+  readonly bottomPanelId = BOTTOM_PANEL_SURFACE_ID;
 
   readonly previewWorkspace = this.previewWorkspaceRect.asReadonly();
 
   readonly preview = computed(() => this.surfaceRecord(this.previewId, 'preview'));
   readonly editor = computed(() => this.surfaceRecord(this.editorId, 'editor'));
   readonly inspector = computed(() => this.surfaceRecord(this.inspectorId, 'inspector'));
+  readonly bottomPanel = computed(() => this.surfaceRecord(this.bottomPanelId, 'bottom-panel'));
+
+  /** A native window shows the bottom panel, so the workspace must not render its docked copy. */
+  readonly bottomPanelNative = computed(() => isNativePlacement(this.bottomPanel().placement));
 
   readonly editorOpen = computed(() => this.editor().open);
   readonly inspectorOpen = computed(() => this.inspector().open);
@@ -101,6 +113,7 @@ export class SurfaceLayoutService {
         persisted = tree;
         untracked(() => this.persistLayout());
       });
+      if (this.desktop.available) this.followBottomPanelWindow();
     }
   }
 
@@ -122,6 +135,10 @@ export class SurfaceLayoutService {
       chrome: { kind: 'editor', editorGroupId: DEFAULT_EDITOR_GROUP_ID },
     });
     this.registry.ensure('inspector');
+    // A native window never outlives the app, so a panel saved as detached docks back on launch.
+    if (isNativePlacement(this.registry.ensure('bottom-panel').placement)) {
+      this.controller.returnToWorkspace(this.bottomPanelId);
+    }
     this.registry.repairEditorLayout();
   }
 
@@ -318,6 +335,19 @@ export class SurfaceLayoutService {
     return this.apply(this.controller.commitMinimizedPoint(id, point, this.containmentOptions(id)));
   }
 
+  /**
+   * Moves the bottom panel into its native window, or focuses the window already
+   * showing it. The layout changes only once the main process reports the window
+   * open, so a refused or failed open leaves the docked panel exactly as it was.
+   * Electron-only; resolves `false` on web.
+   */
+  detachBottomPanel(): Promise<boolean> {
+    if (!this.desktop.available) return Promise.resolve(false);
+    // A second click while the first open is still loading shares its outcome.
+    this.detaching ??= this.openBottomPanelWindow().finally(() => (this.detaching = null));
+    return this.detaching;
+  }
+
   /** Electron-only; no-op on web. */
   runExternalize(id: SurfaceId, bounds: Rect): boolean {
     return this.externalize(id, bounds);
@@ -326,6 +356,53 @@ export class SurfaceLayoutService {
   /** Electron-only; no-op on web. */
   runReturn(id: SurfaceId): boolean {
     return this.returnToWorkspace(id);
+  }
+
+  private async openBottomPanelWindow(): Promise<boolean> {
+    const result = await this.desktop
+      .openSurface({
+        surfaceId: this.bottomPanelId,
+        kind: 'bottom-panel',
+        path: BOTTOM_PANEL_SURFACE_PATH,
+      })
+      .catch(() => null);
+    if (result?.status !== 'ok' && result?.status !== 'focused') return false;
+    if (!this.bottomPanelNative() && !this.externalize(this.bottomPanelId, result.surface.bounds)) {
+      return false;
+    }
+    if (!this.preferences.value().bottomPanelOpen)
+      this.preferences.patch({ bottomPanelOpen: true });
+    return true;
+  }
+
+  private followBottomPanelWindow(): void {
+    // Dock sends `surface-returned` before the closing window's `open: false`,
+    // which then finds the panel already contained and leaves it shown.
+    const offReturned = this.desktop.onSurfaceReturned(({ surfaceId }) => {
+      if (surfaceId === this.bottomPanelId) this.settleBottomPanel(true);
+    });
+    const offChanged = this.desktop.onSurfaceChanged((event) => {
+      if (event.surfaceId === this.bottomPanelId && !event.open) this.settleBottomPanel(false);
+    });
+    this.destroyRef.onDestroy(() => {
+      offReturned();
+      offChanged();
+    });
+
+    // Hiding the panel from the menu or a shortcut closes its window as well.
+    effect(() => {
+      if (this.preferences.value().bottomPanelOpen || !this.bottomPanelNative()) return;
+      untracked(() => void this.desktop.closeSurface(this.bottomPanelId).catch(() => undefined));
+    });
+  }
+
+  /** The panel's native window is gone: dock it back, shown after Dock and hidden after a close. */
+  private settleBottomPanel(open: boolean): void {
+    if (!this.bottomPanelNative()) return;
+    this.controller.returnToWorkspace(this.bottomPanelId);
+    if (!open) this.controller.close(this.bottomPanelId);
+    this.persistLayout();
+    this.preferences.patch({ bottomPanelOpen: open });
   }
 
   private surfaceRecord(id: SurfaceId, kind: SurfaceKind): SurfaceRecord {

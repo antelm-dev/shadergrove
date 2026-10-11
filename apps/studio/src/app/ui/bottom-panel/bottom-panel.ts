@@ -22,7 +22,9 @@ import {
 } from '@shadergrove/shared/panel-prefs';
 import { I18n } from '../../i18n/i18n';
 import { TranslatePipe } from '../../i18n/translate.pipe';
+import { DesktopPlatform } from '../../desktop/desktop-platform';
 import { Preferences } from '../../prefs/preferences';
+import { SurfaceLayoutService } from '../../surfaces/surface-layout';
 import { PointerGesture } from '../layout/pointer-gesture';
 import { ShaderStore } from '../../workspace/shader-store';
 import { OutputPanel } from './output-panel';
@@ -156,6 +158,19 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler', 'insp
       </div>
 
       <span class="spacer"></span>
+
+      @if (desktop.available) {
+        <button
+          matIconButton
+          type="button"
+          class="detach"
+          [matTooltip]="'action.detach' | translate"
+          [attr.aria-label]="'action.detach' | translate"
+          (click)="detach()"
+        >
+          <mat-icon>open_in_new</mat-icon>
+        </button>
+      }
 
       <button
         matIconButton
@@ -354,6 +369,7 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler', 'insp
       flex: 1;
     }
 
+    .detach,
     .close {
       width: 28px;
       height: 28px;
@@ -397,6 +413,8 @@ const TABS: readonly BottomPanelTab[] = ['problems', 'output', 'profiler', 'insp
 export class BottomPanel {
   protected readonly store = inject(ShaderStore);
   protected readonly preferences = inject(Preferences);
+  protected readonly desktop = inject(DesktopPlatform);
+  private readonly layout = inject(SurfaceLayoutService);
   protected readonly minHeight = BOTTOM_PANEL_HEIGHT_LIMITS.min;
 
   private readonly i18n = inject(I18n);
@@ -495,6 +513,11 @@ export class BottomPanel {
             ? this.profilerTab()
             : this.inspectionTab();
     ref?.nativeElement.focus();
+  }
+
+  /** Desktop only: hands the panel to its own native window. */
+  protected detach(): void {
+    void this.layout.detachBottomPanel();
   }
 
   protected close(): void {

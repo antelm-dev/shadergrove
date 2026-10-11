@@ -126,6 +126,8 @@ describe('AppTitlebar Help and View menus', () => {
             toggleFullscreen: () => undefined,
             toggleDevTools,
             openSupportLink,
+            onSurfaceChanged: () => () => undefined,
+            onSurfaceReturned: () => () => undefined,
           },
         },
         {

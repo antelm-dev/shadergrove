@@ -1,6 +1,11 @@
 import { Injectable, computed, signal } from '@angular/core';
 
 import type { Bundle, ImportMode } from '@shadergrove/shared/model';
+import type {
+  NativeSurfaceChangedEvent,
+  NativeSurfaceOpenRequest,
+  NativeSurfaceResult,
+} from '../../desktop/contracts/contracts';
 
 /** Semantic Help destinations — never pass raw URLs to the main process. */
 export type SupportLinkDestination = 'documentation' | 'issues';
@@ -193,6 +198,31 @@ export class DesktopPlatform {
 
   closeOutput(): void {
     if (this.available) window.electron.bridge.window.closeOutput();
+  }
+
+  /** Opens a native satellite, or focuses the one already open for that id. */
+  openSurface(request: NativeSurfaceOpenRequest): Promise<NativeSurfaceResult> {
+    if (!this.available) return Promise.resolve({ status: 'rejected', reason: 'unavailable' });
+    return window.electron.bridge.window.surfaceOpen(request);
+  }
+
+  /** Closes a native satellite's window; the main process reports it through `surface-changed`. */
+  closeSurface(surfaceId: string): Promise<NativeSurfaceResult> {
+    if (!this.available) return Promise.resolve({ status: 'rejected', reason: 'unavailable' });
+    return window.electron.bridge.window.surfaceClose(surfaceId);
+  }
+
+  onSurfaceChanged(listener: (event: NativeSurfaceChangedEvent) => void): () => void {
+    return this.available
+      ? window.electron.bridge.window.onSurfaceChanged(listener)
+      : () => undefined;
+  }
+
+  /** A satellite asked to be docked back into this window (`surfaceReturn`). */
+  onSurfaceReturned(listener: (payload: { surfaceId: string }) => void): () => void {
+    return this.available
+      ? window.electron.bridge.window.onSurfaceReturned(listener)
+      : () => undefined;
   }
 
   close(): void {
