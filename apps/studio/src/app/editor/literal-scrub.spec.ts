@@ -40,6 +40,7 @@ describe('findScrubbableLiteral', () => {
     ['float a = .|25;', '.25'],
     ['vec3(0.|1, 0.2, 0.3)', '0.1'],
     ['float a = 1|.;', '1'],
+    ['int n = |0;', '0'],
   ])('reads %s as %s', (marked, text) => {
     expect(at(marked)?.text).toBe(text);
   });
@@ -54,6 +55,7 @@ describe('findScrubbableLiteral', () => {
     ['an exponent float', 'float a = 1.0e|5;'],
     ['an exponent integer', 'float a = 1|e5;'],
     ['a hex integer', 'int a = 0x1|F;'],
+    ['an octal integer', 'int a = 01|0;'],
     ['an operator', 'a = b +| c;'],
     ['the end of the line', 'a = 1.0;|'],
   ])('ignores %s', (_name, marked) => {
@@ -67,6 +69,9 @@ describe('findScrubbableLiteral', () => {
     ['f(a, -0.|5)', true],
     ['f(-0.|5)', true],
     ['c ? -1.|0 : 1.0', true],
+    ['return -1.|0;', true],
+    ['case -1|:', true],
+    ['else x = -0.|5;', true],
     ['a = b-0.|5;', false],
     ['a = b -0.|5;', false],
     ['a = b - 0.|5;', false],
@@ -131,6 +136,7 @@ describe('formatScrubbed', () => {
     ['x = -0.|5;', 0.5, undefined, '0.5'],
     ['x = 0.0|5;', 0.05 - 10 * 0.01, undefined, '-0.05'],
     ['x = b-0.|5;', -0.2, undefined, '0.0'],
+    ['return -1.|0;', -0.9, undefined, '-0.9'],
     ['x = 0.0|0;', -0.0001, undefined, '0.00'],
     ['x = .|25;', 0.26, undefined, '0.26'],
   ])('writes %s at %s (decimals %s) as %s', (marked, value, decimals, text) => {

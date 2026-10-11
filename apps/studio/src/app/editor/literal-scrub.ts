@@ -68,8 +68,7 @@ export function findScrubbableLiteral(
 function literalAt(lineText: string, index: number, tokens: readonly LineToken[]) {
   if (index < 0 || index >= lineText.length) return null;
 
-  let at = -1;
-  while (at + 1 < tokens.length && tokens[at + 1].offset <= index) at++;
+  const at = tokenAt(tokens, index);
   if (at < 0 || !/^number(\.float)?(\.|$)/.test(tokens[at].type)) return null;
 
   const start = tokens[at].offset;
@@ -81,12 +80,14 @@ function literalAt(lineText: string, index: number, tokens: readonly LineToken[]
   const [, digits, suffix] = match;
   const kind = digits.includes('.') ? 'float' : 'int';
   if (kind === 'float' && /[uU]/.test(suffix)) return null;
+  // A leading zero makes an integer octal in GLSL: `010` is 8, and scrubbing it as 10 would lie.
+  if (kind === 'int' && /^0\d/.test(digits)) return null;
 
   if (IDENTIFIER_CHAR.test(lineText[start - 1] ?? '')) return null;
   if (IDENTIFIER_CHAR.test(lineText[end] ?? '')) return null;
 
   const minus = lineText[start - 1] === '-';
-  const signed = minus && isUnaryContext(lineText, start - 1);
+  const signed = minus && isUnaryContext(lineText, start - 1, tokens);
   const from = signed ? start - 1 : start;
 
   return {
@@ -101,9 +102,23 @@ function literalAt(lineText: string, index: number, tokens: readonly LineToken[]
   } satisfies ScrubLiteral;
 }
 
-function isUnaryContext(lineText: string, minusIndex: number): boolean {
+/** The index of the token covering `index`, or -1. */
+function tokenAt(tokens: readonly LineToken[], index: number): number {
+  let at = -1;
+  while (at + 1 < tokens.length && tokens[at + 1].offset <= index) at++;
+  return at;
+}
+
+/** A minus is unary after an operator, an opening bracket, a separator, a keyword (`return -1.0`) or nothing. */
+function isUnaryContext(
+  lineText: string,
+  minusIndex: number,
+  tokens: readonly LineToken[],
+): boolean {
   const before = lineText.slice(0, minusIndex).trimEnd();
-  return before === '' || UNARY_CONTEXT.has(before[before.length - 1]);
+  if (before === '' || UNARY_CONTEXT.has(before[before.length - 1])) return true;
+  const at = tokenAt(tokens, before.length - 1);
+  return at >= 0 && /^keyword(\.|$)/.test(tokens[at].type);
 }
 
 /** The literal's current value, sign included and suffix ignored. */
