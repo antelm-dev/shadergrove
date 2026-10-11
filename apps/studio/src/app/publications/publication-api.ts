@@ -3,14 +3,16 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import type { ShaderRecord } from '@shadergrove/shared/model';
-import type {
-  ExploreCapabilities,
-  OwnerPublication,
-  PublicationDetail,
-  PublicationPage,
-  PublishRequest,
-  ReportRequest,
-  ShaderPublicationStatus,
+import {
+  DEFAULT_PUBLICATION_SORT,
+  type ExploreCapabilities,
+  type OwnerPublication,
+  type PublicationDetail,
+  type PublicationPage,
+  type PublicationSort,
+  type PublishRequest,
+  type ReportRequest,
+  type ShaderPublicationStatus,
 } from '@shadergrove/shared/publication';
 import { API_BASE_URL } from '../api/api-base-url';
 import { apiRequest } from '../api/shader-api';
@@ -36,8 +38,17 @@ export class PublicationApi {
     );
   }
 
-  list(search: string, cursor: string | null): Promise<PublicationPage> {
-    const params = { ...(search ? { search } : {}), ...(cursor ? { cursor } : {}) };
+  /** `cursor` is opaque and only valid with the `search` and `sort` that produced it. */
+  list(
+    search: string,
+    cursor: string | null,
+    sort: PublicationSort = DEFAULT_PUBLICATION_SORT,
+  ): Promise<PublicationPage> {
+    const params = {
+      ...(search ? { search } : {}),
+      ...(sort === DEFAULT_PUBLICATION_SORT ? {} : { sort }),
+      ...(cursor ? { cursor } : {}),
+    };
     return apiRequest(
       firstValueFrom(this.http.get<PublicationPage>(this.url('/publications'), { params })),
     );

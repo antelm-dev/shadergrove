@@ -1,7 +1,7 @@
 {
   "manifest": {
     "id": "dev.shadergrove.language-fr",
-    "version": "1.0.8",
+    "version": "1.0.10",
     "protocolVersion": 3,
     "appVersionRange": ">=1.5.0 <3.0.0",
     "name": "French",
@@ -743,7 +743,10 @@
           "editorTheme.followsApp": "Suit le thème {theme} du studio",
           "explore.title": "Explorer",
           "explore.backToEditor": "Retour à l’éditeur",
-          "explore.search": "Rechercher des shaders publics",
+          "explore.search": "Rechercher par titre, description ou auteur",
+          "explore.sort": "Trier",
+          "explore.sortUpdated": "Mis à jour récemment",
+          "explore.sortPublished": "Publiés récemment",
           "explore.loading": "Chargement des shaders publics",
           "explore.unavailable": "Explorer n’est pas disponible sur ce serveur.",
           "explore.loadError": "Impossible de charger les shaders publics.",
