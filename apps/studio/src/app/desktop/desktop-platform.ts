@@ -5,6 +5,7 @@ import type {
   NativeSurfaceChangedEvent,
   NativeSurfaceOpenRequest,
   NativeSurfaceResult,
+  NativeSurfaceSnapshot,
 } from '../../desktop/contracts/contracts';
 
 /** Semantic Help destinations — never pass raw URLs to the main process. */
@@ -216,6 +217,12 @@ export class DesktopPlatform {
   returnSurface(surfaceId: string): Promise<NativeSurfaceResult> {
     if (!this.available) return Promise.resolve({ status: 'rejected', reason: 'unavailable' });
     return window.electron.bridge.window.surfaceReturn(surfaceId);
+  }
+
+  /** The satellite's window as the main process sees it, or `null` when none is open. */
+  surfaceState(surfaceId: string): Promise<NativeSurfaceSnapshot | null> {
+    if (!this.available) return Promise.resolve(null);
+    return window.electron.bridge.window.surfaceState(surfaceId);
   }
 
   onSurfaceChanged(listener: (event: NativeSurfaceChangedEvent) => void): () => void {

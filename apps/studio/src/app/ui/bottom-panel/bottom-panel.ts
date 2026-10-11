@@ -421,7 +421,7 @@ export class BottomPanel {
 
   /** Desktop only: hands the panel to its own native window. */
   protected detach(): void {
-    void this.layout.detachBottomPanel();
+    void this.layout.detach(this.layout.bottomPanelId);
   }
 
   protected close(): void {

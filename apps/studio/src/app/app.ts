@@ -574,12 +574,11 @@ export class App {
    * editor, via `EditorWindow.openEditor()`.
    */
   protected openProblems(): void {
-    // Detached: bring its window forward, on Problems — the detach only focuses it.
+    this.preferences.patch({ bottomPanelOpen: true, bottomPanelTab: 'problems' });
+    // Detached: the tab follows into its window, which this brings forward (or reopens).
     if (this.layout.bottomPanelNative()) {
       this.bottomPanelHost.show('problems');
-      void this.layout.detachBottomPanel();
-      return;
+      void this.layout.detach(this.layout.bottomPanelId);
     }
-    this.preferences.patch({ bottomPanelOpen: true, bottomPanelTab: 'problems' });
   }
 }

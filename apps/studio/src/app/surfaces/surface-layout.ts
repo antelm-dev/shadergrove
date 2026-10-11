@@ -24,7 +24,9 @@ import type { InspectorTab } from '@shadergrove/shared/panel-prefs';
 import type { Point, Rect } from '@shadergrove/shared/geometry';
 import {
   DEFAULT_EDITOR_GROUP_ID,
+  NATIVE_SURFACE_PATHS,
   WELL_KNOWN_SURFACE_IDS,
+  asSurfaceId,
   createDefaultSurface,
   editorSurfaceId,
   isContainedPlacement,
@@ -37,7 +39,7 @@ import {
 } from '@shadergrove/shared/surfaces';
 
 import { DesktopPlatform } from '../desktop/desktop-platform';
-import { BOTTOM_PANEL_PATH } from '../output-mode';
+import { isOutputWindow, isSatelliteWindow, type SatelliteKind } from '../output-mode';
 import { Preferences } from '../prefs/preferences';
 import {
   SurfaceController,
@@ -51,7 +53,11 @@ export const PREVIEW_SURFACE_ID = WELL_KNOWN_SURFACE_IDS.preview;
 export const DEFAULT_EDITOR_SURFACE_ID = editorSurfaceId(DEFAULT_EDITOR_GROUP_ID);
 export const INSPECTOR_SURFACE_ID = WELL_KNOWN_SURFACE_IDS.inspector;
 export const BOTTOM_PANEL_SURFACE_ID = WELL_KNOWN_SURFACE_IDS.bottomPanel;
-export const BOTTOM_PANEL_SURFACE_PATH = BOTTOM_PANEL_PATH;
+
+/** The panels the desktop can move into a native window of their own, and that window's kind. */
+const NATIVE_PANELS: ReadonlyMap<SurfaceId, SatelliteKind> = new Map([
+  [BOTTOM_PANEL_SURFACE_ID, 'bottom-panel'],
+]);
 
 @Injectable({ providedIn: 'root' })
 export class SurfaceLayoutService {
@@ -61,7 +67,18 @@ export class SurfaceLayoutService {
   private readonly desktop = inject(DesktopPlatform);
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   private readonly destroyRef = inject(DestroyRef);
-  private detaching: Promise<boolean> | null = null;
+
+  /**
+   * Only the desktop's main window owns native panel windows: never the web, the
+   * live output window (which shares this service and its saved layout) or a
+   * panel window itself.
+   */
+  private readonly managesWindows =
+    this.isBrowser && this.desktop.available && !isOutputWindow() && !isSatelliteWindow();
+  /** Native panel windows known to be open. */
+  private readonly windows = signal<ReadonlySet<SurfaceId>>(new Set());
+  private readonly opening = new Map<SurfaceId, Promise<boolean>>();
+  private readonly closing = new Set<SurfaceId>();
 
   /** Preview stage rect in client coordinates (origin + size). */
   private readonly previewWorkspaceRect = signal<Rect>({ x: 0, y: 0, width: 0, height: 0 });
@@ -78,7 +95,7 @@ export class SurfaceLayoutService {
   readonly inspector = computed(() => this.surfaceRecord(this.inspectorId, 'inspector'));
   readonly bottomPanel = computed(() => this.surfaceRecord(this.bottomPanelId, 'bottom-panel'));
 
-  /** A native window shows the bottom panel, so the workspace must not render its docked copy. */
+  /** A native window shows the bottom panel (or will, once shown): the workspace renders no copy. */
   readonly bottomPanelNative = computed(() => isNativePlacement(this.bottomPanel().placement));
 
   readonly editorOpen = computed(() => this.editor().open);
@@ -113,7 +130,7 @@ export class SurfaceLayoutService {
         persisted = tree;
         untracked(() => this.persistLayout());
       });
-      if (this.desktop.available) this.followBottomPanelWindow();
+      if (this.managesWindows) this.followNativeWindows();
     }
   }
 
@@ -135,11 +152,12 @@ export class SurfaceLayoutService {
       chrome: { kind: 'editor', editorGroupId: DEFAULT_EDITOR_GROUP_ID },
     });
     this.registry.ensure('inspector');
-    // A native window never outlives the app, so a panel saved as detached docks back on launch.
-    // After a reload of this window the old one may still be open: close it rather than show two.
-    if (isNativePlacement(this.registry.ensure('bottom-panel').placement)) {
-      this.controller.returnToWorkspace(this.bottomPanelId);
-      void this.desktop.closeSurface(this.bottomPanelId).catch(() => undefined);
+    this.registry.ensure('bottom-panel');
+    // Without Electron there is no window to put a detached panel in: show it contained.
+    if (!this.desktop.available) {
+      for (const id of NATIVE_PANELS.keys()) {
+        if (this.isNative(id)) this.controller.returnToWorkspace(id);
+      }
     }
     this.registry.repairEditorLayout();
   }
@@ -265,6 +283,12 @@ export class SurfaceLayoutService {
   }
 
   open(id: SurfaceId): boolean {
+    // Detached: show it, and bring its window forward (or reopen it).
+    if (this.isNative(id)) {
+      this.setShown(id, true);
+      void this.detach(id);
+      return true;
+    }
     const surface = this.registry.get(id);
     if (
       surface &&
@@ -337,19 +361,6 @@ export class SurfaceLayoutService {
     return this.apply(this.controller.commitMinimizedPoint(id, point, this.containmentOptions(id)));
   }
 
-  /**
-   * Moves the bottom panel into its native window, or focuses the window already
-   * showing it. The layout changes only once the main process reports the window
-   * open, so a refused or failed open leaves the docked panel exactly as it was.
-   * Electron-only; resolves `false` on web.
-   */
-  detachBottomPanel(): Promise<boolean> {
-    if (!this.desktop.available) return Promise.resolve(false);
-    // A second click while the first open is still loading shares its outcome.
-    this.detaching ??= this.openBottomPanelWindow().finally(() => (this.detaching = null));
-    return this.detaching;
-  }
-
   /** Electron-only; no-op on web. */
   runExternalize(id: SurfaceId, bounds: Rect): boolean {
     return this.externalize(id, bounds);
@@ -360,51 +371,141 @@ export class SurfaceLayoutService {
     return this.returnToWorkspace(id);
   }
 
-  private async openBottomPanelWindow(): Promise<boolean> {
+  // --- Native panel windows (desktop main window only) ---------------------
+
+  /** Whether a surface is placed in a native window of its own — shown or hidden. */
+  isNative(id: SurfaceId): boolean {
+    const surface = this.registry.get(id);
+    return surface !== undefined && isNativePlacement(surface.placement);
+  }
+
+  /**
+   * Moves a panel into its native window, or focuses the window already showing
+   * it. The layout changes only once the main process reports the window open,
+   * so a refused or failed open leaves the contained panel exactly as it was.
+   * Electron main window only; resolves `false` anywhere else.
+   */
+  detach(id: SurfaceId): Promise<boolean> {
+    return this.ensureWindow(id, true);
+  }
+
+  /** Whether the panel is meant to be on screen, wherever it is placed. */
+  private shown(id: SurfaceId): boolean {
+    return id === this.bottomPanelId
+      ? this.preferences.value().bottomPanelOpen
+      : (this.registry.get(id)?.open ?? false);
+  }
+
+  private setShown(id: SurfaceId, open: boolean): void {
+    if (this.shown(id) === open) return;
+    if (id === this.bottomPanelId) {
+      this.preferences.patch({ bottomPanelOpen: open });
+      return;
+    }
+    const surface = this.registry.get(id);
+    if (!surface) return;
+    this.registry.upsert({ ...surface, open });
+    this.persistLayout();
+  }
+
+  /**
+   * Opens (or, with `focus`, focuses) the panel's window. Without `focus` an
+   * already open window — one a reload of this window left behind — is only
+   * adopted, not brought forward. Concurrent calls share one open.
+   */
+  private ensureWindow(id: SurfaceId, focus: boolean): Promise<boolean> {
+    const kind = NATIVE_PANELS.get(id);
+    if (!this.managesWindows || !kind) return Promise.resolve(false);
+    let pending = this.opening.get(id);
+    if (!pending) {
+      pending = this.openWindow(id, kind, focus).finally(() => this.opening.delete(id));
+      this.opening.set(id, pending);
+    }
+    return pending;
+  }
+
+  private async openWindow(id: SurfaceId, kind: SatelliteKind, focus: boolean): Promise<boolean> {
+    if (!focus && (await this.desktop.surfaceState(id).catch(() => null))) {
+      this.markWindow(id, true);
+      return true;
+    }
     const result = await this.desktop
-      .openSurface({
-        surfaceId: this.bottomPanelId,
-        kind: 'bottom-panel',
-        path: BOTTOM_PANEL_SURFACE_PATH,
-      })
+      .openSurface({ surfaceId: id, kind, path: NATIVE_SURFACE_PATHS[kind]! })
       .catch(() => null);
-    if (result?.status !== 'ok' && result?.status !== 'focused') return false;
-    if (!this.bottomPanelNative() && !this.externalize(this.bottomPanelId, result.surface.bounds)) {
+    if (result?.status !== 'ok' && result?.status !== 'focused') {
+      // A window that cannot open must not take the panel with it: show it contained instead.
+      if (this.isNative(id)) this.returnToWorkspace(id);
       return false;
     }
-    if (!this.preferences.value().bottomPanelOpen)
-      this.preferences.patch({ bottomPanelOpen: true });
+    if (!this.isNative(id) && !this.externalize(id, result.surface.bounds)) {
+      this.closeWindow(id);
+      return false;
+    }
+    this.markWindow(id, true);
+    this.setShown(id, true);
     return true;
   }
 
-  private followBottomPanelWindow(): void {
-    // Dock sends `surface-returned` before the closing window's `open: false`,
-    // which then finds the panel already contained and leaves it shown.
+  /** Closes a window this window no longer wants; its `open: false` is then not a user close. */
+  private closeWindow(id: SurfaceId): void {
+    this.closing.add(id);
+    void this.desktop.closeSurface(id).then(
+      () => this.markWindow(id, false),
+      () => this.closing.delete(id),
+    );
+  }
+
+  private markWindow(id: SurfaceId, open: boolean): void {
+    // A close that never reported back is stale once a window is open again.
+    if (open) this.closing.delete(id);
+    if (this.windows().has(id) === open) return;
+    const next = new Set(this.windows());
+    if (open) next.add(id);
+    else next.delete(id);
+    this.windows.set(next);
+  }
+
+  /**
+   * Keeps every native panel's window in step with the layout. "Detached" is a
+   * placement the user chose, and it outlives its window: closing the window
+   * only hides the panel, showing the panel again reopens its window, and a
+   * relaunch reopens the window of every detached panel that was shown. Dock is
+   * the one way back into the workspace.
+   */
+  private followNativeWindows(): void {
+    // Dock: `surface-returned` comes before the closing window's `open: false`, which then
+    // finds the panel contained and leaves it shown.
     const offReturned = this.desktop.onSurfaceReturned(({ surfaceId }) => {
-      if (surfaceId === this.bottomPanelId) this.settleBottomPanel(true);
+      const id = asSurfaceId(surfaceId);
+      if (!NATIVE_PANELS.has(id)) return;
+      this.markWindow(id, false);
+      if (this.isNative(id) && this.returnToWorkspace(id)) this.setShown(id, true);
     });
     const offChanged = this.desktop.onSurfaceChanged((event) => {
-      if (event.surfaceId === this.bottomPanelId && !event.open) this.settleBottomPanel(false);
+      const id = asSurfaceId(event.surfaceId);
+      if (!NATIVE_PANELS.has(id) || event.open) return;
+      this.markWindow(id, false);
+      // A close this window asked for (hiding the panel) is not the user closing it.
+      if (this.closing.delete(id)) return;
+      if (this.isNative(id)) this.setShown(id, false);
     });
     this.destroyRef.onDestroy(() => {
       offReturned();
       offChanged();
     });
 
-    // Hiding the panel from the menu or a shortcut closes its window as well.
     effect(() => {
-      if (this.preferences.value().bottomPanelOpen || !this.bottomPanelNative()) return;
-      untracked(() => void this.desktop.closeSurface(this.bottomPanelId).catch(() => undefined));
+      const windows = this.windows();
+      for (const id of NATIVE_PANELS.keys()) {
+        const native = this.isNative(id);
+        const shown = this.shown(id);
+        const open = windows.has(id);
+        untracked(() => {
+          if (native && shown && !open) void this.ensureWindow(id, false);
+          else if (open && (!native || !shown) && !this.closing.has(id)) this.closeWindow(id);
+        });
+      }
     });
-  }
-
-  /** The panel's native window is gone: dock it back, shown after Dock and hidden after a close. */
-  private settleBottomPanel(open: boolean): void {
-    if (!this.bottomPanelNative()) return;
-    this.controller.returnToWorkspace(this.bottomPanelId);
-    if (!open) this.controller.close(this.bottomPanelId);
-    this.persistLayout();
-    this.preferences.patch({ bottomPanelOpen: open });
   }
 
   private surfaceRecord(id: SurfaceId, kind: SurfaceKind): SurfaceRecord {

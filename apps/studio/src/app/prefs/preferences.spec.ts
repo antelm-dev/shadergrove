@@ -268,25 +268,25 @@ describe('Preferences theme fields', () => {
   });
 });
 
-describe('Preferences in the native bottom-panel window', () => {
-  beforeEach(() => {
-    TestBed.resetTestingModule();
-    vi.stubGlobal('electron', {});
-    history.replaceState(null, '', '/bottom-panel');
-  });
-
+describe('Preferences in a native panel window', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     history.replaceState(null, '', '/');
   });
 
-  it('never overwrites what the main window saved', () => {
-    const saved = JSON.stringify({ browserWidth: 300 });
-    const prefs = makePreferences(saved);
-    prefs.patch({ bottomPanelTab: 'output', browserWidth: 420 });
-    TestBed.tick();
-    const storage = TestBed.inject(DOCUMENT).defaultView!.localStorage;
-    expect(storage.getItem(STORAGE_KEY)).toBe(saved);
-    expect(prefs.value().browserWidth).toBe(420);
-  });
+  for (const path of ['/bottom-panel', '/inspector', '/editor']) {
+    it(`never overwrites what the main window saved (${path})`, () => {
+      TestBed.resetTestingModule();
+      vi.stubGlobal('electron', {});
+      history.replaceState(null, '', path);
+
+      const saved = JSON.stringify({ browserWidth: 300 });
+      const prefs = makePreferences(saved);
+      prefs.patch({ bottomPanelTab: 'output', browserWidth: 420 });
+      TestBed.tick();
+      const storage = TestBed.inject(DOCUMENT).defaultView!.localStorage;
+      expect(storage.getItem(STORAGE_KEY)).toBe(saved);
+      expect(prefs.value().browserWidth).toBe(420);
+    });
+  }
 });

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { isBottomPanelWindow, isOutputWindow } from './output-mode';
+import { isOutputWindow, isSatelliteWindow, satelliteKind } from './output-mode';
 
 /**
  * The secondary Electron output window is detected by pathname, not by a
@@ -38,30 +38,36 @@ describe('isOutputWindow', () => {
   });
 });
 
-describe('isBottomPanelWindow', () => {
+describe('satelliteKind', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('is true for /bottom-panel in the desktop app only', () => {
-    vi.stubGlobal('window', { electron: {}, location: { pathname: '/bottom-panel' } });
-    expect(isBottomPanelWindow()).toBe(true);
-
-    vi.stubGlobal('window', { electron: {}, location: { pathname: '/bottom-panel/' } });
-    expect(isBottomPanelWindow()).toBe(true);
+  it('names each panel window in the desktop app only', () => {
+    const cases = [
+      ['/bottom-panel', 'bottom-panel'],
+      ['/bottom-panel/', 'bottom-panel'],
+      ['/inspector', 'inspector'],
+      ['/editor/', 'editor'],
+    ] as const;
+    for (const [pathname, kind] of cases) {
+      vi.stubGlobal('window', { electron: {}, location: { pathname } });
+      expect(satelliteKind()).toBe(kind);
+      expect(isSatelliteWindow()).toBe(true);
+    }
 
     // On the web the path is an unknown route that boots the workspace, as before.
     vi.stubGlobal('window', { location: { pathname: '/bottom-panel' } });
-    expect(isBottomPanelWindow()).toBe(false);
+    expect(satelliteKind()).toBeNull();
   });
 
-  it('is false for SSR and every other desktop route', () => {
+  it('is null for SSR and every other desktop route', () => {
     vi.stubGlobal('window', undefined);
-    expect(isBottomPanelWindow()).toBe(false);
+    expect(isSatelliteWindow()).toBe(false);
 
-    for (const pathname of ['/', '/output', '/bottom-panel-extra', '/shaders/bottom-panel']) {
+    for (const pathname of ['/', '/output', '/bottom-panel-extra', '/shaders/editor']) {
       vi.stubGlobal('window', { electron: {}, location: { pathname } });
-      expect(isBottomPanelWindow()).toBe(false);
+      expect(satelliteKind()).toBeNull();
     }
   });
 });

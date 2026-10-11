@@ -20,13 +20,15 @@ import {
 import { DEFAULT_PREVIEW_WINDOW } from '@shadergrove/shared/preview-prefs';
 import type {
   NativeSurfaceChangedEvent,
+  NativeSurfaceKind,
   NativeSurfaceOpenRequest,
   NativeSurfaceResult,
+  NativeSurfaceSnapshot,
 } from '../../desktop/contracts/contracts';
 import { DesktopPlatform } from '../desktop/desktop-platform';
 import { Preferences, type WorkspacePreferences } from '../prefs/preferences';
 import { SurfaceController } from './surface-controller';
-import { BOTTOM_PANEL_SURFACE_PATH, SurfaceLayoutService } from './surface-layout';
+import { SurfaceLayoutService } from './surface-layout';
 import { SurfaceRegistry } from './surface-registry';
 import { projectSurfaceFrame } from './surface-frame';
 
@@ -352,27 +354,27 @@ class FakeDesktop {
   readonly available = true;
   readonly opens: NativeSurfaceOpenRequest[] = [];
   readonly closes: string[] = [];
-  next: NativeSurfaceResult = {
-    status: 'ok',
-    surface: {
-      surfaceId: WELL_KNOWN_SURFACE_IDS.bottomPanel,
-      kind: 'bottom-panel',
-      path: '/bottom-panel',
-      bounds: { x: 40, y: 60, width: 900, height: 320 },
-      maximized: false,
-      fullscreen: false,
-    },
-  };
+  /** What the next open answers; `null` answers `ok` (or `focused`) with the requested surface. */
+  next: NativeSurfaceResult | null = null;
+  /** Windows the main process reports open to `surfaceState`. */
+  readonly live = new Map<string, NativeSurfaceKind>();
   changed: (event: NativeSurfaceChangedEvent) => void = () => undefined;
   returned: (payload: { surfaceId: string }) => void = () => undefined;
 
   openSurface(request: NativeSurfaceOpenRequest): Promise<NativeSurfaceResult> {
     this.opens.push(request);
-    return Promise.resolve(this.next);
+    if (this.next) return Promise.resolve(this.next);
+    const status = this.live.has(request.surfaceId) ? 'focused' : 'ok';
+    this.live.set(request.surfaceId, request.kind);
+    return Promise.resolve({ status, surface: this.snapshot(request.surfaceId, request.kind) });
   }
   closeSurface(surfaceId: string): Promise<NativeSurfaceResult> {
     this.closes.push(surfaceId);
     return Promise.resolve({ status: 'closed', surfaceId });
+  }
+  surfaceState(surfaceId: string): Promise<NativeSurfaceSnapshot | null> {
+    const kind = this.live.get(surfaceId);
+    return Promise.resolve(kind ? this.snapshot(surfaceId, kind) : null);
   }
   onSurfaceChanged(listener: (event: NativeSurfaceChangedEvent) => void): () => void {
     this.changed = listener;
@@ -382,6 +384,31 @@ class FakeDesktop {
     this.returned = listener;
     return () => undefined;
   }
+
+  /** The main process reports the window gone, as after an OS close. */
+  windowClosed(surfaceId: string): void {
+    this.live.delete(surfaceId);
+    this.changed({ surfaceId, open: false });
+  }
+
+  private snapshot(surfaceId: string, kind: NativeSurfaceKind): NativeSurfaceSnapshot {
+    return {
+      surfaceId,
+      kind,
+      path: `/${kind}`,
+      bounds: { x: 40, y: 60, width: 900, height: 420 },
+      maximized: false,
+      fullscreen: false,
+    };
+  }
+}
+
+/** Lets the open/close promises and the effects that follow them settle. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 6; i++) {
+    await Promise.resolve();
+    TestBed.tick();
+  }
 }
 
 describe('SurfaceLayoutService native bottom panel', () => {
@@ -390,10 +417,8 @@ describe('SurfaceLayoutService native bottom panel', () => {
   let preferences: FakePreferences;
   let desktop: FakeDesktop;
 
-  beforeEach(() => {
-    preferences = new FakePreferences();
-    preferences.patch({ bottomPanelOpen: true });
-    desktop = new FakeDesktop();
+  const boot = () => {
+    TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       providers: [
         { provide: Preferences, useValue: preferences },
@@ -401,6 +426,14 @@ describe('SurfaceLayoutService native bottom panel', () => {
       ],
     });
     layout = TestBed.inject(SurfaceLayoutService);
+    TestBed.tick();
+  };
+
+  beforeEach(() => {
+    preferences = new FakePreferences();
+    preferences.patch({ bottomPanelOpen: true });
+    desktop = new FakeDesktop();
+    boot();
   });
 
   const docked = () => {
@@ -410,103 +443,195 @@ describe('SurfaceLayoutService native bottom panel', () => {
   const savedPlacementHost = () =>
     preferences.value().surfacesLayout?.surfaces.find((surface) => surface.id === id)?.placement
       .host;
+  const shown = () => preferences.value().bottomPanelOpen;
 
-  it('opens the safe /bottom-panel path and commits native placement only after it opened', async () => {
-    const detached = layout.detachBottomPanel();
+  it('opens its own page and commits native placement only after the window opened', async () => {
+    const detached = layout.detach(id);
     expect(layout.bottomPanelNative()).toBe(false);
 
     expect(await detached).toBe(true);
-    expect(desktop.opens).toEqual([
-      { surfaceId: id, kind: 'bottom-panel', path: BOTTOM_PANEL_SURFACE_PATH },
-    ]);
+    expect(desktop.opens).toEqual([{ surfaceId: id, kind: 'bottom-panel', path: '/bottom-panel' }]);
     expect(layout.bottomPanelNative()).toBe(true);
     expect(savedPlacementHost()).toBe('native');
-    expect(preferences.value().bottomPanelOpen).toBe(true);
+    expect(shown()).toBe(true);
   });
 
   it('leaves the docked panel untouched when the open is refused', async () => {
     desktop.next = { status: 'rejected', reason: 'load-failed:ERR_FAILED' };
     const saved = preferences.value().surfacesLayout;
 
-    expect(await layout.detachBottomPanel()).toBe(false);
+    expect(await layout.detach(id)).toBe(false);
     expect(layout.bottomPanelNative()).toBe(false);
     expect(docked()).toBe('bottom');
     expect(preferences.value().surfacesLayout).toBe(saved);
   });
 
   it('shares one open between overlapping clicks and focuses the window afterwards', async () => {
-    await Promise.all([layout.detachBottomPanel(), layout.detachBottomPanel()]);
+    await Promise.all([layout.detach(id), layout.detach(id)]);
     expect(desktop.opens).toHaveLength(1);
 
-    desktop.next = { ...desktop.next, status: 'focused' } as NativeSurfaceResult;
-    expect(await layout.detachBottomPanel()).toBe(true);
+    expect(await layout.detach(id)).toBe(true);
     expect(desktop.opens).toHaveLength(2);
     expect(layout.bottomPanelNative()).toBe(true);
   });
 
-  it('docks back shown on return, ignoring the closing window that follows', async () => {
-    await layout.detachBottomPanel();
+  it('docks back shown on Dock, ignoring the closing window that follows', async () => {
+    await layout.detach(id);
 
     desktop.returned({ surfaceId: id });
-    desktop.changed({ surfaceId: id, open: false });
+    desktop.windowClosed(id);
+    await settle();
 
     expect(layout.bottomPanelNative()).toBe(false);
     expect(docked()).toBe('bottom');
-    expect(preferences.value().bottomPanelOpen).toBe(true);
+    expect(shown()).toBe(true);
     expect(savedPlacementHost()).toBe('contained');
+    expect(desktop.opens).toHaveLength(1);
   });
 
-  it('docks back hidden when the window is closed', async () => {
-    await layout.detachBottomPanel();
+  it('stays detached but hidden when the user closes its window, and reopens it on show', async () => {
+    await layout.detach(id);
 
-    desktop.changed({ surfaceId: id, open: false });
+    desktop.windowClosed(id);
+    await settle();
 
-    expect(layout.bottomPanelNative()).toBe(false);
-    expect(docked()).toBe('bottom');
-    expect(preferences.value().bottomPanelOpen).toBe(false);
-  });
+    expect(layout.bottomPanelNative()).toBe(true);
+    expect(savedPlacementHost()).toBe('native');
+    expect(shown()).toBe(false);
+    expect(desktop.opens).toHaveLength(1);
 
-  it('ignores other satellites', async () => {
-    await layout.detachBottomPanel();
+    preferences.patch({ bottomPanelOpen: true });
+    await settle();
 
-    desktop.changed({ surfaceId: WELL_KNOWN_SURFACE_IDS.livePreviewOutput, open: false });
-    desktop.returned({ surfaceId: WELL_KNOWN_SURFACE_IDS.livePreviewOutput });
-
+    expect(desktop.opens).toHaveLength(2);
+    expect(desktop.live.has(id)).toBe(true);
     expect(layout.bottomPanelNative()).toBe(true);
   });
 
-  it('closes the native window when the panel is hidden from the workspace', async () => {
-    await layout.detachBottomPanel();
-    TestBed.tick();
+  it('closes the window when the panel is hidden, without mistaking that for a user close', async () => {
+    await layout.detach(id);
+    await settle();
     expect(desktop.closes).toEqual([]);
 
     preferences.patch({ bottomPanelOpen: false });
-    TestBed.tick();
-
+    await settle();
     expect(desktop.closes).toEqual([id]);
+
+    // The main process reports the close; showing the panel again brings the window back.
+    desktop.windowClosed(id);
+    preferences.patch({ bottomPanelOpen: true });
+    await settle();
+
+    expect(shown()).toBe(true);
+    expect(desktop.opens).toHaveLength(2);
   });
 
-  it('docks a panel saved as detached back on launch, closing a window a reload left open', async () => {
-    await layout.detachBottomPanel();
-    expect(savedPlacementHost()).toBe('native');
-    expect(desktop.closes).toEqual([]);
+  it('ignores other satellites', async () => {
+    await layout.detach(id);
 
-    layout.hydrateFromPreferences();
+    desktop.windowClosed(WELL_KNOWN_SURFACE_IDS.livePreviewOutput);
+    desktop.returned({ surfaceId: WELL_KNOWN_SURFACE_IDS.livePreviewOutput });
+    await settle();
+
+    expect(layout.bottomPanelNative()).toBe(true);
+    expect(shown()).toBe(true);
+  });
+
+  it('reopens a shown detached panel in its window on relaunch', async () => {
+    await layout.detach(id);
+    desktop.live.clear(); // the app quit: no window survives it
+
+    boot();
+    await settle();
+
+    expect(layout.bottomPanelNative()).toBe(true);
+    expect(desktop.opens).toEqual([
+      { surfaceId: id, kind: 'bottom-panel', path: '/bottom-panel' },
+      { surfaceId: id, kind: 'bottom-panel', path: '/bottom-panel' },
+    ]);
+  });
+
+  it('keeps a hidden detached panel hidden on relaunch, and opens its window when shown', async () => {
+    await layout.detach(id);
+    desktop.windowClosed(id);
+    await settle();
+
+    boot();
+    await settle();
+    expect(desktop.opens).toHaveLength(1);
+    expect(layout.bottomPanelNative()).toBe(true);
+
+    preferences.patch({ bottomPanelOpen: true });
+    await settle();
+    expect(desktop.opens).toHaveLength(2);
+  });
+
+  it('adopts the window a reload of the main window left open, without a second one', async () => {
+    await layout.detach(id);
+
+    boot(); // reload: the satellite is still open
+    await settle();
+
+    expect(desktop.opens).toHaveLength(1);
+    expect(desktop.closes).toEqual([]);
+    expect(layout.bottomPanelNative()).toBe(true);
+  });
+
+  it('docks the panel when its window cannot be reopened', async () => {
+    await layout.detach(id);
+    desktop.windowClosed(id);
+    await settle();
+
+    desktop.next = { status: 'rejected', reason: 'load-failed:ERR_FAILED' };
+    preferences.patch({ bottomPanelOpen: true });
+    await settle();
 
     expect(layout.bottomPanelNative()).toBe(false);
     expect(docked()).toBe('bottom');
-    expect(desktop.closes).toEqual([id]);
+    expect(shown()).toBe(true);
   });
 });
 
-describe('SurfaceLayoutService bottom panel on the web', () => {
-  it('never detaches without Electron', async () => {
+describe('SurfaceLayoutService bottom panel without a native host', () => {
+  it('never detaches on the web, and shows a panel saved as detached contained', async () => {
+    const preferences = new FakePreferences();
     TestBed.configureTestingModule({
-      providers: [{ provide: Preferences, useValue: new FakePreferences() }],
+      providers: [
+        { provide: Preferences, useValue: preferences },
+        { provide: DesktopPlatform, useValue: new FakeDesktop() },
+      ],
+    });
+    await TestBed.inject(SurfaceLayoutService).detach(WELL_KNOWN_SURFACE_IDS.bottomPanel);
+    const saved = preferences.value().surfacesLayout?.surfaces;
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [{ provide: Preferences, useValue: preferences }],
     });
     const layout = TestBed.inject(SurfaceLayoutService);
 
-    expect(await layout.detachBottomPanel()).toBe(false);
+    const host = saved?.find((s) => s.id === WELL_KNOWN_SURFACE_IDS.bottomPanel)?.placement.host;
+    expect(host).toBe('native');
     expect(layout.bottomPanelNative()).toBe(false);
+    expect(await layout.detach(WELL_KNOWN_SURFACE_IDS.bottomPanel)).toBe(false);
+  });
+
+  it('leaves window management to the main window when this is the live output window', async () => {
+    history.replaceState(null, '', '/output');
+    try {
+      const desktop = new FakeDesktop();
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: Preferences, useValue: new FakePreferences() },
+          { provide: DesktopPlatform, useValue: desktop },
+        ],
+      });
+      const layout = TestBed.inject(SurfaceLayoutService);
+
+      expect(await layout.detach(WELL_KNOWN_SURFACE_IDS.bottomPanel)).toBe(false);
+      expect(desktop.opens).toEqual([]);
+    } finally {
+      history.replaceState(null, '', '/');
+    }
   });
 });

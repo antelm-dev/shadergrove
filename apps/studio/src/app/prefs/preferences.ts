@@ -54,7 +54,7 @@ import {
   type AppThemeMode,
   type LanguagePackId,
 } from '@shadergrove/shared/plugin';
-import { isBottomPanelWindow } from '../output-mode';
+import { isSatelliteWindow } from '../output-mode';
 
 /**
  * UI state that should survive a reload: which shader was open, which panels
@@ -256,9 +256,9 @@ export class Preferences {
         query.addEventListener('change', (event) => this.systemDark.set(event.matches));
       }
 
-      // The native bottom panel only reads: its tab or a theme it follows must never overwrite
-      // what the main window saved.
-      if (!isBottomPanelWindow()) effect(() => this.persist(this.state()));
+      // A native panel window only reads: a theme it follows or anything it changes must never
+      // overwrite what the main window saved.
+      if (!isSatelliteWindow()) effect(() => this.persist(this.state()));
 
       // Another window of the app saved its preferences: wear the same theme and speak the
       // same language here. Layout and the rest stay this window's own.
