@@ -13,35 +13,48 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink, type ParamMap } from '@angular/router';
 
+import type { TranslationKey } from '@shadergrove/shared/i18n';
 import {
   PUBLICATION_LIMITS,
+  PUBLICATION_SORTS,
   type PublicationPage,
+  type PublicationSort,
   type PublicationSummary,
 } from '@shadergrove/shared/publication';
 import { ApiError } from '../api/shader-api';
 import { TranslatePipe } from '../i18n/translate.pipe';
-import { ExploreBrowseState } from './explore-browse-state';
+import {
+  ExploreBrowseState,
+  UNFILTERED,
+  addressOf,
+  type ExploreSearch,
+} from './explore-browse-state';
 import { PAGE_STYLES, serverState } from './page';
 import { PublicationApi } from './publication-api';
 
 type State = 'loading' | 'ready' | 'error' | 'unavailable';
 
-/** What the server rendered, and for which search: a page for any other `q` is not this page's. */
-interface RenderedSearch {
-  query: string;
+/** What the server rendered, and for which search: a page for any other `q` or `sort` is not this page's. */
+interface RenderedSearch extends ExploreSearch {
   page: PublicationPage;
 }
+
+const SORT_LABELS: Record<PublicationSort, TranslationKey> = {
+  updated: 'explore.sortUpdated',
+  published: 'explore.sortPublished',
+};
 
 /**
  * `/explore`: every public shader, newest first, for anyone — no session, no
  * sign-in prompt. The cards are static thumbnails; nothing is compiled or
  * rendered until a visitor opens one and asks for its preview.
  *
- * The address is the search: `?q=` decides what is listed, so a search can be
- * shared, reloaded and walked back through. Opening a publication and returning
- * brings back the search, every page loaded so far and the scroll position
+ * The address is the search: `?q=` decides what is listed and `?sort=` in which
+ * order (absent: recently updated), so a search can be shared, reloaded and
+ * walked back through. Opening a publication and returning brings back the
+ * search, its order, every page loaded so far and the scroll position
  * (`ExploreBrowseState`) without asking the server again.
  */
 @Component({
@@ -63,9 +76,24 @@ interface RenderedSearch {
           [maxLength]="searchLength"
           [placeholder]="'explore.search' | translate"
           [attr.aria-label]="'explore.search' | translate"
-          [value]="query()"
+          [value]="current().query"
         />
       </form>
+      <span class="sort">
+        <label for="explore-sort">{{ 'explore.sort' | translate }}</label>
+        <select id="explore-sort" (change)="sortBy($event)">
+          @for (sort of sorts; track sort) {
+            <!-- The attribute is for the server's HTML, the property for the browser's live choice. -->
+            <option
+              [value]="sort"
+              [selected]="sort === current().sort"
+              [attr.selected]="sort === current().sort ? '' : null"
+            >
+              {{ sortLabels[sort] | translate }}
+            </option>
+          }
+        </select>
+      </span>
     </header>
 
     <main [attr.aria-busy]="state() === 'loading'">
@@ -83,7 +111,9 @@ interface RenderedSearch {
         }
         @default {
           @if (state() === 'ready' && publications().length === 0) {
-            <p class="status">{{ (query() ? 'explore.noMatch' : 'explore.empty') | translate }}</p>
+            <p class="status">
+              {{ (current().query ? 'explore.noMatch' : 'explore.empty') | translate }}
+            </p>
           }
           <ul class="cards" [attr.aria-label]="'explore.title' | translate" (click)="scrolled()">
             @for (item of publications(); track item.id) {
@@ -138,6 +168,24 @@ interface RenderedSearch {
 
       .search:focus-within {
         box-shadow: inset 0 0 0 1px var(--mat-sys-primary);
+      }
+
+      .sort {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--mat-sys-on-surface-variant);
+        font: var(--mat-sys-body-medium);
+      }
+
+      .sort select {
+        height: 36px;
+        padding: 0 8px;
+        border: 1px solid var(--mat-sys-outline);
+        border-radius: var(--mat-sys-corner-small);
+        background: var(--mat-sys-surface);
+        color: var(--mat-sys-on-surface);
+        font: inherit;
       }
 
       .search input {
@@ -219,8 +267,11 @@ export class ExplorePage {
   private readonly firstPage = serverState<RenderedSearch>('explore');
 
   protected readonly searchLength = PUBLICATION_LIMITS.searchLength;
+  protected readonly sorts = PUBLICATION_SORTS;
+  protected readonly sortLabels = SORT_LABELS;
   protected readonly state = signal<State>('loading');
-  protected readonly query = signal('');
+  /** The search and order listed now. */
+  protected readonly current = signal<ExploreSearch>(UNFILTERED);
   protected readonly publications = signal<readonly PublicationSummary[]>([]);
   protected readonly nextCursor = signal<string | null>(null);
 
@@ -234,10 +285,8 @@ export class ExplorePage {
   private tracking = false;
 
   constructor() {
-    // One component serves every search: Back, Forward and a typed address change `q`, not the page.
-    this.route.queryParamMap
-      .pipe(takeUntilDestroyed())
-      .subscribe((params) => this.follow(params.get('q')));
+    // One component serves every search: Back, Forward and a typed address change `q` and `sort`, not the page.
+    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => this.follow(params));
     inject(DestroyRef).onDestroy(() => {
       this.generation += 1;
       this.tracking = false;
@@ -248,35 +297,49 @@ export class ExplorePage {
     event.preventDefault();
     const query = this.browse.normalize(input.value);
     input.value = query;
-    if (query === this.query()) {
+    if (query === this.current().query) {
       // The same search again is a refresh, not a new place in the history.
-      this.browse.forget(query);
+      this.browse.forget(this.current());
       void this.load(null);
       return;
     }
-    // One history entry per submitted search; `follow` loads it once the address has changed.
+    this.go({ query, sort: this.current().sort });
+  }
+
+  protected sortBy(event: Event): void {
+    const sort = this.browse.normalizeSort((event.target as HTMLSelectElement).value);
+    if (sort !== this.current().sort) this.go({ query: this.current().query, sort });
+  }
+
+  /** One history entry per chosen search or order, listed from its first page; `follow` loads it. */
+  private go(search: ExploreSearch): void {
+    this.browse.forget(search);
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { q: query || null },
+      queryParams: addressOf(search),
       queryParamsHandling: 'merge',
     });
   }
 
   /** Notes where the listing is scrolled to, for the next time this search is shown. */
   protected scrolled(): void {
-    if (this.tracking) this.browse.scrolled(this.query(), this.host.scrollTop);
+    if (this.tracking) this.browse.scrolled(this.current(), this.host.scrollTop);
   }
 
   /** Loads the page after `cursor`, or starts over from the top when there is none. */
   protected async load(cursor: string | null): Promise<void> {
     const generation = ++this.generation;
-    const query = this.query();
+    const { query, sort } = this.current();
     const shown = cursor ? this.publications() : [];
-    if (!cursor) this.tracking = false;
+    if (!cursor) {
+      // A first page is listed from the top, whatever the previous search or order was scrolled to.
+      this.tracking = false;
+      this.host.scrollTop = 0;
+    }
     this.publications.set(shown);
     this.state.set('loading');
     try {
-      const page = await this.api.list(query, cursor);
+      const page = await this.api.list(query, cursor, sort);
       if (generation !== this.generation) return;
       this.show(page, shown);
       this.tracking = true;
@@ -289,18 +352,23 @@ export class ExplorePage {
     }
   }
 
-  private follow(raw: string | null): void {
-    const query = this.browse.normalize(raw);
-    // `?q=%20x%20`, `?q=`: tidy the address in place rather than add an entry for it.
-    if (!this.onServer && raw !== null && (query === '' || query !== raw)) {
+  private follow(params: ParamMap): void {
+    const search: ExploreSearch = {
+      query: this.browse.normalize(params.get('q')),
+      sort: this.browse.normalizeSort(params.get('sort')),
+    };
+    const address = addressOf(search);
+    // `?q=%20x%20`, `?q=`, `?sort=updated`, `?sort=nonsense`: tidy the address in place rather than add an entry for it.
+    if (!this.onServer && (params.get('q') !== address.q || params.get('sort') !== address.sort)) {
       void this.router.navigate([], {
         relativeTo: this.route,
-        queryParams: { q: query || null },
+        queryParams: address,
         queryParamsHandling: 'merge',
         replaceUrl: true,
       });
     }
-    if (this.opened && query === this.query()) return;
+    const { query, sort } = this.current();
+    if (this.opened && search.query === query && search.sort === sort) return;
 
     const first = !this.opened;
     this.opened = true;
@@ -308,12 +376,12 @@ export class ExplorePage {
     if (!first) this.scrolled();
     this.generation += 1;
     this.tracking = false;
-    this.query.set(query);
-    if (!this.onServer) this.browse.returnQuery.set(query);
+    this.current.set(search);
+    if (!this.onServer) this.browse.returnTo.set(search);
 
     const rendered = first ? this.firstPage.take() : null;
-    const kept = this.browse.recall(query);
-    if (rendered?.query === query) {
+    const kept = this.browse.recall(search);
+    if (rendered?.query === search.query && rendered.sort === search.sort) {
       this.show(rendered.page, []);
       this.tracking = true;
       this.keep(0);
@@ -323,7 +391,7 @@ export class ExplorePage {
       this.state.set('ready');
       this.restore(kept.scrollTop);
     } else {
-      void this.load(null).then(() => (first ? this.publishFirstPage(query) : undefined));
+      void this.load(null).then(() => (first ? this.publishFirstPage(search) : undefined));
     }
   }
 
@@ -351,17 +419,17 @@ export class ExplorePage {
 
   /** A completed listing only: never a loading or failed one. */
   private keep(scrollTop: number): void {
-    this.browse.remember(this.query(), {
+    this.browse.remember(this.current(), {
       publications: this.publications(),
       nextCursor: this.nextCursor(),
       scrollTop,
     });
   }
 
-  private publishFirstPage(query: string): void {
-    if (this.state() !== 'ready' || this.query() !== query) return;
+  private publishFirstPage(search: ExploreSearch): void {
+    if (this.state() !== 'ready' || this.current() !== search) return;
     this.firstPage.put({
-      query,
+      ...search,
       page: { publications: [...this.publications()], nextCursor: this.nextCursor() },
     });
   }

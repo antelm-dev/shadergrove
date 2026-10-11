@@ -137,7 +137,8 @@ async function expectDraft(page: Page, marker: string): Promise<void> {
 
 const cards = (page: Page) => page.locator('app-explore-page .card');
 const titles = (page: Page) => page.locator('app-explore-page .card-title').allTextContents();
-const search = (page: Page) => page.getByRole('searchbox', { name: 'Search public shaders' });
+const search = (page: Page) =>
+  page.getByRole('searchbox', { name: 'Search titles, descriptions and authors' });
 
 async function submitSearch(page: Page, text: string): Promise<void> {
   await search(page).fill(text);
