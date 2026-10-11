@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.0](https://github.com/antelm-dev/shadergrove/compare/v2.9.0...v2.10.0) (2026-10-11)
+
+
+### Features
+
+* **explore:** sort public Explore by recently updated or recently published ([#236](https://github.com/antelm-dev/shadergrove/issues/236)) ([c958568](https://github.com/antelm-dev/shadergrove/commit/c9585689f1527ff7a662ddcbc6bf6f6de58dab75))
+
 ## [2.9.0](https://github.com/antelm-dev/shadergrove/compare/v2.8.2...v2.9.0) (2026-10-09)
 
 
