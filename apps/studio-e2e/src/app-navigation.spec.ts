@@ -153,17 +153,28 @@ test('the links keep the draft and bring back the Explore search and the Plugins
   await expect(page).toHaveURL('/explore?q=nebula');
   await page.getByRole('button', { name: 'Load more' }).click();
   await expect(page.locator('app-explore-page .card')).toHaveCount(24);
-  const scrolled = await page.locator('app-explore-page').evaluate((host) => {
+  // The card opened is wholly on screen: one partly under the sticky bar makes Playwright
+  // scroll it into view first, which moves the very position under test.
+  const { scrolled, opened } = await page.locator('app-explore-page').evaluate((host) => {
     host.scrollTop = 200;
-    return host.scrollTop;
+    const top = host.querySelector('.page-bar')!.getBoundingClientRect().bottom;
+    const bottom = host.getBoundingClientRect().bottom;
+    const card = [...host.querySelectorAll('.card')].find((entry) => {
+      const box = entry.getBoundingClientRect();
+      return box.top >= top && box.bottom <= bottom;
+    });
+    return { scrolled: host.scrollTop, opened: card?.getAttribute('href') };
   });
   expect(scrolled).toBeGreaterThan(0);
+  expect(opened, 'a card is wholly on screen').toMatch(/^\/explore\/nebula-\d\d$/);
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
   await tab(page, 'explore').click();
   await expect(page).toHaveURL('/explore?q=nebula');
 
-  await page.locator('app-explore-page a[href="/explore/nebula-02"]').click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Nebula 02' })).toBeVisible();
+  await page.locator(`app-explore-page a[href="${opened}"]`).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: `Nebula ${opened!.slice(-2)}` }),
+  ).toBeVisible();
   await expectCurrent(page, 'explore');
   await expectNavOverPage(page, 'app-publication-page');
 
