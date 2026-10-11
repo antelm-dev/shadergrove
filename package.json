@@ -1,6 +1,6 @@
 {
   "name": "shadergrove",
-  "version": "2.8.1",
+  "version": "2.9.0",
   "private": true,
   "description": "A shader collection viewer and editor: browse, edit, tune and share WebGL shaders.",
   "keywords": [],
