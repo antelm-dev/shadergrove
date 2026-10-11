@@ -8,28 +8,40 @@ import { DesktopPlatform } from '../../desktop/desktop-platform';
 import { I18n } from '../../i18n/i18n';
 import { provideTestLanguages, speaking } from '../../i18n/testing/languages';
 import { Preferences } from '../../prefs/preferences';
+import { RendererHandle } from '../../rendering/renderer-handle';
 import { SurfaceLayoutService } from '../../surfaces/surface-layout';
-import {
-  BOTTOM_PANEL_CHANNEL,
-  BottomPanelHost,
-  type BottomPanelMessage,
-} from '../../workspace/bottom-panel-sync';
 import { OutputSync } from '../../workspace/output-sync';
 import { RoutingCoordinator } from '../../workspace/routing-coordinator';
+import { SessionHost } from '../../workspace/session-sync/session-host';
+import {
+  SESSION_CHANNEL,
+  type SessionMessage,
+} from '../../workspace/session-sync/session-protocol';
 import { ShaderStore } from '../../workspace/shader-store';
 import { StartupCoordinator } from '../../workspace/startup-coordinator';
 import { FakeBroadcastChannel } from '../../workspace/testing/fake-broadcast-channel';
+import { IDLE_PROFILER } from '../inspector/profiler-session';
 import { BottomPanelWindow } from './bottom-panel-window';
 
-/** What the native window must never create: the main window's session and its side effects. */
-const MAIN_WINDOW_ONLY: readonly Type<unknown>[] = [
+/** What a panel window must never create: the main window's session and its side effects. */
+export const MAIN_WINDOW_ONLY: readonly Type<unknown>[] = [
   ShaderStore,
   StartupCoordinator,
   RoutingCoordinator,
   OutputSync,
   SurfaceLayoutService,
-  BottomPanelHost,
+  SessionHost,
+  RendererHandle,
 ];
+
+/** Throwing factories for `MAIN_WINDOW_ONLY`: a test fails the moment a panel window asks for one. */
+export const forbidMainWindowOnly = (window: string) =>
+  MAIN_WINDOW_ONLY.map((token) => ({
+    provide: token,
+    useFactory: () => {
+      throw new Error(`the ${window} window must not create ${token.name}`);
+    },
+  }));
 
 const diagnostic: CompileDiagnostic = {
   severity: 'error',
@@ -40,22 +52,22 @@ const diagnostic: CompileDiagnostic = {
   docName: 'Image',
 };
 
-describe('BottomPanelWindow (native Problems/Output window)', () => {
+describe('BottomPanelWindow (the bottom panel in its own window)', () => {
   const desktop = {
     available: true,
     returnSurface: vi.fn(async () => ({ status: 'returned', surfaceId: '' })),
     closeSurface: vi.fn(async () => ({ status: 'closed', surfaceId: '' })),
   };
   let main: FakeBroadcastChannel;
-  let received: BottomPanelMessage[];
+  let received: SessionMessage[];
 
   beforeEach(() => {
     vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel);
     desktop.returnSurface.mockClear();
     desktop.closeSurface.mockClear();
-    main = new FakeBroadcastChannel(BOTTOM_PANEL_CHANNEL);
+    main = new FakeBroadcastChannel(SESSION_CHANNEL);
     received = [];
-    main.onmessage = ({ data }) => received.push(data as BottomPanelMessage);
+    main.onmessage = ({ data }) => received.push(data as SessionMessage);
 
     TestBed.configureTestingModule({
       providers: [
@@ -67,12 +79,7 @@ describe('BottomPanelWindow (native Problems/Output window)', () => {
           useValue: { value: signal(speaking('en')).asReadonly(), patch: () => undefined },
         },
         { provide: DesktopPlatform, useValue: desktop },
-        ...MAIN_WINDOW_ONLY.map((token) => ({
-          provide: token,
-          useFactory: () => {
-            throw new Error(`the bottom-panel window must not create ${token.name}`);
-          },
-        })),
+        ...forbidMainWindowOnly('bottom-panel'),
       ],
     });
   });
@@ -91,21 +98,29 @@ describe('BottomPanelWindow (native Problems/Output window)', () => {
 
   const publish = async (
     fixture: Awaited<ReturnType<typeof mount>>['fixture'],
-    message: BottomPanelMessage,
+    message: SessionMessage,
   ) => {
     main.postMessage(message);
     await fixture.whenStable();
   };
 
-  it('renders only the panel shell, without the workspace session, and asks for a snapshot', async () => {
+  const lastCommand = () => {
+    const message = received.at(-1);
+    return message?.kind === 'command' ? message.command : null;
+  };
+
+  it('offers every tab of the docked panel, without the workspace session, and says hello', async () => {
     const { root } = await mount();
 
-    expect(received).toEqual([{ kind: 'ready' }]);
+    expect(received).toEqual([{ kind: 'hello', client: expect.any(String) }]);
     expect(
-      [...root.querySelectorAll('[role="tab"] > span')].map((label) => label.textContent?.trim()),
-    ).toEqual(['Problems', 'Output']);
+      [...root.querySelectorAll('[role="tab"] > span:first-of-type')].map((label) =>
+        label.textContent?.trim(),
+      ),
+    ).toEqual(['Problems', 'Output', 'Profiler', 'Inspection']);
     expect(root.querySelector('app-problems-panel')).not.toBeNull();
     expect(root.querySelector('app-output-panel')).not.toBeNull();
+    expect(root.querySelector('app-profiler-view')).not.toBeNull();
     expect(root.querySelector('app-preview-shell, app-editor-shell, mat-toolbar')).toBeNull();
   });
 
@@ -114,64 +129,110 @@ describe('BottomPanelWindow (native Problems/Output window)', () => {
     expect(root.textContent).toContain('No problems detected.');
 
     await publish(fixture, {
-      kind: 'snapshot',
-      diagnostics: [diagnostic],
-      entries: [{ id: 1, timestamp: 0, level: 'error', source: 'compiler', message: 'failed' }],
+      kind: 'state',
+      patch: {
+        diagnostics: [diagnostic],
+        entries: [{ id: 1, timestamp: 0, level: 'error', source: 'compiler', message: 'failed' }],
+      },
     });
 
     expect(root.querySelector('.row')?.textContent).toContain('undeclared identifier');
     expect(root.querySelector('.count.error')?.textContent?.trim()).toBe('1');
     expect(root.querySelector('.entry .message')?.textContent).toBe('failed');
 
-    await publish(fixture, {
-      kind: 'snapshot',
-      diagnostics: [],
-      entries: [
-        { id: 1, timestamp: 0, level: 'error', source: 'compiler', message: 'failed' },
-        { id: 2, timestamp: 0, level: 'info', source: 'compiler', message: 'compiled' },
-      ],
-    });
-
+    await publish(fixture, { kind: 'state', patch: { diagnostics: [] } });
     expect(root.querySelector('.row')).toBeNull();
-    expect(root.querySelectorAll('.entry')).toHaveLength(2);
   });
 
-  it('asks the main window to reveal a clicked diagnostic', async () => {
-    const { fixture, root } = await mount();
-    await publish(fixture, { kind: 'snapshot', diagnostics: [diagnostic], entries: [] });
-
-    root.querySelector<HTMLButtonElement>('.row')!.click();
-
-    expect(received.at(-1)).toEqual({ kind: 'reveal', docId: 'image', line: 4 });
-  });
-
-  it('asks the main window to clear its log rather than clearing a copy', async () => {
-    const { fixture, root } = await mount();
-    await publish(fixture, {
-      kind: 'snapshot',
-      diagnostics: [],
-      entries: [{ id: 1, timestamp: 0, level: 'info', source: 'compiler', message: 'ok' }],
-    });
-
-    root.querySelector<HTMLButtonElement>('button[aria-label="Clear output"]')!.click();
-    await fixture.whenStable();
-
-    expect(received.at(-1)).toEqual({ kind: 'clear-output' });
-    expect(root.querySelectorAll('.entry')).toHaveLength(1);
-  });
-
-  it('switches tabs locally and follows a tab the main window suggests', async () => {
+  it('shows the tab the main window has selected, and selects tabs there', async () => {
     const { fixture, root } = await mount();
     const panel = (name: string) => root.querySelector<HTMLElement>(`#bottom-panel-panel-${name}`)!;
-    expect(panel('output').hidden).toBe(true);
+
+    await publish(fixture, { kind: 'state', patch: { bottomPanelTab: 'profiler' } });
+    expect(panel('profiler').hidden).toBe(false);
+    expect(panel('problems').hidden).toBe(true);
 
     root.querySelector<HTMLButtonElement>('#bottom-panel-tab-output')!.click();
     await fixture.whenStable();
+    expect(lastCommand()).toEqual({ kind: 'bottom-panel-tab', tab: 'output' });
     expect(panel('output').hidden).toBe(false);
-    expect(panel('problems').hidden).toBe(true);
+  });
 
-    await publish(fixture, { kind: 'show', tab: 'problems' });
-    expect(panel('problems').hidden).toBe(false);
+  it("mirrors the main window's profiler and asks it to apply a suggestion", async () => {
+    const { fixture, root } = await mount();
+    await publish(fixture, {
+      kind: 'state',
+      patch: {
+        bottomPanelTab: 'profiler',
+        profiler: {
+          ...IDLE_PROFILER,
+          suggestion: 0.75,
+          status: { kind: 'suggestion', scale: 0.75 },
+        },
+      },
+    });
+    // No snapshot yet: the empty state, as in the docked panel.
+    expect(root.querySelector('#bottom-panel-panel-profiler')?.textContent).toContain(
+      'Waiting for the active preview',
+    );
+
+    await publish(fixture, {
+      kind: 'state',
+      patch: {
+        profiler: {
+          snapshot: {
+            enabled: true,
+            gpuSupport: 'supported',
+            sampleCount: 40,
+            lastSampleAgeMs: 10,
+            cpuSubmission: { medianMs: 1, p95Ms: 1 },
+            totalGpu: { medianMs: 30, p95Ms: 32 },
+            passes: [],
+            renderTargetBytes: 0,
+            textureBytes: 0,
+            textureEstimated: true,
+            textures: [],
+            compiles: [],
+          },
+          suggestion: 0.75,
+          status: { kind: 'suggestion', scale: 0.75 },
+        },
+      },
+    });
+    root.querySelector<HTMLButtonElement>('.suggestion button')!.click();
+
+    expect(lastCommand()).toEqual({ kind: 'apply-profiler-suggestion', scale: 0.75 });
+  });
+
+  it('explains that frame inspection needs the main window, and docks on request', async () => {
+    const { fixture, root } = await mount();
+    await publish(fixture, { kind: 'state', patch: { bottomPanelTab: 'inspection' } });
+
+    const inspection = root.querySelector<HTMLElement>('#bottom-panel-panel-inspection')!;
+    expect(inspection.textContent).toContain('captures the preview in the main window');
+    inspection.querySelector<HTMLButtonElement>('button.dock-to-inspect')!.click();
+
+    expect(desktop.returnSurface).toHaveBeenCalledWith(WELL_KNOWN_SURFACE_IDS.bottomPanel);
+  });
+
+  it('asks the main window to reveal a clicked diagnostic and to clear its log', async () => {
+    const { fixture, root } = await mount();
+    await publish(fixture, {
+      kind: 'state',
+      patch: {
+        diagnostics: [diagnostic],
+        entries: [{ id: 1, timestamp: 0, level: 'info', source: 'compiler', message: 'ok' }],
+      },
+    });
+
+    root.querySelector<HTMLButtonElement>('.row')!.click();
+    expect(lastCommand()).toEqual({ kind: 'reveal', docId: 'image', line: 4 });
+
+    root.querySelector<HTMLButtonElement>('button[aria-label="Clear output"]')!.click();
+    await fixture.whenStable();
+    expect(lastCommand()).toEqual({ kind: 'clear-output' });
+    // The copy empties only when the main window's log does.
+    expect(root.querySelectorAll('.entry')).toHaveLength(1);
   });
 
   it('docks back and closes through the satellite surface IPC', async () => {
@@ -180,7 +241,7 @@ describe('BottomPanelWindow (native Problems/Output window)', () => {
 
     const dock = root.querySelector<HTMLButtonElement>('button.dock')!;
     const close = root.querySelector<HTMLButtonElement>('button.close')!;
-    expect(dock.getAttribute('aria-label')).toBe('Dock to bottom');
+    expect(dock.getAttribute('aria-label')).toBe('Dock in main window');
     expect(close.getAttribute('aria-label')).toBe('Close panel');
 
     dock.click();

@@ -54,7 +54,7 @@ import { ResizeHandle } from './ui/layout/resize-handle';
 import { ShaderBrowser } from './ui/browser/shader-browser';
 import { TransportBar } from './ui/layout/transport-bar';
 import { StartupCoordinator } from './workspace/startup-coordinator';
-import { BottomPanelHost } from './workspace/bottom-panel-sync';
+import { SessionHost } from './workspace/session-sync/session-host';
 import { WorkspaceActions } from './ui/workspace-actions';
 import { PluginCommands } from './plugins/plugin-commands';
 import { FALLBACK_LANGUAGE_ID } from '@shadergrove/shared/plugin';
@@ -111,7 +111,7 @@ export class App {
   protected readonly commands = inject(MenuCommands);
   protected readonly layout = inject(SurfaceLayoutService);
   private readonly surfaces = inject(SurfaceRegistry);
-  private readonly bottomPanelHost = inject(BottomPanelHost);
+  private readonly sessionHost = inject(SessionHost);
   protected readonly i18n = inject(I18n);
   protected readonly outputMode = isOutputWindow();
   /** Which of Editor / Explore / Plugins is on screen, and where each link leads. */
@@ -426,8 +426,8 @@ export class App {
     // constructor. Nothing here needs to call anything on it.
     inject(StartupCoordinator);
 
-    // Feeds the native Problems/Output window, which only the desktop opens.
-    if (this.desktop.available && !this.outputMode) this.bottomPanelHost.start();
+    // Feeds the native panel windows, which only the desktop opens.
+    if (this.desktop.available && !this.outputMode) this.sessionHost.start();
 
     // The hidden input the browser imports go through is in this template.
     if (!this.outputMode) {
@@ -576,9 +576,6 @@ export class App {
   protected openProblems(): void {
     this.preferences.patch({ bottomPanelOpen: true, bottomPanelTab: 'problems' });
     // Detached: the tab follows into its window, which this brings forward (or reopens).
-    if (this.layout.bottomPanelNative()) {
-      this.bottomPanelHost.show('problems');
-      void this.layout.detach(this.layout.bottomPanelId);
-    }
+    if (this.layout.bottomPanelNative()) void this.layout.detach(this.layout.bottomPanelId);
   }
 }

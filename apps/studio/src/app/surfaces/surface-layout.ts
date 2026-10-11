@@ -97,6 +97,10 @@ export class SurfaceLayoutService {
 
   /** A native window shows the bottom panel (or will, once shown): the workspace renders no copy. */
   readonly bottomPanelNative = computed(() => isNativePlacement(this.bottomPanel().placement));
+  readonly inspectorNative = computed(() => isNativePlacement(this.inspector().placement));
+  readonly editorNative = computed(() => isNativePlacement(this.editor().placement));
+  /** Whether any panel lives in a native window of its own. */
+  readonly anyNative = computed(() => [...NATIVE_PANELS.keys()].some((id) => this.isNative(id)));
 
   readonly editorOpen = computed(() => this.editor().open);
   readonly inspectorOpen = computed(() => this.inspector().open);
