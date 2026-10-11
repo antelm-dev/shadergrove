@@ -3,9 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_RENDER } from '@shadergrove/shared/model';
 import { GlContextRegistry } from './gl-context-registry';
-import { GlContext, WrongContextError, ownerOf, type GlBackend } from './gl-context';
-import { ShaderEngine, type ChannelSource, type ShaderSpec } from './shader-engine';
-import { FakeFrames, fakeBackend, type FakeRenderer, type FakeTexture } from './testing/fake-gl';
+import {
+  GlContext,
+  WrongContextError,
+  ownerOf,
+  type GlBackend,
+  ShaderEngine,
+  type ChannelSource,
+  type ShaderSpec,
+} from '@shadergrove/rendering';
+import {
+  FakeFrames,
+  fakeBackend,
+  type FakeRenderer,
+  type FakeTexture,
+} from '@shadergrove/rendering/testing';
 
 /**
  * Two WebGL contexts, side by side, in jsdom — which has no WebGL at all.

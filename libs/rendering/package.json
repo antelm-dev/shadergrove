@@ -1,0 +1,32 @@
+{
+  "name": "@shadergrove/rendering",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The WebGL shader runtime shared by the studio and other browser hosts. No Angular, Node, Electron or backend.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./testing": {
+      "types": "./src/testing/fake-gl.ts",
+      "default": "./src/testing/fake-gl.ts"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@shadergrove/shared": "workspace:*",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.1",
+    "jsdom": "^28.0.0",
+    "typescript": "~6.0.2",
+    "vitest": "^4.0.8"
+  }
+}

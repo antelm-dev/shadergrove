@@ -1,6 +1,6 @@
 import { Injectable, computed, signal, type Signal } from '@angular/core';
 
-import { GlContext, type GlContextOptions } from './gl-context';
+import { GlContext, type GlContextOptions } from '@shadergrove/rendering';
 
 /**
  * Every live WebGL context in the app, keyed by id.

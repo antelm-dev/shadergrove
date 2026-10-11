@@ -3,10 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_RENDER } from '@shadergrove/shared/model';
 import { GlContextRegistry } from './gl-context-registry';
-import type { GlContext } from './gl-context';
+import { type GlContext, ShaderEngine, type ShaderSpec } from '@shadergrove/rendering';
 import { renderFrame } from './frame-render';
-import { ShaderEngine, type ShaderSpec } from './shader-engine';
-import { fakeBackend } from './testing/fake-gl';
+import { fakeBackend } from '@shadergrove/rendering/testing';
 
 /**
  * `renderFrame` reuses the same offline-capture contract `offline-capture.spec.ts`

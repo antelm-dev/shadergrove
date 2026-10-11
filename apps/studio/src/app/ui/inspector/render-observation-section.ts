@@ -21,8 +21,8 @@ import {
   FrameCaptureError,
   type CapturedPass,
   type FrameSnapshot,
-} from '../../rendering/render-inspection';
-import type { ObservationResult } from '../../rendering/render-observation';
+  type ObservationResult,
+} from '@shadergrove/rendering';
 import { RendererHandle } from '../../rendering/renderer-handle';
 import { classifyComponent, formatRaw, parseVisit, type Texel } from './render-inspection-model';
 

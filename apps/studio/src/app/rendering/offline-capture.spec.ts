@@ -3,9 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_RENDER } from '@shadergrove/shared/model';
 import { GlContextRegistry } from './gl-context-registry';
-import type { GlContext } from './gl-context';
-import { ShaderEngine, type ShaderSpec } from './shader-engine';
-import { FakeFrames, fakeBackend, type FakeRenderer } from './testing/fake-gl';
+import { type GlContext, ShaderEngine, type ShaderSpec } from '@shadergrove/rendering';
+import { FakeFrames, fakeBackend, type FakeRenderer } from '@shadergrove/rendering/testing';
 
 /**
  * The clock seam: what makes a captured frame a function of its time and

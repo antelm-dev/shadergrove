@@ -52,6 +52,7 @@
     "@nestjs/swagger": "^11.4.6",
     "@shadergrove/backend": "workspace:*",
     "@shadergrove/glsl-analysis": "workspace:*",
+    "@shadergrove/rendering": "workspace:*",
     "@shadergrove/shared": "workspace:*",
     "better-auth": "^1.7.5",
     "drizzle-orm": "0.45.2",

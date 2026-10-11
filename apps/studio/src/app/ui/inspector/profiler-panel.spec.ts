@@ -2,10 +2,7 @@ import { computed, provideZonelessChangeDetection, signal } from '@angular/core'
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  PROFILER_MIN_GPU_SAMPLES,
-  type ProfilerSnapshot,
-} from '../../rendering/performance-profiler';
+import { PROFILER_MIN_GPU_SAMPLES, type ProfilerSnapshot } from '@shadergrove/rendering';
 import { RendererHandle } from '../../rendering/renderer-handle';
 import { I18n } from '../../i18n/i18n';
 import { provideTestLanguages } from '../../i18n/testing/languages';
