@@ -1,11 +1,14 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as Monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ReducedMotion } from '../prefs/reduced-motion';
 import { AppThemes } from '../themes/app-themes';
 import { CodeEditor, MONACO_LOADER, type EditorDoc } from './code-editor';
 import { FontLoader } from './google-fonts';
+import type { MonacoApi } from './monaco-loader';
+import { loadMonacoInJsdom } from './testing/jsdom-monaco';
 
 /**
  * A model that keeps what the real one is accountable for here: its text, an
@@ -336,5 +339,342 @@ describe('CodeEditor', () => {
 
       expect(configModel().history).toEqual([]);
     });
+  });
+});
+
+/**
+ * Literal scrubbing, over the app's real Monaco models and GLSL tokenizer, so the
+ * undo stack under test is Monaco's own. Only the view is stood in for: it maps
+ * every pointer to `target` and hands content changes on as the editor would.
+ */
+describe('CodeEditor literal scrub', () => {
+  let monaco: MonacoApi;
+  let fixture: ComponentFixture<CodeEditor>;
+  let emitted: Array<{ id: string; value: string }>;
+  let view: ScrubView;
+  let created: Record<string, unknown>;
+
+  class ScrubView {
+    node = document.createElement('div');
+    target: { lineNumber: number; column: number } | null = null;
+    private listener: (() => void) | null = null;
+    private subscription: { dispose(): void } | null = null;
+
+    constructor(
+      private readonly host: HTMLElement,
+      public model: Monaco.editor.ITextModel,
+    ) {
+      host.appendChild(this.node);
+    }
+
+    getTargetAtClientPoint() {
+      return (
+        this.target && {
+          type: monaco.editor.MouseTargetType.CONTENT_TEXT,
+          position: this.target,
+        }
+      );
+    }
+
+    onDidChangeModelContent(listener: () => void): void {
+      this.listener = listener;
+      this.attach();
+    }
+
+    /** Like Monaco, a new model gets a new view node. */
+    setModel(model: Monaco.editor.ITextModel): void {
+      this.model = model;
+      this.node.remove();
+      this.node = this.host.appendChild(document.createElement('div'));
+      this.attach();
+    }
+
+    private attach(): void {
+      this.subscription?.dispose();
+      const listener = this.listener;
+      this.subscription = listener ? this.model.onDidChangeContent(() => listener()) : null;
+    }
+
+    getModel(): Monaco.editor.ITextModel {
+      return this.model;
+    }
+
+    saveViewState(): null {
+      return null;
+    }
+
+    onDidLayoutChange(): void {}
+    restoreViewState(): void {}
+    updateOptions(): void {}
+    layout(): void {}
+    focus(): void {}
+    dispose(): void {
+      this.subscription?.dispose();
+      this.node.remove();
+    }
+  }
+
+  const SOURCE: EditorDoc = {
+    id: 'image',
+    language: 'glsl',
+    value: 'float a = 0.50; /*\n  0.5 */\nfloat b = -1.0;\nuint c = 3u;',
+  };
+
+  beforeAll(async () => {
+    monaco = await loadMonacoInJsdom();
+  }, 120_000);
+
+  beforeEach(async () => {
+    emitted = [];
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [CodeEditor],
+      providers: [
+        provideZonelessChangeDetection(),
+        {
+          provide: MONACO_LOADER,
+          useValue: async () => ({
+            ...monaco,
+            editor: {
+              ...monaco.editor,
+              create: (host: HTMLElement, options: { model: Monaco.editor.ITextModel }) => {
+                created = options;
+                view = new ScrubView(host, options.model);
+                return view;
+              },
+            },
+          }),
+        },
+        { provide: AppThemes, useValue: { attachMonaco: vi.fn() } },
+        { provide: FontLoader, useValue: { load: async () => 'idle' } },
+        { provide: ReducedMotion, useValue: { enabled: signal(false) } },
+      ],
+    });
+    fixture = TestBed.createComponent(CodeEditor);
+    fixture.componentRef.setInput('doc', SOURCE);
+    fixture.componentInstance.valueChange.subscribe((change) => emitted.push(change));
+    fixture.detectChanges();
+    for (let i = 0; i < 10 && !fixture.componentInstance.ready(); i++) {
+      await fixture.whenStable();
+      await new Promise((resolve) => setTimeout(resolve));
+    }
+    expect(fixture.componentInstance.ready()).toBe(true);
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  const pointer = (type: string, init: PointerEventInit = {}) => {
+    const event = new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 1,
+      button: 0,
+      altKey: true,
+      ...init,
+    });
+    (type === 'pointerdown' ? view.node : document).dispatchEvent(event);
+    return event;
+  };
+  const key = (type: 'keydown' | 'keyup', name: string) =>
+    document.dispatchEvent(new KeyboardEvent(type, { key: name, bubbles: true, cancelable: true }));
+
+  /** Press on a line and column at x = 100, then move to each x in turn. */
+  function drag(lineNumber: number, column: number, xs: number[], init: PointerEventInit = {}) {
+    view.target = { lineNumber, column };
+    const down = pointer('pointerdown', { clientX: 100, ...init });
+    for (const x of xs) pointer('pointermove', { clientX: x, ...init });
+    return down;
+  }
+
+  const line = (n: number) => view.model.getLineContent(n);
+
+  it('lets Ctrl/Cmd add cursors, leaving Alt to the gesture', () => {
+    expect(created['multiCursorModifier']).toBe('ctrlCmd');
+  });
+
+  it('scrubs a float in steps of four pixels and reports each edit as typing', () => {
+    const down = drag(1, 12, [103, 108, 140]);
+    pointer('pointerup', { clientX: 140 });
+
+    expect(down.defaultPrevented).toBe(true);
+    expect(line(1)).toBe('float a = 0.60; /*');
+    expect(emitted.map((change) => change.id)).toEqual(['image', 'image']);
+    expect(emitted.at(-1)?.value).toBe(view.model.getValue());
+  });
+
+  it('is one undo step, however many edits the drag made', () => {
+    drag(1, 12, [104, 108, 112, 160, 80]);
+    pointer('pointerup');
+    expect(line(1)).toBe('float a = 0.45; /*');
+
+    view.model.undo();
+    expect(view.model.getValue()).toBe(SOURCE.value);
+    view.model.redo();
+    expect(line(1)).toBe('float a = 0.45; /*');
+  });
+
+  it('crosses zero with the unary minus inside the edited range', () => {
+    drag(3, 13, [140]);
+    pointer('pointerup');
+    expect(line(3)).toBe('float b = 0.0;');
+
+    drag(3, 12, [144]);
+    pointer('pointerup');
+    expect(line(3)).toBe('float b = 1.1;');
+  });
+
+  it('takes ten times the step with Shift and a tenth with Ctrl', () => {
+    drag(1, 12, [108], { shiftKey: true });
+    pointer('pointerup');
+    expect(line(1)).toBe('float a = 0.70; /*');
+
+    drag(1, 12, [108], { ctrlKey: true });
+    pointer('pointerup');
+    expect(line(1)).toBe('float a = 0.702; /*');
+  });
+
+  /** Types at the end of line 3, leaving the stack element open as the keyboard does. */
+  const typeOnLine3 = (text: string) => {
+    const end = view.model.getLineMaxColumn(3);
+    view.model.pushEditOperations(
+      [],
+      [{ range: { startLineNumber: 3, startColumn: end, endLineNumber: 3, endColumn: end }, text }],
+      () => null,
+    );
+  };
+
+  it('keeps typing on either side out of the undo step of the gesture', () => {
+    typeOnLine3(' // x');
+    drag(1, 12, [140]);
+    pointer('pointerup');
+    typeOnLine3('y');
+
+    view.model.undo();
+    expect([line(1), line(3)]).toEqual(['float a = 0.60; /*', 'float b = -1.0; // x']);
+    view.model.undo();
+    expect([line(1), line(3)]).toEqual(['float a = 0.50; /*', 'float b = -1.0; // x']);
+  });
+
+  it('restores the original on Escape, leaving no empty step before the previous edit', () => {
+    typeOnLine3(' // x');
+    const typed = view.model.getValue();
+    drag(1, 12, [140]);
+    expect(line(1)).toBe('float a = 0.60; /*');
+
+    key('keydown', 'Escape');
+    expect(view.model.getValue()).toBe(typed);
+    pointer('pointermove', { clientX: 200 });
+    expect(view.model.getValue()).toBe(typed);
+
+    // The first Ctrl+Z after Escape takes back the typing, not an empty gesture step.
+    view.model.undo();
+    expect(view.model.getValue()).toBe(SOURCE.value);
+  });
+
+  it('leaves the text and the undo stack alone on an Escape before any move', () => {
+    typeOnLine3(' // x');
+    drag(1, 12, []);
+    key('keydown', 'Escape');
+
+    view.model.undo();
+    expect(view.model.getValue()).toBe(SOURCE.value);
+  });
+
+  it('keeps every non-modifier key from the editor while dragging', () => {
+    const reached: string[] = [];
+    // Stands in for the editor; stopping here keeps the key from Monaco's
+    // body-level clipboard listener, which jsdom cannot serve.
+    view.node.addEventListener('keydown', (event) => {
+      reached.push(event.key);
+      event.stopPropagation();
+    });
+    drag(1, 12, [108]);
+
+    const press = (name: string) => {
+      const event = new KeyboardEvent('keydown', {
+        key: name,
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      view.node.dispatchEvent(event);
+      return event;
+    };
+    expect(press('ArrowUp').defaultPrevented).toBe(true);
+    expect(press('z').defaultPrevented).toBe(true);
+    expect(press('Shift').defaultPrevented).toBe(false);
+    pointer('pointermove', { clientX: 112 });
+    pointer('pointerup');
+
+    expect(reached).toEqual(['Shift']);
+    expect(view.model.getValue()).toBe(SOURCE.value.replace('0.50', '0.53'));
+  });
+
+  it('turns back at once from a value pinned at zero', () => {
+    drag(4, 10, [60]);
+    expect(line(4)).toBe('uint c = 0u;');
+    pointer('pointermove', { clientX: 64 });
+    pointer('pointerup');
+
+    expect(line(4)).toBe('uint c = 1u;');
+  });
+
+  it('ends when Alt is let go', () => {
+    drag(1, 12, [108]);
+    key('keyup', 'Alt');
+    pointer('pointermove', { clientX: 200 });
+
+    expect(line(1)).toBe('float a = 0.52; /*');
+  });
+
+  it.each([
+    ['without Alt', 1, 12, { altKey: false }],
+    ['off a literal', 1, 3, {}],
+    ['in a comment opened on an earlier line', 2, 4, {}],
+  ])('leaves the press to Monaco %s', (_name, lineNumber, column, init) => {
+    const down = drag(lineNumber, column, [140], init);
+    pointer('pointerup');
+
+    expect(down.defaultPrevented).toBe(false);
+    expect(view.model.getValue()).toBe(SOURCE.value);
+    expect(emitted).toEqual([]);
+  });
+
+  it('ignores the gesture in a read-only editor', () => {
+    fixture.componentRef.setInput('readOnly', true);
+    fixture.detectChanges();
+
+    const down = drag(1, 12, [140]);
+    pointer('pointerup');
+
+    expect(down.defaultPrevented).toBe(false);
+    expect(view.model.getValue()).toBe(SOURCE.value);
+  });
+
+  it('still scrubs after the editor has shown another document', async () => {
+    fixture.componentRef.setInput('doc', CONFIG);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.componentRef.setInput('doc', SOURCE);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    drag(1, 12, [108]);
+    pointer('pointerup');
+
+    expect(line(1)).toBe('float a = 0.52; /*');
+    expect(emitted).toEqual([{ id: 'image', value: view.model.getValue() }]);
+  });
+
+  it('ignores the gesture outside GLSL', async () => {
+    fixture.componentRef.setInput('doc', CONFIG);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const down = drag(2, 3, [140]);
+    pointer('pointerup');
+
+    expect(down.defaultPrevented).toBe(false);
+    expect(view.model.getValue()).toBe(CONFIG.value);
   });
 });

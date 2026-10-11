@@ -25,10 +25,20 @@ import { ReducedMotion } from '../prefs/reduced-motion';
 import { FontLoader, findFont, nearestWeight } from './google-fonts';
 import { AppThemes } from '../themes/app-themes';
 import type { ProjectAnalysis } from './glsl-analysis';
+import {
+  SCRUB_PIXELS_PER_STEP,
+  findScrubbableLiteral,
+  formatScrubbed,
+  literalValue,
+  scrubStep,
+  type ScrubLiteral,
+} from './literal-scrub';
 import { bindAnalysisModel, syncAnalysisMarkers } from './monaco-glsl-analysis';
 import { GLSL_LANGUAGE_ID, JSON_LANGUAGE_ID, loadMonaco, type MonacoApi } from './monaco-loader';
 
 export type EditorLanguage = 'glsl' | 'json';
+
+const MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'Shift']);
 
 /** How Monaco is obtained. Only a test has a reason to provide anything else. */
 export const MONACO_LOADER = new InjectionToken<() => Promise<MonacoApi>>('MONACO_LOADER', {
@@ -564,6 +574,8 @@ export class CodeEditor {
       renderLineHighlight: 'line',
       padding: { top: 12, bottom: 12 },
       scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
+      // Alt is the literal-scrub gesture; Ctrl/Cmd+click adds cursors instead.
+      multiCursorModifier: 'ctrlCmd',
       ...untracked(this.options),
     });
 
@@ -581,6 +593,8 @@ export class CodeEditor {
     // A resize changes which lines are on screen without scrolling.
     editor.onDidLayoutChange(() => this.scheduleVisibleTokens());
 
+    this.bindLiteralScrub(monaco, editor);
+
     this.editor = editor;
     this.monaco.set(monaco);
     this.ready.set(true);
@@ -595,6 +609,158 @@ export class CodeEditor {
       this.models.clear();
       this.viewStates.clear();
     });
+  }
+
+  /** Ends the Alt-drag in progress, restoring the original text when `cancel`. */
+  private endScrub: ((cancel: boolean) => void) | null = null;
+
+  /**
+   * Alt-drag on a numeric GLSL literal changes it.
+   *
+   * The press is caught in the capture phase on the host, before Monaco's own
+   * handlers below it, so the gesture neither moves the caret nor starts a
+   * selection. The host, not `getDomNode()`: Monaco replaces its view's node on
+   * every `setModel`. The edits are ordinary ones — `applying` stays false —
+   * so the draft hears them like typing; a stack element on each side of the
+   * gesture makes the whole drag one undo step.
+   */
+  private bindLiteralScrub(monaco: MonacoApi, editor: Monaco.editor.IStandaloneCodeEditor): void {
+    const node = this.host().nativeElement;
+
+    const onDown = (event: PointerEvent) => {
+      if (!event.altKey || event.button !== 0 || this.endScrub || this.readOnly()) return;
+      const model = editor.getModel();
+      if (!model || model.getLanguageId() !== GLSL_LANGUAGE_ID) return;
+
+      const target = editor.getTargetAtClientPoint(event.clientX, event.clientY);
+      if (target?.type !== monaco.editor.MouseTargetType.CONTENT_TEXT || !target.position) return;
+
+      const { lineNumber, column } = target.position;
+      // From the top, so a block comment opened on an earlier line still counts.
+      const tokens = monaco.editor.tokenize(
+        model.getValueInRange({
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: lineNumber,
+          endColumn: model.getLineMaxColumn(lineNumber),
+        }),
+        GLSL_LANGUAGE_ID,
+      )[lineNumber - 1];
+      const literal = findScrubbableLiteral(model.getLineContent(lineNumber), column, tokens ?? []);
+      if (!literal) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      editor.focus();
+      this.startScrub(model, node, event, lineNumber, literal);
+    };
+
+    node.addEventListener('pointerdown', onDown, true);
+    this.destroyRef.onDestroy(() => {
+      this.endScrub?.(false);
+      node.removeEventListener('pointerdown', onDown, true);
+    });
+  }
+
+  private startScrub(
+    model: Monaco.editor.ITextModel,
+    node: HTMLElement,
+    down: PointerEvent,
+    lineNumber: number,
+    literal: ScrubLiteral,
+  ): void {
+    const modifiers = (event: MouseEvent) => ({
+      shift: event.shiftKey,
+      ctrl: event.ctrlKey || event.metaKey,
+    });
+
+    let text = literal.text;
+    let edited = false;
+    let value = literalValue(literal);
+    let decimals = literal.decimals;
+    let mode = modifiers(down);
+    // Changing modifiers mid-drag continues from the current value, never jumps.
+    let base = { x: down.clientX, value };
+
+    const write = (next: string) => {
+      if (next === text || model.isDisposed()) return;
+      model.pushEditOperations(
+        [],
+        [
+          {
+            range: {
+              startLineNumber: lineNumber,
+              startColumn: literal.startColumn,
+              endLineNumber: lineNumber,
+              endColumn: literal.startColumn + text.length,
+            },
+            text: next,
+          },
+        ],
+        () => null,
+      );
+      text = next;
+      edited = true;
+    };
+
+    const move = (event: PointerEvent) => {
+      if (event.pointerId !== down.pointerId) return;
+      if (!event.altKey) return end(false);
+
+      const next = modifiers(event);
+      if (next.shift !== mode.shift || next.ctrl !== mode.ctrl) {
+        mode = next;
+        base = { x: event.clientX, value };
+      }
+      const step = scrubStep(literal, mode);
+      // A finer step adds a decimal; letting go of Ctrl keeps it rather than rounding it away.
+      decimals = Math.max(decimals, step.decimals);
+      value = base.value + Math.trunc((event.clientX - base.x) / SCRUB_PIXELS_PER_STEP) * step.step;
+      if (literal.nonNegative && value < 0) {
+        // Pinned at zero from here, so turning back moves it at once rather than after a dead zone.
+        value = 0;
+        base = { x: event.clientX, value };
+      }
+      write(formatScrubbed(literal, value, decimals));
+    };
+    const release = (event: PointerEvent) => {
+      if (event.pointerId === down.pointerId) end(false);
+    };
+    // Alt is held, so any key is an Alt chord — Alt+Up would move the line the
+    // gesture is writing to. Only modifiers get through; Escape cancels.
+    const keydown = (event: KeyboardEvent) => {
+      if (MODIFIER_KEYS.has(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === 'Escape') end(true);
+    };
+    const keyup = (event: KeyboardEvent) => {
+      if (event.key === 'Alt') end(false);
+    };
+
+    const end = (cancel: boolean) => {
+      if (!model.isDisposed()) {
+        // Undoing the gesture's own element restores the text and leaves no empty
+        // step behind; writing the original back would leave one for Ctrl+Z to eat.
+        if (cancel && edited) void model.undo();
+        model.pushStackElement();
+      }
+      listening.abort();
+      if (node.hasPointerCapture?.(down.pointerId)) node.releasePointerCapture(down.pointerId);
+      this.endScrub = null;
+    };
+
+    model.pushStackElement();
+    node.setPointerCapture?.(down.pointerId);
+    const listening = new AbortController();
+    const options = { capture: true, signal: listening.signal };
+    document.addEventListener('pointermove', move, options);
+    document.addEventListener('pointerup', release, options);
+    document.addEventListener('pointercancel', release, options);
+    document.addEventListener('keydown', keydown, options);
+    document.addEventListener('keyup', keyup, options);
+    window.addEventListener('blur', () => end(false), { signal: listening.signal });
+    this.endScrub = end;
   }
 
   private bindModel(
