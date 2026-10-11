@@ -215,6 +215,11 @@ describe('checkDocs', () => {
     expect(report.errors).toEqual(['docs/README.md:5: broken link: gone.md']);
   });
 
+  it('does not crash on an out-of-range numeric entity in a heading', () => {
+    const report = vault({ ...clean, 'docs/README.md': '## A &#99999999; B\n\n[x](#a--b)\n' });
+    expect(report.errors).toEqual([]);
+  });
+
   it('warns when a link targets a file git does not track', () => {
     const tracked = Object.keys(clean).filter((path) => path !== 'docs/runbooks/backup.md');
     const report = vault(clean, tracked);

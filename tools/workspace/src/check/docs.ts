@@ -322,9 +322,10 @@ export function slugify(heading: string): string {
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/<[^>]+>/g, '')
     .replace(/&(?:#(\d+)|#x([\da-f]+)|(amp|lt|gt|quot|apos));/gi, (_, dec, hex, name) => {
-      if (dec) return String.fromCodePoint(Number(dec));
-      if (hex) return String.fromCodePoint(parseInt(hex, 16));
-      return ENTITIES[String(name).toLowerCase()] ?? '';
+      if (!dec && !hex) return ENTITIES[String(name).toLowerCase()] ?? '';
+      const code = dec ? Number(dec) : parseInt(hex, 16);
+      // Like cmark, an out-of-range code point becomes U+FFFD instead of throwing.
+      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '�';
     })
     .toLowerCase()
     .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '')
