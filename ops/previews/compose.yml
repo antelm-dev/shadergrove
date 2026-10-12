@@ -20,7 +20,7 @@ services:
     security_opt: ['no-new-privileges:true']
 
   mailpit:
-    image: axllent/mailpit:v1.31.3
+    image: axllent/mailpit:v1.31.4@sha256:b68349e3a014b90c5610bfb26b2ae36f3892d7b8cf25ee140c6c71c98d2fcf48
     restart: unless-stopped
     networks: [private]
     mem_limit: 128m
