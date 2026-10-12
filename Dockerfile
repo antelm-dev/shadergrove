@@ -1,10 +1,10 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 
 # ---- build ------------------------------------------------------------------
 # Debian (glibc), not Alpine: the pinned Linux Emscripten/LLVM archive that
 # tools/glsl-analysis downloads is glibc-linked. Build stage only; the runtime
 # stage below stays Alpine.
-FROM node:24-bookworm-slim AS build
+FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS build
 
 # The compiler bootstrap shells out to git (pinned emsdk), python3 (emsdk) and
 # tar with xz (release archive), and downloads over HTTPS.
@@ -70,7 +70,7 @@ COPY ops/runtime-deps/package.json ops/runtime-deps/package-lock.json /runtime-d
 RUN cd /runtime-deps && npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
 # ---- runtime ----------------------------------------------------------------
-FROM node:24-alpine AS runtime
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS runtime
 
 # Package installation happens in the build stage; the server only needs Node.
 # Remove npm and its bundled dependencies from the shipped image.
