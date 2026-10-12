@@ -20,9 +20,9 @@ import { createI18nIpc } from './ipc/i18n.ipc';
 import { createMigrationIpc } from './ipc/migration.ipc';
 import { createPluginsIpc } from './ipc/plugins.ipc';
 import { createShaderIpc } from './ipc/shader.ipc';
-import { broadcastSync, createSyncIpc } from './ipc/sync.ipc';
+import { createSyncIpc, syncEmitter } from './ipc/sync.ipc';
 import { createUpdateIpc } from './ipc/update.ipc';
-import { createWindowIpc, type CloseController } from './ipc/window.ipc';
+import { createWindowIpc, windowEmitter, type CloseController } from './ipc/window.ipc';
 import { notifyingWrites, SyncService } from './sync/sync-service';
 import {
   applyNavigationPolicy,
@@ -242,21 +242,23 @@ prepare({
       onSatelliteChanged: (event) => {
         const win = mainWindow;
         if (!win || win.isDestroyed()) return;
-        if ('open' in event && event.open === false) {
-          win.webContents.send('surface-changed', event);
+        if ('open' in event) {
+          windowEmitter.emitTo(win.webContents, 'surface-changed', event);
           if (event.surfaceId === WELL_KNOWN_SURFACE_IDS.livePreviewOutput) {
-            win.webContents.send('output-state-changed', false);
+            windowEmitter.emitTo(win.webContents, 'output-state-changed', false);
           }
           return;
         }
         const openEvent = { ...event, open: true as const };
-        win.webContents.send('surface-changed', openEvent);
+        windowEmitter.emitTo(win.webContents, 'surface-changed', openEvent);
         if (event.surfaceId === WELL_KNOWN_SURFACE_IDS.livePreviewOutput) {
-          win.webContents.send('output-state-changed', true);
+          windowEmitter.emitTo(win.webContents, 'output-state-changed', true);
         }
       },
       onReturnedToWorkspace: (surfaceId, kind) => {
-        mainWindow?.webContents.send('surface-returned', { surfaceId, kind });
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          windowEmitter.emitTo(mainWindow.webContents, 'surface-returned', { surfaceId, kind });
+        }
       },
     });
 
@@ -270,7 +272,9 @@ prepare({
     };
     closeController.outputOpen = () => surfaceManager?.isLivePreviewOutputOpen() ?? false;
 
-    const sync = new SyncService(library, account, broadcastSync);
+    const sync = new SyncService(library, account, (event) =>
+      syncEmitter.emit('sync-changed', event),
+    );
 
     const ipc = createIpcContainer();
     const updates = new UpdateController(() => {
@@ -289,7 +293,8 @@ prepare({
       plugins: createPluginsIpc(
         join(userData, 'plugins'),
         join(userData, 'plugin-bootstrap.json'),
-        (sender) => sender === mainWindow?.webContents,
+        // By id: the IPC module hands handlers a proxy of the sender, never the same object.
+        (sender) => sender.id === mainWindow?.webContents.id,
       ),
     });
     void sync.run();
@@ -313,14 +318,14 @@ prepare({
     win.on('close', (event) => {
       if (closeController.approved.has(win)) return;
       event.preventDefault();
-      win.webContents.send('close-requested');
+      windowEmitter.emitTo(win.webContents, 'close-requested');
     });
     win.on('closed', () => {
       surfaceManager?.closeAllSatellites();
       mainWindow = null;
     });
     const pushWindowState = () => {
-      win.webContents.send('state-changed', {
+      windowEmitter.emitTo(win.webContents, 'state-changed', {
         maximized: win.isMaximized(),
         fullscreen: win.isFullScreen(),
       });

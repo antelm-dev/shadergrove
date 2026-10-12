@@ -115,8 +115,8 @@ importers:
         specifier: 0.45.2
         version: 0.45.2(@types/pg@8.20.0)(kysely@0.29.6)(pg@8.22.0)
       electron-ipc-module:
-        specifier: 1.1.0
-        version: 1.1.0(electron@41.10.7)(typescript@6.0.3)
+        specifier: 1.2.0
+        version: 1.2.0(electron@41.10.7)(typescript@6.0.3)
       electron-updater:
         specifier: 6.8.9
         version: 6.8.9
@@ -5558,8 +5558,8 @@ packages:
     engines: {node: '>=14.0.0'}
     hasBin: true
 
-  electron-ipc-module@1.1.0:
-    resolution: {integrity: sha512-fz+suEwT/4pyppmn4ERzGC3UGEn0xp8HhQ7x1YyAjZrLJ0I2TJyQO9pkKfZuM/BJMlFmwk8cE3A0SfnkwVMAyA==}
+  electron-ipc-module@1.2.0:
+    resolution: {integrity: sha512-rx6MYnQvIrWI5SMJjfd/cHgbvboPgUOESv19kby0FEAbmA3jWWIBfVFNNsloIGJhW/2RVPY3QREoaOcZjgpWvA==}
     engines: {node: '>=22.5.0'}
     hasBin: true
     peerDependencies:
@@ -13807,7 +13807,7 @@ snapshots:
       - electron-builder-squirrel-windows
       - supports-color
 
-  electron-ipc-module@1.1.0(electron@41.10.7)(typescript@6.0.3):
+  electron-ipc-module@1.2.0(electron@41.10.7)(typescript@6.0.3):
     dependencies:
       '@standard-schema/spec': 1.1.0
       electron: 41.10.7
