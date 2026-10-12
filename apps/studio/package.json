@@ -56,7 +56,7 @@
     "@shadergrove/shared": "workspace:*",
     "better-auth": "^1.7.5",
     "drizzle-orm": "0.45.2",
-    "electron-ipc-module": "1.1.0",
+    "electron-ipc-module": "1.2.0",
     "electron-updater": "6.8.9",
     "express": "^5.1.0",
     "lil-gui": "^0.21.0",

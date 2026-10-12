@@ -6,11 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PLUGIN_LIMITS } from '@shadergrove/shared';
 import { createPluginBootstrapFile, createPluginFiles, createPluginsIpc } from './plugins.ipc';
 
-// The real module registers on Electron's ipcMain; here a module is just its handlers.
-vi.mock('electron-ipc-module', () => ({
-  defineIpcModule: (_name: string, handlers: unknown) => handlers,
-  handle: (fn: unknown) => fn,
-}));
+// The real IPC module, registered on a fake ipcMain: the guard under test lives in its options.
+vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] }, ipcMain: {} }));
 
 function packageText(id: string, version = '1.0.0'): string {
   return JSON.stringify({
@@ -197,50 +194,46 @@ describe('the plugins IPC module', () => {
     const dir = await mkdtemp(join(tmpdir(), 'sg-plugins-ipc-'));
     const main = { id: 1 };
     const output = { id: 2 };
-    const handlers = createPluginsIpc(
+    const channels = new Map<string, (event: unknown, ...args: unknown[]) => Promise<unknown>>();
+    await createPluginsIpc(
       dir,
       join(dir, 'bootstrap.json'),
-      (sender) => sender === (main as never),
-    ) as unknown as {
-      list: (event: { sender: unknown }) => Promise<unknown>;
-      put: (event: { sender: unknown }, record: unknown) => Promise<unknown>;
-      remove: (event: { sender: unknown }, id: string) => Promise<unknown>;
-      bootstrap: (event: { sender: unknown }) => Promise<unknown>;
-      saveBootstrap: (event: { sender: unknown }, state: unknown) => Promise<unknown>;
-      removeIf: (event: { sender: unknown }, expected: unknown) => Promise<unknown>;
-    };
+      (sender) => sender.id === main.id,
+    )({
+      handle: (channel: string, fn: (event: unknown, ...args: unknown[]) => Promise<unknown>) =>
+        channels.set(channel, fn),
+      removeHandler: () => undefined,
+    } as never);
+    const call = (channel: string, sender: unknown, ...args: unknown[]) =>
+      channels.get(`plugins:${channel}`)!({ sender }, ...args);
     try {
-      await expect(handlers.list({ sender: main })).resolves.toEqual([]);
-      await expect(handlers.list({ sender: output })).resolves.toEqual([]);
-      await expect(
-        handlers.put({ sender: output }, record(packageText('dev.example.tint'))),
-      ).rejects.toThrow(/main window/);
-      await expect(handlers.remove({ sender: output }, 'dev.example.tint')).rejects.toThrow(
-        /main window/,
+      await expect(call('list', main)).resolves.toEqual([]);
+      await expect(call('list', output)).resolves.toEqual([]);
+      await expect(call('put', output, record(packageText('dev.example.tint')))).rejects.toThrow(
+        /not authorized/,
       );
+      await expect(call('remove', output, 'dev.example.tint')).rejects.toThrow(/not authorized/);
       await expect(
-        handlers.removeIf({ sender: output }, record(packageText('dev.example.tint'))),
-      ).rejects.toThrow(/main window/);
+        call('removeIf', output, record(packageText('dev.example.tint'))),
+      ).rejects.toThrow(/not authorized/);
       // Nothing to seed outside the main window.
-      await expect(handlers.bootstrap({ sender: output })).resolves.toBeNull();
-      await expect(handlers.bootstrap({ sender: main })).resolves.toEqual({
-        version: 0,
-        packages: {},
-      });
-      await expect(
-        handlers.saveBootstrap({ sender: output }, { version: 1, packages: {} }),
-      ).rejects.toThrow(/main window/);
+      await expect(call('bootstrap', output)).resolves.toBeNull();
+      await expect(call('bootstrap', main)).resolves.toEqual({ version: 0, packages: {} });
+      await expect(call('saveBootstrap', output, { version: 1, packages: {} })).rejects.toThrow(
+        /not authorized/,
+      );
       expect(await readdir(dir)).toEqual([]);
 
       // With a theme pack and a package with GLSL installed, the output window sees the theme only.
       const theme = record(languagePackText(), true);
       const effect = record(packageText('dev.example.tint'), true);
-      await handlers.put({ sender: main }, theme);
-      await handlers.put({ sender: main }, effect);
-      expect(
-        ((await handlers.list({ sender: main })) as { id: string }[]).map((r) => r.id).sort(),
-      ).toEqual(['dev.example.spanish', 'dev.example.tint']);
-      await expect(handlers.list({ sender: output })).resolves.toEqual([theme]);
+      await call('put', main, theme);
+      await call('put', main, effect);
+      expect(((await call('list', main)) as { id: string }[]).map((r) => r.id).sort()).toEqual([
+        'dev.example.spanish',
+        'dev.example.tint',
+      ]);
+      await expect(call('list', output)).resolves.toEqual([theme]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

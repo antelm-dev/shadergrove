@@ -176,6 +176,9 @@ function isStoredPlugin(value: unknown): value is StoredPlugin {
   );
 }
 
+/** Any window may read: the others see only data-only packages, and nothing to seed. */
+const READS = new Set(['list', 'bootstrap']);
+
 /**
  * `isMainWindow` gates every write: output and satellite windows render
  * shaders, they do not get to install, remove or seed anything. They may read
@@ -189,43 +192,36 @@ export function createPluginsIpc(
 ) {
   const files = createPluginFiles(dir);
   const bootstrap = createPluginBootstrapFile(bootstrapPath);
-  const guard = (sender: WebContents) => {
-    if (!isMainWindow(sender)) throw new Error('Plugins are managed from the main window only');
-  };
 
-  return defineIpcModule('plugins', {
-    // Any window may read: the others see only the data-only packages, so their theme and
-    // language follow the main window's without any plugin code reaching them.
-    list: handle(async (event): Promise<StoredPlugin[]> => {
-      const stored = await files.list();
-      if (isMainWindow(event.sender)) return stored;
-      return stored.filter((record) => {
-        const parsed = parsePluginPackage(record.text);
-        return (
-          parsed.ok && parsed.value.manifest.id === record.id && isDataOnlyPackage(parsed.value)
-        );
-      });
-    }),
-    put: handle(async (event, record: StoredPlugin): Promise<string> => {
-      guard(event.sender);
-      return files.put(record);
-    }),
-    remove: handle(async (event, id: string): Promise<void> => {
-      guard(event.sender);
-      await files.remove(id);
-    }),
-    removeIf: handle(async (event, expected: StoredPlugin): Promise<boolean> => {
-      guard(event.sender);
-      return files.removeIf(expected);
-    }),
-    // `null` elsewhere: only the main window seeds the defaults.
-    bootstrap: handle(
-      async (event): Promise<PluginBootstrapState | null> =>
-        isMainWindow(event.sender) ? bootstrap.read() : null,
-    ),
-    saveBootstrap: handle(async (event, state: PluginBootstrapState): Promise<void> => {
-      guard(event.sender);
-      await bootstrap.write(state);
-    }),
-  });
+  return defineIpcModule(
+    'plugins',
+    {
+      // The theme and language of other windows follow the main window's without any
+      // plugin code reaching them.
+      list: handle(async (event): Promise<StoredPlugin[]> => {
+        const stored = await files.list();
+        if (isMainWindow(event.sender)) return stored;
+        return stored.filter((record) => {
+          const parsed = parsePluginPackage(record.text);
+          return (
+            parsed.ok && parsed.value.manifest.id === record.id && isDataOnlyPackage(parsed.value)
+          );
+        });
+      }),
+      put: handle((_event, record: StoredPlugin): Promise<string> => files.put(record)),
+      remove: handle((_event, id: string): Promise<void> => files.remove(id)),
+      removeIf: handle(
+        (_event, expected: StoredPlugin): Promise<boolean> => files.removeIf(expected),
+      ),
+      // `null` elsewhere: only the main window seeds the defaults.
+      bootstrap: handle(
+        async (event): Promise<PluginBootstrapState | null> =>
+          isMainWindow(event.sender) ? bootstrap.read() : null,
+      ),
+      saveBootstrap: handle(
+        (_event, state: PluginBootstrapState): Promise<void> => bootstrap.write(state),
+      ),
+    },
+    { authorize: (event, { key }) => READS.has(key) || isMainWindow(event.sender) },
+  );
 }

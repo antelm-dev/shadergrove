@@ -1,7 +1,8 @@
-import { app, BrowserWindow } from 'electron';
+import { app } from 'electron';
 import { autoUpdater } from 'electron-updater';
 
 import type { UpdateState } from '../../contracts/contracts';
+import { updateEmitter } from '../ipc/update.ipc';
 import { updateChannelForVersion } from './update-channel';
 
 const unsupportedState = (): UpdateState => ({
@@ -94,9 +95,7 @@ export class UpdateController {
 
   private set(patch: Omit<UpdateState, 'currentVersion'>): void {
     this.state = { currentVersion: app.getVersion(), ...patch };
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) win.webContents.send('update-state-changed', this.state);
-    }
+    updateEmitter.emit('update-state-changed', this.state);
   }
 }
 
