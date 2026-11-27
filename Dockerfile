@@ -4,7 +4,7 @@
 # Debian (glibc), not Alpine: the pinned Linux Emscripten/LLVM archive that
 # tools/glsl-analysis downloads is glibc-linked. Build stage only; the runtime
 # stage below stays Alpine.
-FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS build
+FROM node:24-bookworm-slim@sha256:873f586f3794f52281bd039bf02c048a0be08fde619338f9941bad1eb6b34530 AS build
 
 # The compiler bootstrap shells out to git (pinned emsdk), python3 (emsdk) and
 # tar with xz (release archive), and downloads over HTTPS.
